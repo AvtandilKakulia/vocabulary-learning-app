@@ -63,8 +63,7 @@ export default function FreeMode() {
 
       if (error) throw error;
 
-      let words: Word[] = data || [];
-
+      const words: Word[] = data || [];
       setAllWords(words);
     } catch (error) {
       console.error('Error loading words:', error);
@@ -118,7 +117,7 @@ export default function FreeMode() {
   const nextWord = () => {
     if (!currentWord) return;
 
-    // Mark current word as guessed
+    // Mark current word as guessed if re-guessing is not allowed
     if (!allowReguess) {
       setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
     }
@@ -126,7 +125,7 @@ export default function FreeMode() {
     const nextIndex = currentIndex + 1;
 
     if (nextIndex >= sessionWords.length) {
-      setShowCompletionDialog(true);
+      setShowCompletionDialog(true); // Show modal on last word
       return;
     }
 
@@ -136,24 +135,21 @@ export default function FreeMode() {
     setShowResult(false);
   };
 
-  // Auto-restart session after completion dialog
-  useEffect(() => {
-    if (showCompletionDialog) {
-      const timer = setTimeout(() => {
-        // ✅ Explicitly type new Set<string>()
-        const newGuessed: Set<string> = allowReguess ? new Set<string>() : guessedWords;
-        setGuessedWords(newGuessed);
+  // Restart practice from completion modal
+  const handleRestartPractice = () => {
+    // Clear progress in localStorage
+    localStorage.removeItem('vocab_practice_progress');
 
-        setCurrentIndex(0);
-        setCurrentWord(sessionWords[0] || null);
-        setUserAnswer('');
-        setShowResult(false);
-        setShowCompletionDialog(false);
-      }, 2000);
+    setCorrectCount(0);
+    setTotalAttempts(0);
+    setGuessedWords(new Set());
 
-      return () => clearTimeout(timer);
-    }
-  }, [showCompletionDialog, sessionWords, allowReguess, guessedWords]);
+    setCurrentIndex(0);
+    setCurrentWord(sessionWords[0] || null);
+    setUserAnswer('');
+    setShowResult(false);
+    setShowCompletionDialog(false);
+  };
 
   const handleResetProgress = async () => {
     setCorrectCount(0);
@@ -181,6 +177,7 @@ export default function FreeMode() {
     );
   }
 
+  // Determine completion message
   const successRate = totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
   let message = '';
   let emoji = '';
@@ -234,10 +231,8 @@ export default function FreeMode() {
                 Correct: {correctCount} / {totalAttempts}
               </div>
               <div className="text-sm text-blue-700 dark:text-blue-300">
-                {totalAttempts > 0
-                  ? Math.round((correctCount / totalAttempts) * 100)
-                  : 0}
-                % Success Rate
+                {totalAttempts > 0 ? Math.round(successRate) : 0}%
+                Success Rate
               </div>
             </div>
             <button
@@ -324,9 +319,14 @@ export default function FreeMode() {
             ) : (
               <button
                 onClick={nextWord}
-                className="w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                className={`w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                  currentIndex + 1 >= sessionWords.length
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
               >
-                Next Word <ChevronRight size={20} />
+                {currentIndex + 1 >= sessionWords.length ? 'Finish Practice' : 'Next Word'}
+                {currentIndex + 1 >= sessionWords.length ? <Check size={20} /> : <ChevronRight size={20} />}
               </button>
             )}
           </div>
@@ -368,12 +368,15 @@ export default function FreeMode() {
             <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
               {emoji} {message}
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               You got {correctCount} out of {totalAttempts} correct ({Math.round(successRate)}%)
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-              The practice session will restart automatically...
-            </p>
+            <button
+              onClick={handleRestartPractice}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              OK
+            </button>
           </div>
         </div>
       )}
