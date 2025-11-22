@@ -231,45 +231,29 @@ export default function FreeMode() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Free Mode - Practice</h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm">
+            <span className="text-gray-600">Progress:</span>
+            <span className="font-medium text-blue-600">{answeredWords}/{totalWords}</span>
+            {correctAnswers > 0 && answeredWords > 0 && (
+              <span className="text-gray-500">({((correctAnswers / answeredWords) * 100).toFixed(0)}%)</span>
+            )}
+          </div>
           <button
             onClick={() => {
               setShuffle(!shuffle);
               loadWords();
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
               shuffle
                 ? 'bg-blue-600 text-white border-blue-600'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
-            <Shuffle size={18} />
-            Shuffle
+            <Shuffle size={16} />
+            <span className="text-sm">{shuffle ? 'Shuffled' : 'Sort'}</span>
           </button>
         </div>
-      </div>
-
-      {/* Progress Tracker */}
-      <div className="bg-white rounded-lg shadow-md p-3">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-xs font-medium text-gray-700">Progress</span>
-          <span className="text-xs text-gray-500">
-            {answeredWords} / {totalWords} answered
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
-            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${(answeredWords / totalWords) * 100}%` }}
-          ></div>
-        </div>
-        {correctAnswers > 0 && answeredWords > 0 && (
-          <div className="text-center mt-1">
-            <span className="text-xs text-gray-600">
-              Correct: {correctAnswers} ({((correctAnswers / answeredWords) * 100).toFixed(1)}%)
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="bg-white rounded-lg shadow-lg p-8">
