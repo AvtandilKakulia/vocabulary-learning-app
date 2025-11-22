@@ -5,20 +5,25 @@ import { Shuffle, ChevronRight, Check, X } from 'lucide-react';
 
 export default function FreeMode() {
   const { user } = useAuth();
+
   const [allWords, setAllWords] = useState<Word[]>([]);
-  const [remainingWords, setRemainingWords] = useState<Word[]>([]);
+  const [sessionWords, setSessionWords] = useState<Word[]>([]);
   const [currentWord, setCurrentWord] = useState<Word | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0); // New state for progress
+  const [currentIndex, setCurrentIndex] = useState(0);
+
   const [direction, setDirection] = useState<'en-to-geo' | 'geo-to-en'>('geo-to-en');
   const [userAnswer, setUserAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
+
   const [shuffle, setShuffle] = useState(true);
+  const [allowReguess, setAllowReguess] = useState(false);
   const [loading, setLoading] = useState(true);
+
   const [correctCount, setCorrectCount] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [guessedWords, setGuessedWords] = useState<Set<string>>(new Set());
-  const [allowReguess, setAllowReguess] = useState(false);
+
   const [showResetModal, setShowResetModal] = useState(false);
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
 
@@ -60,47 +65,35 @@ export default function FreeMode() {
 
       let words: Word[] = data || [];
 
-      // Apply shuffle
-      if (shuffle && words.length > 0) {
-        words = [...words].sort(() => Math.random() - 0.5);
-      } else {
-        words = [...words].sort((a, b) =>
-          a.english_word.localeCompare(b.english_word)
-        );
-      }
-
       setAllWords(words);
     } catch (error) {
       console.error('Error loading words:', error);
     } finally {
       setLoading(false);
     }
-  }, [user, shuffle]);
+  }, [user]);
 
   useEffect(() => {
     loadWords();
   }, [loadWords]);
 
-  // Compute remaining words based on guessedWords and allowReguess
+  // Initialize sessionWords whenever allWords or shuffle changes
   useEffect(() => {
     if (allWords.length === 0) return;
 
-    const remaining = allowReguess
-      ? [...allWords]
-      : allWords.filter((w) => !guessedWords.has(w.english_word));
+    let words = [...allWords];
+    if (shuffle) {
+      words.sort(() => Math.random() - 0.5);
+    } else {
+      words.sort((a, b) => a.english_word.localeCompare(b.english_word));
+    }
 
-    setRemainingWords(remaining);
-    setCurrentWord(remaining[0] || null);
-  }, [allWords, guessedWords, allowReguess]);
-
-  // Update currentIndex whenever currentWord changes
-  useEffect(() => {
-    if (!currentWord) return;
-    const index = allWords.findIndex(
-      (w) => w.english_word === currentWord.english_word
-    );
-    setCurrentIndex(index);
-  }, [currentWord, allWords]);
+    setSessionWords(words);
+    setCurrentIndex(0);
+    setCurrentWord(words[0]);
+    setUserAnswer('');
+    setShowResult(false);
+  }, [allWords, shuffle]);
 
   const checkAnswer = () => {
     if (!currentWord) return;
@@ -132,15 +125,34 @@ export default function FreeMode() {
 
     const nextIndex = currentIndex + 1;
 
-    if (nextIndex >= allWords.length) {
+    if (nextIndex >= sessionWords.length) {
       setShowCompletionDialog(true);
       return;
     }
 
-    setCurrentWord(allWords[nextIndex]);
+    setCurrentIndex(nextIndex);
+    setCurrentWord(sessionWords[nextIndex]);
     setUserAnswer('');
     setShowResult(false);
   };
+
+  // Auto-restart session after completion dialog
+  useEffect(() => {
+    if (showCompletionDialog) {
+      const timer = setTimeout(() => {
+        const newGuessed = allowReguess ? new Set() : guessedWords;
+        setGuessedWords(newGuessed);
+
+        setCurrentIndex(0);
+        setCurrentWord(sessionWords[0] || null);
+        setUserAnswer('');
+        setShowResult(false);
+        setShowCompletionDialog(false);
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [showCompletionDialog, sessionWords, allowReguess, guessedWords]);
 
   const handleResetProgress = async () => {
     setCorrectCount(0);
@@ -148,11 +160,6 @@ export default function FreeMode() {
     setGuessedWords(new Set());
     localStorage.removeItem('vocab_practice_progress');
     await loadWords();
-  };
-
-  const handleCompletionDialogOk = () => {
-    handleResetProgress();
-    setShowCompletionDialog(false);
   };
 
   if (loading) {
@@ -171,6 +178,23 @@ export default function FreeMode() {
         </p>
       </div>
     );
+  }
+
+  const successRate = totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
+  let message = '';
+  let emoji = '';
+  if (successRate === 100) {
+    message = 'Perfect!';
+    emoji = '🏆';
+  } else if (successRate >= 75) {
+    message = 'Great job!';
+    emoji = '🎉';
+  } else if (successRate >= 50) {
+    message = 'Good effort!';
+    emoji = '👍';
+  } else {
+    message = 'Keep practicing!';
+    emoji = '💪';
   }
 
   return (
@@ -228,7 +252,7 @@ export default function FreeMode() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
           <div className="text-center mb-4">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-              Word {currentIndex + 1} of {allWords.length}
+              Word {currentIndex + 1} of {sessionWords.length}
             </div>
             <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
               {direction === 'en-to-geo'
@@ -299,14 +323,9 @@ export default function FreeMode() {
             ) : (
               <button
                 onClick={nextWord}
-                className={`w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  currentIndex + 1 >= allWords.length
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
+                className="w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
               >
-                {currentIndex + 1 >= allWords.length ? 'Finish Practice' : 'Next Word'}
-                {currentIndex + 1 >= allWords.length ? <Check size={20} /> : <ChevronRight size={20} />}
+                Next Word <ChevronRight size={20} />
               </button>
             )}
           </div>
@@ -341,24 +360,19 @@ export default function FreeMode() {
         </div>
       )}
 
-      {/* Completion Dialog */}
+      {/* Completion Modal */}
       {showCompletionDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md transition-colors">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-              🎉 Practice Session Complete!
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md transition-colors text-center">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+              {emoji} {message}
             </h3>
-            <div className="text-center mb-6">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Great job! You completed the session.
-              </p>
-            </div>
-            <button
-              onClick={handleCompletionDialogOk}
-              className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 dark:hover:from-blue-800 dark:hover:to-indigo-800 font-medium transition-all duration-200 flex items-center justify-center gap-2"
-            >
-              <Check size={20} /> Continue
-            </button>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              You got {correctCount} out of {totalAttempts} correct ({Math.round(successRate)}%)
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+              The practice session will restart automatically...
+            </p>
           </div>
         </div>
       )}
