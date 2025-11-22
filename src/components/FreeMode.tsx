@@ -82,22 +82,14 @@ export default function FreeMode() {
 
   // Compute remaining words based on guessedWords and allowReguess
   useEffect(() => {
-    let remaining: Word[];
-    if (allowReguess) {
-      remaining = [...allWords];
-    } else {
-      remaining = allWords.filter(
-        (w) => !guessedWords.has(w.english_word)
-      );
-    }
+    if (allWords.length === 0) return;
+
+    const remaining = allowReguess
+      ? [...allWords]
+      : allWords.filter((w) => !guessedWords.has(w.english_word));
 
     setRemainingWords(remaining);
-
-    if (remaining.length > 0) {
-      setCurrentWord(remaining[0]);
-    } else {
-      setCurrentWord(null);
-    }
+    setCurrentWord(remaining[0] || null);
   }, [allWords, guessedWords, allowReguess]);
 
   const checkAnswer = () => {
@@ -118,28 +110,37 @@ export default function FreeMode() {
     setShowResult(true);
     setTotalAttempts((prev) => prev + 1);
     if (correct) setCorrectCount((prev) => prev + 1);
-
-    setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
   };
 
   const nextWord = () => {
+    if (!currentWord) return;
+
+    // Mark current word as guessed
+    if (!allowReguess) {
+      setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
+    }
+
+    // If last word, show completion dialog
     if (remainingWords.length <= 1) {
       setShowCompletionDialog(true);
       return;
     }
-    const nextIndex = remainingWords.findIndex((w) => w.english_word === currentWord?.english_word) + 1;
+
+    const nextIndex =
+      remainingWords.findIndex(
+        (w) => w.english_word === currentWord?.english_word
+      ) + 1;
     setCurrentWord(remainingWords[nextIndex]);
     setUserAnswer('');
     setShowResult(false);
   };
 
-  const handleResetProgress = () => {
+  const handleResetProgress = async () => {
     setCorrectCount(0);
     setTotalAttempts(0);
     setGuessedWords(new Set());
     localStorage.removeItem('vocab_practice_progress');
-    setShowResetModal(false);
-    loadWords();
+    await loadWords();
   };
 
   const handleCompletionDialogOk = () => {
@@ -168,7 +169,6 @@ export default function FreeMode() {
   return (
     <>
       <div className="max-w-2xl mx-auto space-y-6">
-
         {/* Shuffle + Allow Re-guess */}
         <div className="flex gap-4 items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
           <button
