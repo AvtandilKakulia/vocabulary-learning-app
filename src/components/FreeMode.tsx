@@ -77,22 +77,27 @@ export default function FreeMode() {
   }, [loadWords]);
 
   // Initialize sessionWords whenever allWords or shuffle changes
-  useEffect(() => {
-    if (allWords.length === 0) return;
+useEffect(() => {
+  if (allWords.length === 0) return;
 
-    let words = [...allWords];
-    if (shuffle) {
-      words.sort(() => Math.random() - 0.5);
-    } else {
-      words.sort((a, b) => a.english_word.localeCompare(b.english_word));
-    }
+  // Filter out already guessed words if re-guessing not allowed
+  let words = allowReguess
+    ? [...allWords]
+    : allWords.filter((w) => !guessedWords.has(w.english_word));
 
-    setSessionWords(words);
-    setCurrentIndex(0);
-    setCurrentWord(words[0]);
-    setUserAnswer('');
-    setShowResult(false);
-  }, [allWords, shuffle]);
+  if (shuffle) {
+    words.sort(() => Math.random() - 0.5);
+  } else {
+    words.sort((a, b) => a.english_word.localeCompare(b.english_word));
+  }
+
+  setSessionWords(words);
+  setCurrentIndex(0);
+  setCurrentWord(words[0] || null);
+  setUserAnswer('');
+  setShowResult(false);
+}, [allWords, shuffle, guessedWords, allowReguess]);
+
 
   const checkAnswer = () => {
     if (!currentWord) return;
