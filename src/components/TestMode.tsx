@@ -23,33 +23,23 @@ export default function TestMode() {
   const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>([]);
 
   function generateMultipleChoiceOptions(correctAnswer: string, allWords: Word[], direction: string) {
-    const options: string[] = [];
+    const options = [correctAnswer.trim().toLowerCase()];
 
-    // Add the single correct answer first (normalized)
-    const correctNorm = correctAnswer.trim().toLowerCase();
-    options.push(correctNorm);
+    // Build pool of wrong answers
+    const wrongPool = allWords.flatMap(w =>
+      direction === 'en-to-geo'
+        ? (w.georgian_definitions || []).map(d => d.trim().toLowerCase())
+        : [w.english_word.trim().toLowerCase()]
+    );
 
-    // Collect all possible wrong answers
-    const wrongPool =
-      direction === "en-to-geo"
-        ? allWords.flatMap(w => (w.georgian_definitions || []).join(", ").trim().toLowerCase())
-        : allWords.map(w => w.english_word.trim().toLowerCase());
-
-    // Filter out the correct answer from wrong pool
-    const wrongOnly = wrongPool.filter(x => x !== correctNorm);
-
-    // Shuffle wrong answers
+    const wrongOnly = wrongPool.filter(x => x !== correctAnswer.trim().toLowerCase());
     const shuffledWrong = wrongOnly.sort(() => Math.random() - 0.5);
 
-    // Add wrong answers until we have 4 total options
     for (const wrong of shuffledWrong) {
       if (options.length >= 4) break;
-      if (!options.includes(wrong)) {
-        options.push(wrong);
-      }
+      if (!options.includes(wrong)) options.push(wrong);
     }
 
-    // Finally shuffle the entire options list
     return options.sort(() => Math.random() - 0.5);
   }
 
@@ -58,48 +48,27 @@ export default function TestMode() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data: allWords, error } = await supabase
         .from('words')
         .select('*')
-        .eq('user_id', user.id); // Filter by current user
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
-      if (!data || data.length === 0) {
+      if (!allWords || allWords.length === 0) {
         alert('No words available. Add some words first!');
         return;
       }
 
-      const count = wordCount === 0 ? parseInt(customCount) : wordCount;
-      if (count <= 0 || count > data.length) {
-        // Show improved error modal
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-[70]';
-        errorDiv.innerHTML = `
-          <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <div class="flex items-start gap-4 mb-4">
-              <div class="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                <svg class="text-amber-600" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="15" y1="9" x2="9" y2="15"></line>
-                  <line x1="9" y1="9" x2="15" y2="15"></line>
-                </svg>
-              </div>
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900">Invalid Selection</h3>
-                <p class="text-sm text-gray-500 mt-1">Please select between 1 and ${data.length} words</p>
-              </div>
-            </div>
-            <button onclick="this.closest('.fixed').remove()" class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors">
-              Got it
-            </button>
-          </div>
-        `;
-        document.body.appendChild(errorDiv);
+      // Safely parse count
+      const count = wordCount === 0 ? parseInt(customCount || '0', 10) : wordCount;
+      if (count <= 0 || count > allWords.length) {
+        alert(`Please select between 1 and ${allWords.length} words`);
         return;
       }
 
-      const shuffled = [...data].sort(() => Math.random() - 0.5).slice(0, count);
+      // Random selection
+      const shuffled = [...allWords].sort(() => Math.random() - 0.5).slice(0, count);
       const testData: TestWord[] = shuffled.map(word => ({
         ...word,
         userAnswer: '',
@@ -109,57 +78,62 @@ export default function TestMode() {
       setTestWords(testData);
       setCurrentQuestion(0);
       setUserAnswer('');
-      
+
       // Generate options for first question if multiple choice
       if (inputType === 'multiple') {
-        const currentWord = testData[0];
-        const correctAnswer = direction === 'en-to-geo' 
-          ? (currentWord.georgian_definitions || []).join(", ") // Join ALL Georgian definitions
-          : currentWord.english_word; // Single English word
-        const options = generateMultipleChoiceOptions(correctAnswer, data, direction);
+        const firstWord = testData[0];
+        const correctAnswer = direction === 'en-to-geo'
+          ? (firstWord.georgian_definitions || []).join(', ')
+          : firstWord.english_word;
+
+        const options = generateMultipleChoiceOptions(correctAnswer, allWords, direction);
         setMultipleChoiceOptions(options);
       }
-      
+
       setStage('testing');
-    } catch (error: any) {
-      console.error('Error starting test:', error);
-      alert('Error starting test: ' + error.message);
+    } catch (err: any) {
+      console.error('Error starting test:', err);
+      alert('Error starting test: ' + err.message);
     } finally {
       setLoading(false);
     }
   }
 
   function submitAnswer() {
-    console.log('📝 SUBMIT ANSWER CALLED - Current question:', currentQuestion, 'of', testWords.length - 1);
-    console.log('User answer:', userAnswer);
-    
-    if (!testWords[currentQuestion]) {
-      console.error('❌ No current word found!');
-      return;
-    }
+    if (!testWords[currentQuestion]) return;
 
     const currentWord = testWords[currentQuestion];
-    const isLastQuestion = currentQuestion >= testWords.length - 1;
-    
-    console.log('Current word:', currentWord?.english_word);
-    console.log('Is last question?', isLastQuestion);
+    const correctAnswer = direction === 'en-to-geo'
+      ? (currentWord.georgian_definitions || []).join(', ')
+      : currentWord.english_word;
 
-    // Simple logic: always finish if it's the last question
+    // Update the current word with user answer and correctness
+    const updatedWords = [...testWords];
+    updatedWords[currentQuestion] = {
+      ...currentWord,
+      userAnswer,
+      isCorrect: userAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase(),
+    };
+    setTestWords(updatedWords);
+
+    const isLastQuestion = currentQuestion >= testWords.length - 1;
+
     if (isLastQuestion) {
-      console.log('🎯 FINISHING TEST - This is the last question!');
-      finishTest(testWords);
+      finishTest(updatedWords);
     } else {
-      console.log('➡️ Moving to next question');
       const nextQuestion = currentQuestion + 1;
       setCurrentQuestion(nextQuestion);
       setUserAnswer('');
-      
-      if (inputType === 'multiple' && testWords[nextQuestion]) {
-        const nextWord = testWords[nextQuestion];
-        const correctAnswer = direction === 'en-to-geo' 
-          ? (nextWord.georgian_definitions || []).join(", ")
+
+      // Generate next multiple choice options
+      if (inputType === 'multiple') {
+        const nextWord = updatedWords[nextQuestion];
+        const nextCorrect = direction === 'en-to-geo'
+          ? (nextWord.georgian_definitions || []).join(', ')
           : nextWord.english_word;
-        const options = generateMultipleChoiceOptions(correctAnswer, testWords, direction);
+
+        // Use original pool (all words) instead of testWords
+        const options = generateMultipleChoiceOptions(nextCorrect, updatedWords, direction);
         setMultipleChoiceOptions(options);
       }
     }
