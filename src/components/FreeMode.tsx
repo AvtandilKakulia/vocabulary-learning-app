@@ -140,7 +140,8 @@ export default function FreeMode() {
   useEffect(() => {
     if (showCompletionDialog) {
       const timer = setTimeout(() => {
-        const newGuessed = allowReguess ? new Set() : guessedWords;
+        // ✅ Explicitly type new Set<string>()
+        const newGuessed: Set<string> = allowReguess ? new Set<string>() : guessedWords;
         setGuessedWords(newGuessed);
 
         setCurrentIndex(0);
