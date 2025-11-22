@@ -54,10 +54,9 @@ export default function FreeMode() {
 
       let wordsToUse = data || [];
       
-      // Filter out guessed words if re-guess is disabled
-      if (!allowReguess) {
-        wordsToUse = wordsToUse.filter(word => !guessedWords.has(word.english_word));
-      }
+      // If allowReguess is enabled, show all words (no filtering)
+      // If allowReguess is disabled, we still show all words but just track progress
+      // The filtering should not remove words from practice entirely
       
       if (shuffle && wordsToUse.length > 0) {
         wordsToUse = [...wordsToUse].sort(() => Math.random() - 0.5);
