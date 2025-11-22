@@ -6,8 +6,12 @@ import { Shuffle, ChevronRight, Check, X } from 'lucide-react';
 export default function FreeMode() {
   const { user } = useAuth();
 
+  // All words loaded from Supabase
   const [allWords, setAllWords] = useState<Word[]>([]);
+
+  // Current session words (filtered & shuffled)
   const [sessionWords, setSessionWords] = useState<Word[]>([]);
+
   const [currentWord, setCurrentWord] = useState<Word | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -63,8 +67,7 @@ export default function FreeMode() {
 
       if (error) throw error;
 
-      const words: Word[] = data || [];
-      setAllWords(words);
+      setAllWords(data || []);
     } catch (error) {
       console.error('Error loading words:', error);
     } finally {
@@ -76,28 +79,27 @@ export default function FreeMode() {
     loadWords();
   }, [loadWords]);
 
-  // Initialize sessionWords whenever allWords or shuffle changes
-useEffect(() => {
-  if (allWords.length === 0) return;
+  // Initialize session words whenever allWords, shuffle, guessedWords, or allowReguess changes
+  useEffect(() => {
+    if (allWords.length === 0) return;
 
-  // Filter out already guessed words if re-guessing not allowed
-  let words = allowReguess
-    ? [...allWords]
-    : allWords.filter((w) => !guessedWords.has(w.english_word));
+    // Filter out already guessed words unless allow re-guessing
+    let words = allowReguess
+      ? [...allWords]
+      : allWords.filter((w) => !guessedWords.has(w.english_word));
 
-  if (shuffle) {
-    words.sort(() => Math.random() - 0.5);
-  } else {
-    words.sort((a, b) => a.english_word.localeCompare(b.english_word));
-  }
+    if (shuffle) {
+      words.sort(() => Math.random() - 0.5);
+    } else {
+      words.sort((a, b) => a.english_word.localeCompare(b.english_word));
+    }
 
-  setSessionWords(words);
-  setCurrentIndex(0);
-  setCurrentWord(words[0] || null);
-  setUserAnswer('');
-  setShowResult(false);
-}, [allWords, shuffle, guessedWords, allowReguess]);
-
+    setSessionWords(words);
+    setCurrentIndex(0);
+    setCurrentWord(words[0] || null);
+    setUserAnswer('');
+    setShowResult(false);
+  }, [allWords, shuffle, guessedWords, allowReguess]);
 
   const checkAnswer = () => {
     if (!currentWord) return;
@@ -117,33 +119,31 @@ useEffect(() => {
     setShowResult(true);
     setTotalAttempts((prev) => prev + 1);
     if (correct) setCorrectCount((prev) => prev + 1);
+
+    // Mark as guessed if re-guess not allowed
+    if (!allowReguess) {
+      setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
+    }
   };
 
-const nextWord = () => {
-  if (!currentWord) return;
+  const nextWord = () => {
+    if (!currentWord) return;
 
-  if (!allowReguess) {
-    setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
-  }
+    const nextIndex = currentIndex + 1;
 
-  const nextIndex = currentIndex + 1;
+    if (nextIndex >= sessionWords.length) {
+      setShowCompletionDialog(true); // Show modal on last word
+      return;
+    }
 
-  if (nextIndex >= sessionWords.length) {
-    // Do NOT set currentWord to null
-    setShowCompletionDialog(true); // Show modal
-    return;
-  }
+    setCurrentIndex(nextIndex);
+    setCurrentWord(sessionWords[nextIndex]);
+    setUserAnswer('');
+    setShowResult(false);
+  };
 
-  setCurrentIndex(nextIndex);
-  setCurrentWord(sessionWords[nextIndex]);
-  setUserAnswer('');
-  setShowResult(false);
-};
-
-
-  // Restart practice from completion modal
+  // Restart practice after completion modal OK
   const handleRestartPractice = () => {
-    // Clear progress in localStorage
     localStorage.removeItem('vocab_practice_progress');
 
     setCorrectCount(0);
@@ -173,18 +173,17 @@ const nextWord = () => {
     );
   }
 
-if (!currentWord && !showCompletionDialog) {
-  return (
-    <div className="text-center py-12">
-      <p className="text-gray-500 mb-4">
-        No words available for practice. Add some words!
-      </p>
-    </div>
-  );
-}
+  if (!currentWord && !showCompletionDialog) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500 mb-4">
+          No words available for practice. Add some words!
+        </p>
+      </div>
+    );
+  }
 
-
-  // Determine completion message
+  // Completion message and emoji
   const successRate = totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
   let message = '';
   let emoji = '';
@@ -238,8 +237,7 @@ if (!currentWord && !showCompletionDialog) {
                 Correct: {correctCount} / {totalAttempts}
               </div>
               <div className="text-sm text-blue-700 dark:text-blue-300">
-                {totalAttempts > 0 ? Math.round(successRate) : 0}%
-                Success Rate
+                {totalAttempts > 0 ? Math.round(successRate) : 0}% Success Rate
               </div>
             </div>
             <button
@@ -252,92 +250,94 @@ if (!currentWord && !showCompletionDialog) {
         </div>
 
         {/* Current Word */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <div className="text-center mb-4">
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-              Word {currentIndex + 1} of {sessionWords.length}
-            </div>
-            <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              {direction === 'en-to-geo'
-                ? currentWord.english_word
-                : currentWord.georgian_definitions.join(', ')}
-            </div>
-            {currentWord.description && (
-              <div className="text-sm text-gray-600 dark:text-gray-400 mt-2 italic">
-                {currentWord.description}
+        {currentWord && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+            <div className="text-center mb-4">
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                Word {currentIndex + 1} of {sessionWords.length}
               </div>
-            )}
-          </div>
-
-          <div className="mb-4">
-            <input
-              type="text"
-              value={userAnswer}
-              onChange={(e) => setUserAnswer(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !showResult) checkAnswer();
-                else if (e.key === 'Enter' && showResult) nextWord();
-              }}
-              disabled={showResult}
-              placeholder="Type your answer..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-            />
-          </div>
-
-          {showResult && (
-            <div
-              className={`p-4 rounded-lg ${
-                isCorrect
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-red-50 border border-red-200'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                {isCorrect ? (
-                  <>
-                    <Check className="text-green-600" size={24} />
-                    <span className="font-medium text-green-800">Correct!</span>
-                  </>
-                ) : (
-                  <>
-                    <X className="text-red-600" size={24} />
-                    <span className="font-medium text-red-800">Incorrect</span>
-                  </>
-                )}
-              </div>
-              <div className="text-sm text-gray-700">
-                Correct answer{currentWord.georgian_definitions.length > 1 ? 's' : ''}:{' '}
+              <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                 {direction === 'en-to-geo'
-                  ? currentWord.georgian_definitions.join(', ')
-                  : currentWord.english_word}
+                  ? currentWord.english_word
+                  : currentWord.georgian_definitions.join(', ')}
               </div>
+              {currentWord.description && (
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-2 italic">
+                  {currentWord.description}
+                </div>
+              )}
             </div>
-          )}
 
-          <div className="mt-4">
-            {!showResult ? (
-              <button
-                onClick={checkAnswer}
-                disabled={!userAnswer.trim()}
-                className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-              >
-                Check Answer
-              </button>
-            ) : (
-              <button
-                onClick={nextWord}
-                className={`w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  currentIndex + 1 >= sessionWords.length
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+            <div className="mb-4">
+              <input
+                type="text"
+                value={userAnswer}
+                onChange={(e) => setUserAnswer(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !showResult) checkAnswer();
+                  else if (e.key === 'Enter' && showResult) nextWord();
+                }}
+                disabled={showResult}
+                placeholder="Type your answer..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+              />
+            </div>
+
+            {showResult && (
+              <div
+                className={`p-4 rounded-lg ${
+                  isCorrect
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-red-50 border border-red-200'
                 }`}
               >
-                {currentIndex + 1 >= sessionWords.length ? 'Finish Practice' : 'Next Word'}
-                {currentIndex + 1 >= sessionWords.length ? <Check size={20} /> : <ChevronRight size={20} />}
-              </button>
+                <div className="flex items-center gap-2 mb-2">
+                  {isCorrect ? (
+                    <>
+                      <Check className="text-green-600" size={24} />
+                      <span className="font-medium text-green-800">Correct!</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="text-red-600" size={24} />
+                      <span className="font-medium text-red-800">Incorrect</span>
+                    </>
+                  )}
+                </div>
+                <div className="text-sm text-gray-700">
+                  Correct answer{currentWord.georgian_definitions.length > 1 ? 's' : ''}:{' '}
+                  {direction === 'en-to-geo'
+                    ? currentWord.georgian_definitions.join(', ')
+                    : currentWord.english_word}
+                </div>
+              </div>
             )}
+
+            <div className="mt-4">
+              {!showResult ? (
+                <button
+                  onClick={checkAnswer}
+                  disabled={!userAnswer.trim()}
+                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                >
+                  Check Answer
+                </button>
+              ) : (
+                <button
+                  onClick={nextWord}
+                  className={`w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                    currentIndex + 1 >= sessionWords.length
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  {currentIndex + 1 >= sessionWords.length ? 'Finish Practice' : 'Next Word'}
+                  {currentIndex + 1 >= sessionWords.length ? <Check size={20} /> : <ChevronRight size={20} />}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Reset Modal */}
@@ -390,4 +390,3 @@ if (!currentWord && !showCompletionDialog) {
     </>
   );
 }
-
