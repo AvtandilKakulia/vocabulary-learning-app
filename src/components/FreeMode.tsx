@@ -119,26 +119,27 @@ useEffect(() => {
     if (correct) setCorrectCount((prev) => prev + 1);
   };
 
-  const nextWord = () => {
-    if (!currentWord) return;
+const nextWord = () => {
+  if (!currentWord) return;
 
-    // Mark current word as guessed if re-guessing is not allowed
-    if (!allowReguess) {
-      setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
-    }
+  if (!allowReguess) {
+    setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
+  }
 
-    const nextIndex = currentIndex + 1;
+  const nextIndex = currentIndex + 1;
 
-    if (nextIndex >= sessionWords.length) {
-      setShowCompletionDialog(true); // Show modal on last word
-      return;
-    }
+  if (nextIndex >= sessionWords.length) {
+    // Do NOT set currentWord to null
+    setShowCompletionDialog(true); // Show modal
+    return;
+  }
 
-    setCurrentIndex(nextIndex);
-    setCurrentWord(sessionWords[nextIndex]);
-    setUserAnswer('');
-    setShowResult(false);
-  };
+  setCurrentIndex(nextIndex);
+  setCurrentWord(sessionWords[nextIndex]);
+  setUserAnswer('');
+  setShowResult(false);
+};
+
 
   // Restart practice from completion modal
   const handleRestartPractice = () => {
@@ -172,15 +173,16 @@ useEffect(() => {
     );
   }
 
-  if (!currentWord) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 mb-4">
-          No words available for practice. Add some words!
-        </p>
-      </div>
-    );
-  }
+if (!currentWord && !showCompletionDialog) {
+  return (
+    <div className="text-center py-12">
+      <p className="text-gray-500 mb-4">
+        No words available for practice. Add some words!
+      </p>
+    </div>
+  );
+}
+
 
   // Determine completion message
   const successRate = totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
