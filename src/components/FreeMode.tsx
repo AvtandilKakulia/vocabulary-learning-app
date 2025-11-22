@@ -22,7 +22,7 @@ export default function FreeMode() {
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [progressLoaded, setProgressLoaded] = useState(false);
 
-  // Load progress on mount
+  // Load progress from localStorage
   useEffect(() => {
     const savedProgress = localStorage.getItem('vocab_practice_progress');
     if (savedProgress) {
@@ -50,7 +50,6 @@ export default function FreeMode() {
       if (error) throw error;
 
       let wordsToUse = data || [];
-
       if (shuffle) {
         wordsToUse = [...wordsToUse].sort(() => Math.random() - 0.5);
       } else {
@@ -63,24 +62,25 @@ export default function FreeMode() {
     }
   }, [user, shuffle]);
 
-  // Filter words based on guessedWords and allowReguess
+  // Filter words and adjust currentIndex automatically
   useEffect(() => {
     if (!progressLoaded) return;
 
-    const filtered = allowReguess
-      ? words
-      : words.filter(w => !guessedWords.has(w.english_word));
+    let filtered = allowReguess ? words : words.filter(w => !guessedWords.has(w.english_word));
 
     setFilteredWords(filtered);
 
-    // Adjust currentIndex if out of bounds
-    if (currentIndex >= filtered.length) setCurrentIndex(0);
+    // Ensure currentIndex points to next valid word
+    if (filtered.length === 0) {
+      setCurrentIndex(0);
+    } else if (currentIndex >= filtered.length) {
+      setCurrentIndex(0);
+    }
   }, [words, guessedWords, allowReguess, currentIndex, progressLoaded]);
 
-  // Persist progress
+  // Persist progress to localStorage
   useEffect(() => {
     if (!progressLoaded) return;
-
     const progress = {
       correctCount,
       totalAttempts,
@@ -95,10 +95,11 @@ export default function FreeMode() {
     if (progressLoaded) loadWords();
   }, [loadWords, progressLoaded]);
 
-  function checkAnswer() {
-    if (!filteredWords[currentIndex]) return;
+  const currentWord = filteredWords[currentIndex];
 
-    const currentWord = filteredWords[currentIndex];
+  function checkAnswer() {
+    if (!currentWord) return;
+
     const answer = userAnswer.trim().toLowerCase();
     let correct = false;
 
@@ -113,7 +114,7 @@ export default function FreeMode() {
     setTotalAttempts(prev => prev + 1);
     if (correct) setCorrectCount(prev => prev + 1);
 
-    // Add word to guessedWords regardless of correct/incorrect
+    // Add to guessedWords regardless of correct/incorrect
     setGuessedWords(prev => new Set([...prev, currentWord.english_word]));
   }
 
@@ -122,7 +123,6 @@ export default function FreeMode() {
       setShowCompletionDialog(true);
       return;
     }
-
     setCurrentIndex(prev => prev + 1);
     setUserAnswer('');
     setShowResult(false);
@@ -138,27 +138,18 @@ export default function FreeMode() {
     loadWords();
   }
 
-  const currentWord = filteredWords[currentIndex];
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12 text-gray-500">
-        Loading words...
-      </div>
-    );
+    return <div className="flex items-center justify-center py-12 text-gray-500">Loading words...</div>;
   }
 
   if (filteredWords.length === 0) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        No words available to practice.
-      </div>
-    );
+    return <div className="text-center py-12 text-gray-500">No words available to practice.</div>;
   }
 
   return (
     <>
       <div className="max-w-2xl mx-auto space-y-6">
+
         {/* Shuffle + Allow Re-guess */}
         <div className="flex justify-between items-center gap-4">
           <button
@@ -288,21 +279,10 @@ export default function FreeMode() {
       {showResetModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <div className="flex items-start gap-4 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                <svg className="text-amber-600" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                  <path d="M3 3v5h5"></path>
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Reset Practice Progress</h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  This will clear all your current session statistics including correct/total attempts and word progress.
-                </p>
-              </div>
-            </div>
-
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reset Practice Progress</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              This will clear all your current session statistics including correct/total attempts and word progress.
+            </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowResetModal(false)}
@@ -333,27 +313,19 @@ export default function FreeMode() {
       {showCompletionDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-4 z-[70]">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md transition-colors">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center">
-                <Check className="text-white" size={32} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">🎉 Practice Session Complete!</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Congratulations on completing all {filteredWords.length} words!
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleCompletionDialogOk}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 dark:hover:from-blue-800 dark:hover:to-indigo-800 font-medium transition-all duration-200 flex items-center justify-center gap-2"
-              >
-                <Check size={20} />
-                Continue
-              </button>
-            </div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+              🎉 Practice Session Complete!
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              Congratulations on completing all {filteredWords.length} words!
+            </p>
+            <button
+              onClick={handleCompletionDialogOk}
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <Check size={20} />
+              Continue
+            </button>
           </div>
         </div>
       )}
