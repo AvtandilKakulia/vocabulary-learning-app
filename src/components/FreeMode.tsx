@@ -67,18 +67,13 @@ export default function FreeMode() {
         );
       }
 
-      // Only reset progress if we're explicitly starting a new session after completion
-      // and there are no active attempts
-      if (sessionCompleted && totalAttempts === 0 && guessedWords.size === 0) {
-        setSessionCompleted(false);
-      }
-
-      // Only reset currentIndex and form state if we don't have a valid currentIndex
-      // or if we're starting fresh after completion
-      const shouldResetIndex = (currentIndex >= wordsToUse.length) || 
-                              (sessionCompleted && totalAttempts === 0 && guessedWords.size === 0);
-      
-      if (shouldResetIndex) {
+      // Only reset currentIndex if we have no valid words or currentIndex is out of bounds
+      if (wordsToUse.length === 0) {
+        setCurrentIndex(0);
+        setUserAnswer('');
+        setShowResult(false);
+      } else if (currentIndex >= wordsToUse.length) {
+        // Only reset if we actually ran out of words
         setCurrentIndex(0);
         setUserAnswer('');
         setShowResult(false);
@@ -90,13 +85,35 @@ export default function FreeMode() {
     } finally {
       setLoading(false);
     }
-  }, [user, allowReguess, shuffle, guessedWords, sessionCompleted, currentIndex, totalAttempts, guessedWords.size]);
+  }, [user, allowReguess, shuffle, guessedWords, currentIndex]);
 
   useEffect(() => {
     if (progressLoaded) {
       loadWords();
     }
   }, [loadWords, progressLoaded]);
+
+  // Handle allowReguess changes with a small delay to avoid conflicts
+  useEffect(() => {
+    if (progressLoaded) {
+      const timer = setTimeout(() => {
+        loadWords();
+      }, 100); // Small delay to ensure navigation state is stable
+      
+      return () => clearTimeout(timer);
+    }
+  }, [allowReguess, progressLoaded]);
+
+  // Handle shuffle changes with a small delay to avoid conflicts
+  useEffect(() => {
+    if (progressLoaded) {
+      const timer = setTimeout(() => {
+        loadWords();
+      }, 100); // Small delay to ensure navigation state is stable
+      
+      return () => clearTimeout(timer);
+    }
+  }, [shuffle, progressLoaded]);
 
   // Save progress to localStorage whenever it changes
   useEffect(() => {
@@ -196,7 +213,7 @@ export default function FreeMode() {
           <button
             onClick={() => {
               setShuffle(!shuffle);
-              loadWords();
+              // Let the useEffect handle the reload
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
               shuffle
@@ -238,7 +255,7 @@ export default function FreeMode() {
             checked={allowReguess}
             onChange={(e) => {
               setAllowReguess(e.target.checked);
-              loadWords();
+              // Don't immediately reload words - let the useEffect handle it with debouncing
             }}
             className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
           />
