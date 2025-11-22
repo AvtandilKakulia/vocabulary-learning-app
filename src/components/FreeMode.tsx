@@ -13,6 +13,9 @@ export default function FreeMode() {
   const [isCorrect, setIsCorrect] = useState(false);
   const [shuffle, setShuffle] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [answeredWords, setAnsweredWords] = useState<Set<number>>(new Set());
+  const [correctAnswers, setCorrectAnswers] = useState<Set<number>>(new Set());
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   useEffect(() => {
     loadWords();
@@ -42,6 +45,9 @@ export default function FreeMode() {
       setCurrentIndex(0);
       setUserAnswer('');
       setShowResult(false);
+      setAnsweredWords(new Set());
+      setCorrectAnswers(new Set());
+      setShowCompletionModal(false);
     } catch (error: any) {
       console.error('Error loading words:', error);
     } finally {
@@ -55,26 +61,96 @@ export default function FreeMode() {
     const currentWord = words[currentIndex];
     const answer = userAnswer.trim().toLowerCase();
 
+    let correct = false;
     if (direction === 'en-to-geo') {
-      const correct = currentWord.georgian_definitions.some(
+      correct = currentWord.georgian_definitions.some(
         def => def.toLowerCase() === answer
       );
-      setIsCorrect(correct);
     } else {
-      const correct = currentWord.english_word.toLowerCase() === answer;
-      setIsCorrect(correct);
+      correct = currentWord.english_word.toLowerCase() === answer;
     }
 
+    setIsCorrect(correct);
     setShowResult(true);
+
+    // Track answered words
+    const wordId = currentWord.id;
+    setAnsweredWords(prev => new Set(prev).add(wordId));
+    
+    // Track correct answers
+    if (correct) {
+      setCorrectAnswers(prev => new Set(prev).add(wordId));
+    }
   }
 
   function nextWord() {
-    setCurrentIndex((currentIndex + 1) % words.length);
+    const nextIndex = (currentIndex + 1) % words.length;
+    setCurrentIndex(nextIndex);
     setUserAnswer('');
     setShowResult(false);
+
+    // Check if all words have been answered
+    if (answeredWords.size >= words.length) {
+      setShowCompletionModal(true);
+    }
+  }
+
+  function getCompletionStats() {
+    const totalWords = words.length;
+    const answeredCount = answeredWords.size;
+    const correctCount = correctAnswers.size;
+    const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
+
+    return { totalWords, answeredCount, correctCount, accuracy };
+  }
+
+  function getCompletionMessage() {
+    const { accuracy, correctCount, totalWords } = getCompletionStats();
+    
+    if (accuracy >= 90) {
+      return { 
+        emoji: '🎉', 
+        title: 'Excellent!', 
+        message: `Perfect score! You're a language master! ${correctCount}/${totalWords} correct.` 
+      };
+    } else if (accuracy >= 70) {
+      return { 
+        emoji: '👍', 
+        title: 'Great Job!', 
+        message: `Well done! You're making great progress. ${correctCount}/${totalWords} correct.` 
+      };
+    } else if (accuracy >= 50) {
+      return { 
+        emoji: '🙂', 
+        title: 'Good Effort!', 
+        message: `Keep practicing! You're getting there. ${correctCount}/${totalWords} correct.` 
+      };
+    } else {
+      return { 
+        emoji: '💪', 
+        title: 'Keep Going!', 
+        message: `Don't give up! Practice makes perfect. ${correctCount}/${totalWords} correct.` 
+      };
+    }
+  }
+
+  function restartPractice() {
+    setCurrentIndex(0);
+    setUserAnswer('');
+    setShowResult(false);
+    setAnsweredWords(new Set());
+    setCorrectAnswers(new Set());
+    setShowCompletionModal(false);
+    
+    // Reshuffle if shuffle is enabled
+    if (shuffle) {
+      const shuffledWords = [...words].sort(() => Math.random() - 0.5);
+      setWords(shuffledWords);
+    }
   }
 
   const currentWord = words[currentIndex];
+  const { totalWords, answeredCount, correctCount } = getCompletionStats();
 
   if (loading) {
     return (
@@ -94,6 +170,24 @@ export default function FreeMode() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Progress Bar */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-medium text-gray-700">
+            Progress: {answeredCount}/{totalWords} words
+          </span>
+          <span className="text-sm font-medium text-gray-700">
+            Correct: {correctCount}/{answeredCount}
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${(answeredCount / totalWords) * 100}%` }}
+          ></div>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Free Mode - Practice</h2>
         <div className="flex gap-2">
@@ -237,6 +331,35 @@ export default function FreeMode() {
           </div>
         </div>
       </div>
+
+      {/* Completion Modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 text-center">
+            <div className="text-6xl mb-4">{getCompletionMessage().emoji}</div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              {getCompletionMessage().title}
+            </h3>
+            <p className="text-gray-600 mb-6">
+              {getCompletionMessage().message}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={restartPractice}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors"
+              >
+                Practice Again
+              </button>
+              <button
+                onClick={() => setShowCompletionModal(false)}
+                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
