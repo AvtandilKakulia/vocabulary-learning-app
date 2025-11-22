@@ -8,6 +8,7 @@ export default function FreeMode() {
   const [allWords, setAllWords] = useState<Word[]>([]);
   const [remainingWords, setRemainingWords] = useState<Word[]>([]);
   const [currentWord, setCurrentWord] = useState<Word | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0); // New state for progress
   const [direction, setDirection] = useState<'en-to-geo' | 'geo-to-en'>('geo-to-en');
   const [userAnswer, setUserAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
@@ -92,6 +93,15 @@ export default function FreeMode() {
     setCurrentWord(remaining[0] || null);
   }, [allWords, guessedWords, allowReguess]);
 
+  // Update currentIndex whenever currentWord changes
+  useEffect(() => {
+    if (!currentWord) return;
+    const index = allWords.findIndex(
+      (w) => w.english_word === currentWord.english_word
+    );
+    setCurrentIndex(index);
+  }, [currentWord, allWords]);
+
   const checkAnswer = () => {
     if (!currentWord) return;
 
@@ -120,17 +130,14 @@ export default function FreeMode() {
       setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
     }
 
-    // If last word, show completion dialog
-    if (remainingWords.length <= 1) {
+    const nextIndex = currentIndex + 1;
+
+    if (nextIndex >= allWords.length) {
       setShowCompletionDialog(true);
       return;
     }
 
-    const nextIndex =
-      remainingWords.findIndex(
-        (w) => w.english_word === currentWord?.english_word
-      ) + 1;
-    setCurrentWord(remainingWords[nextIndex]);
+    setCurrentWord(allWords[nextIndex]);
     setUserAnswer('');
     setShowResult(false);
   };
@@ -221,7 +228,7 @@ export default function FreeMode() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
           <div className="text-center mb-4">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-              Word {allWords.length - remainingWords.length + 1} of {allWords.length}
+              Word {currentIndex + 1} of {allWords.length}
             </div>
             <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
               {direction === 'en-to-geo'
@@ -293,13 +300,13 @@ export default function FreeMode() {
               <button
                 onClick={nextWord}
                 className={`w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  remainingWords.length <= 1
+                  currentIndex + 1 >= allWords.length
                     ? 'bg-green-600 hover:bg-green-700 text-white'
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
                 }`}
               >
-                {remainingWords.length <= 1 ? 'Finish Practice' : 'Next Word'}
-                {remainingWords.length <= 1 ? <Check size={20} /> : <ChevronRight size={20} />}
+                {currentIndex + 1 >= allWords.length ? 'Finish Practice' : 'Next Word'}
+                {currentIndex + 1 >= allWords.length ? <Check size={20} /> : <ChevronRight size={20} />}
               </button>
             )}
           </div>
