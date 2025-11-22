@@ -9,6 +9,68 @@ interface ProgressTracker {
   correctAnswers: number;
 }
 
+interface PersistedProgress {
+  userId: string;
+  words: ProgressTracker[];
+  currentIndex: number;
+  direction: 'en-to-geo' | 'geo-to-en';
+  userAnswer: string;
+  showResult: boolean;
+  lastUpdated: string;
+}
+
+// Helper functions for localStorage
+function saveSessionToStorage(userId: string, data: {
+  progress: ProgressTracker[];
+  currentIndex: number;
+  direction: 'en-to-geo' | 'geo-to-en';
+  userAnswer: string;
+  showResult: boolean;
+}) {
+  if (!userId) return;
+  
+  const persistedData: PersistedProgress = {
+    userId,
+    words: data.progress,
+    currentIndex: data.currentIndex,
+    direction: data.direction,
+    userAnswer: data.userAnswer,
+    showResult: data.showResult,
+    lastUpdated: new Date().toISOString()
+  };
+  
+  try {
+    localStorage.setItem(`freemode_session_${userId}`, JSON.stringify(persistedData));
+  } catch (error) {
+    console.warn('Could not save session to localStorage:', error);
+  }
+}
+
+function loadSessionFromStorage(userId: string): PersistedProgress | null {
+  if (!userId) return null;
+  
+  try {
+    const stored = localStorage.getItem(`freemode_session_${userId}`);
+    if (stored) {
+      const parsed: PersistedProgress = JSON.parse(stored);
+      return parsed;
+    }
+  } catch (error) {
+    console.warn('Could not load session from localStorage:', error);
+  }
+  
+  return null;
+}
+
+function clearSessionFromStorage(userId: string) {
+  if (!userId) return;
+  try {
+    localStorage.removeItem(`freemode_session_${userId}`);
+  } catch (error) {
+    console.warn('Could not clear session from localStorage:', error);
+  }
+}
+
 interface CompletionModalProps {
   isOpen: boolean;
   totalWords: number;
@@ -106,6 +168,48 @@ export default function FreeMode() {
     loadWords();
   }, [shuffle]);
 
+  // Load session from localStorage when words change
+  useEffect(() => {
+    if (words.length > 0 && user) {
+      const savedSession = loadSessionFromStorage(user.id);
+      if (savedSession) {
+        // Merge saved progress with current words to handle added/removed words
+        const currentWordIds = new Set(words.map(w => w.id));
+        const savedWordIds = new Set(savedSession.words.map(p => p.wordId));
+        
+        // Keep progress for words that still exist
+        const relevantProgress = savedSession.words.filter(p => currentWordIds.has(p.wordId));
+        
+        // Add progress tracking for new words
+        const newWords = words.filter(w => !savedWordIds.has(w.id));
+        const newProgress = newWords.map(word => ({
+          wordId: word.id,
+          attempts: 0,
+          correctAnswers: 0
+        }));
+        
+        const mergedProgress = [...relevantProgress, ...newProgress];
+        setProgress(mergedProgress);
+        
+        // Restore session state
+        const validIndex = savedSession.currentIndex < words.length ? savedSession.currentIndex : 0;
+        setCurrentIndex(validIndex);
+        setDirection(savedSession.direction);
+        setUserAnswer(savedSession.userAnswer);
+        setShowResult(savedSession.showResult);
+        
+      } else {
+        // Initialize new progress for all words
+        const initialProgress: ProgressTracker[] = words.map(word => ({
+          wordId: word.id,
+          attempts: 0,
+          correctAnswers: 0
+        }));
+        setProgress(initialProgress);
+      }
+    }
+  }, [words, user]);
+
   async function loadWords() {
     if (!user) return;
 
@@ -156,17 +260,32 @@ export default function FreeMode() {
     setIsCorrect(correct);
     setShowResult(true);
 
-    // Update progress
-    setProgress(prev => prev.map(p => {
-      if (p.wordId === currentWord.id) {
-        return {
-          ...p,
-          attempts: p.attempts + 1,
-          correctAnswers: correct ? p.correctAnswers + 1 : p.correctAnswers
-        };
+    // Update progress and save session
+    setProgress(prev => {
+      const updated = prev.map(p => {
+        if (p.wordId === currentWord.id) {
+          return {
+            ...p,
+            attempts: p.attempts + 1,
+            correctAnswers: correct ? p.correctAnswers + 1 : p.correctAnswers
+          };
+        }
+        return p;
+      });
+      
+      // Save complete session to localStorage
+      if (user) {
+        saveSessionToStorage(user.id, {
+          progress: updated,
+          currentIndex,
+          direction,
+          userAnswer: '',
+          showResult: true
+        });
       }
-      return p;
-    }));
+      
+      return updated;
+    });
   }
 
   function nextWord() {
@@ -179,10 +298,26 @@ export default function FreeMode() {
       setCurrentIndex(nextIndex);
       setUserAnswer('');
       setShowResult(false);
+      
+      // Save session state
+      if (user) {
+        saveSessionToStorage(user.id, {
+          progress,
+          currentIndex: nextIndex,
+          direction,
+          userAnswer: '',
+          showResult: false
+        });
+      }
     }
   }
 
   function restartPractice() {
+    // Clear session from localStorage
+    if (user) {
+      clearSessionFromStorage(user.id);
+    }
+    
     // Reset progress and start over
     const initialProgress: ProgressTracker[] = words.map(word => ({
       wordId: word.id,
@@ -259,6 +394,16 @@ export default function FreeMode() {
                 setDirection('en-to-geo');
                 setUserAnswer('');
                 setShowResult(false);
+                // Save session state
+                if (user) {
+                  saveSessionToStorage(user.id, {
+                    progress,
+                    currentIndex,
+                    direction: 'en-to-geo',
+                    userAnswer: '',
+                    showResult: false
+                  });
+                }
               }}
               className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
                 direction === 'en-to-geo'
@@ -273,6 +418,16 @@ export default function FreeMode() {
                 setDirection('geo-to-en');
                 setUserAnswer('');
                 setShowResult(false);
+                // Save session state
+                if (user) {
+                  saveSessionToStorage(user.id, {
+                    progress,
+                    currentIndex,
+                    direction: 'geo-to-en',
+                    userAnswer: '',
+                    showResult: false
+                  });
+                }
               }}
               className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
                 direction === 'geo-to-en'
