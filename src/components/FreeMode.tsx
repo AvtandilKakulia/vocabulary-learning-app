@@ -93,7 +93,7 @@ export default function FreeMode() {
   const { user } = useAuth();
   const [words, setWords] = useState<Word[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [direction, setDirection] = useState<'en-to-geo' | 'geo-to-en'>('en-to-geo');
+  const [direction, setDirection] = useState<'en-to-geo' | 'geo-to-en'>('geo-to-en');
   const [userAnswer, setUserAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
@@ -250,22 +250,22 @@ export default function FreeMode() {
       </div>
 
       {/* Progress Tracker */}
-      <div className="bg-white rounded-lg shadow-md p-4">
+      <div className="bg-white rounded-lg shadow-md p-3">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-medium text-gray-700">Progress</span>
-          <span className="text-sm text-gray-500">
-            {answeredWords} / {totalWords} questions answered
+          <span className="text-xs font-medium text-gray-700">Progress</span>
+          <span className="text-xs text-gray-500">
+            {answeredWords} / {totalWords} answered
           </span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-3">
+        <div className="w-full bg-gray-200 rounded-full h-2">
           <div 
-            className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
             style={{ width: `${(answeredWords / totalWords) * 100}%` }}
           ></div>
         </div>
         {correctAnswers > 0 && answeredWords > 0 && (
-          <div className="text-center mt-2">
-            <span className="text-sm text-gray-600">
+          <div className="text-center mt-1">
+            <span className="text-xs text-gray-600">
               Correct: {correctAnswers} ({((correctAnswers / answeredWords) * 100).toFixed(1)}%)
             </span>
           </div>
@@ -388,7 +388,7 @@ export default function FreeMode() {
                 onClick={nextWord}
                 className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2"
               >
-                Next Word
+                {currentIndex === words.length - 1 ? 'Finish Test' : 'Next Word'}
                 <ChevronRight size={20} />
               </button>
             )}
