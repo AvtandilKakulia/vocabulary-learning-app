@@ -1,392 +1,373 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { supabase, Word } from '../lib/supabase';
+import React, { useState, useEffect } from 'react';
+import { supabase, Word, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Shuffle, ChevronRight, Check, X } from 'lucide-react';
+import { Check, X, RotateCcw } from 'lucide-react';
 
-export default function FreeMode() {
+interface TestWord extends Word {
+  userAnswer: string;
+  isCorrect: boolean;
+}
+
+export default function TestMode() {
   const { user } = useAuth();
-
-  // All words loaded from Supabase
-  const [allWords, setAllWords] = useState<Word[]>([]);
-
-  // Current session words (filtered & shuffled)
-  const [sessionWords, setSessionWords] = useState<Word[]>([]);
-
-  const [currentWord, setCurrentWord] = useState<Word | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  const [direction, setDirection] = useState<'en-to-geo' | 'geo-to-en'>('geo-to-en');
+  const [stage, setStage] = useState<'setup' | 'testing' | 'results'>('setup');
+  const [direction, setDirection] = useState<'en-to-geo' | 'geo-to-en'>('en-to-geo');
+  const [wordCount, setWordCount] = useState(10);
+  const [customCount, setCustomCount] = useState('');
+  const [inputType, setInputType] = useState<'multiple' | 'text'>('text');
+  const [testWords, setTestWords] = useState<TestWord[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
-  const [showResult, setShowResult] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [shuffle, setShuffle] = useState(true);
-  const [allowReguess, setAllowReguess] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const [correctCount, setCorrectCount] = useState(0);
-  const [totalAttempts, setTotalAttempts] = useState(0);
-  const [guessedWords, setGuessedWords] = useState<Set<string>>(new Set());
-
-  const [showResetModal, setShowResetModal] = useState(false);
-  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
-
-  // Load progress from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('vocab_practice_progress');
-    if (saved) {
-      try {
-        const progress = JSON.parse(saved);
-        setCorrectCount(progress.correctCount || 0);
-        setTotalAttempts(progress.totalAttempts || 0);
-        setGuessedWords(new Set(progress.guessedWords || []));
-      } catch {}
-    }
-  }, []);
-
-  // Save progress to localStorage
-  useEffect(() => {
-    const progress = {
-      correctCount,
-      totalAttempts,
-      guessedWords: Array.from(guessedWords),
-      timestamp: Date.now(),
-    };
-    localStorage.setItem('vocab_practice_progress', JSON.stringify(progress));
-  }, [correctCount, totalAttempts, guessedWords]);
-
-  // Load words from Supabase
-  const loadWords = useCallback(async () => {
+  async function startTest() {
     if (!user) return;
+
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('words')
-        .select('*')
-        .eq('user_id', user.id);
+        .select('*');
 
       if (error) throw error;
 
-      setAllWords(data || []);
-    } catch (error) {
-      console.error('Error loading words:', error);
+      if (!data || data.length === 0) {
+        alert('No words available. Add some words first!');
+        return;
+      }
+
+      const count = wordCount === 0 ? parseInt(customCount) : wordCount;
+      if (count <= 0 || count > data.length) {
+        alert(`Please select between 1 and ${data.length} words`);
+        return;
+      }
+
+      const shuffled = [...data].sort(() => Math.random() - 0.5).slice(0, count);
+      const testData: TestWord[] = shuffled.map(word => ({
+        ...word,
+        userAnswer: '',
+        isCorrect: false,
+      }));
+
+      setTestWords(testData);
+      setCurrentQuestion(0);
+      setUserAnswer('');
+      setStage('testing');
+    } catch (error: any) {
+      console.error('Error starting test:', error);
+      alert('Error starting test: ' + error.message);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }
 
-  useEffect(() => {
-    loadWords();
-  }, [loadWords]);
-
-  // Initialize session words whenever allWords, shuffle, guessedWords, or allowReguess changes
-  useEffect(() => {
-    if (allWords.length === 0) return;
-
-    // Filter out already guessed words unless allow re-guessing
-    let words = allowReguess
-      ? [...allWords]
-      : allWords.filter((w) => !guessedWords.has(w.english_word));
-
-    if (shuffle) {
-      words.sort(() => Math.random() - 0.5);
-    } else {
-      words.sort((a, b) => a.english_word.localeCompare(b.english_word));
-    }
-
-    setSessionWords(words);
-    setCurrentIndex(0);
-    setCurrentWord(words[0] || null);
-    setUserAnswer('');
-    setShowResult(false);
-  }, [allWords, shuffle, guessedWords, allowReguess]);
-
-  const checkAnswer = () => {
-    if (!currentWord) return;
-
+  function submitAnswer() {
+    const currentWord = testWords[currentQuestion];
     const answer = userAnswer.trim().toLowerCase();
     let correct = false;
 
     if (direction === 'en-to-geo') {
       correct = currentWord.georgian_definitions.some(
-        (def) => def.toLowerCase() === answer
+        def => def.toLowerCase() === answer
       );
     } else {
       correct = currentWord.english_word.toLowerCase() === answer;
     }
 
-    setIsCorrect(correct);
-    setShowResult(true);
-    setTotalAttempts((prev) => prev + 1);
-    if (correct) setCorrectCount((prev) => prev + 1);
+    const updatedWords = [...testWords];
+    updatedWords[currentQuestion] = {
+      ...currentWord,
+      userAnswer: userAnswer.trim(),
+      isCorrect: correct,
+    };
+    setTestWords(updatedWords);
 
-    // Mark as guessed if re-guess not allowed
-    if (!allowReguess) {
-      setGuessedWords((prev) => new Set(prev).add(currentWord.english_word));
+    if (currentQuestion < testWords.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+      setUserAnswer('');
+    } else {
+      finishTest(updatedWords);
     }
-  };
+  }
 
-  const nextWord = () => {
-    if (!currentWord) return;
+  async function finishTest(finalWords: TestWord[]) {
+    if (!user) return;
 
-    const nextIndex = currentIndex + 1;
+    const correctCount = finalWords.filter(w => w.isCorrect).length;
+    const mistakes: TestMistake[] = finalWords
+      .filter(w => !w.isCorrect)
+      .map(w => ({
+        english_word: w.english_word,
+        user_answer: w.userAnswer,
+        correct_definitions: w.georgian_definitions,
+      }));
 
-    if (nextIndex >= sessionWords.length) {
-      setShowCompletionDialog(true); // Show modal on last word
-      return;
+    try {
+      const { error } = await supabase
+        .from('test_history')
+        .insert({
+          user_id: user.id,
+          test_direction: direction,
+          total_words: finalWords.length,
+          correct_count: correctCount,
+          mistakes: mistakes,
+        });
+
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Error saving test history:', error);
     }
 
-    setCurrentIndex(nextIndex);
-    setCurrentWord(sessionWords[nextIndex]);
+    setStage('results');
+  }
+
+  function resetTest() {
+    setStage('setup');
+    setTestWords([]);
+    setCurrentQuestion(0);
     setUserAnswer('');
-    setShowResult(false);
-  };
+  }
 
-  // Restart practice after completion modal OK
-  const handleRestartPractice = () => {
-    localStorage.removeItem('vocab_practice_progress');
-
-    setCorrectCount(0);
-    setTotalAttempts(0);
-    setGuessedWords(new Set());
-
-    setCurrentIndex(0);
-    setCurrentWord(sessionWords[0] || null);
-    setUserAnswer('');
-    setShowResult(false);
-    setShowCompletionDialog(false);
-  };
-
-  const handleResetProgress = async () => {
-    setCorrectCount(0);
-    setTotalAttempts(0);
-    setGuessedWords(new Set());
-    localStorage.removeItem('vocab_practice_progress');
-    await loadWords();
-  };
-
-  if (loading) {
+  if (stage === 'setup') {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-gray-500">Loading words...</div>
-      </div>
-    );
-  }
-
-  if (!currentWord && !showCompletionDialog) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 mb-4">
-          No words available for practice. Add some words!
-        </p>
-      </div>
-    );
-  }
-
-  // Completion message and emoji
-  const successRate = totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0;
-  let message = '';
-  let emoji = '';
-  if (successRate === 100) {
-    message = 'Perfect!';
-    emoji = '🏆';
-  } else if (successRate >= 75) {
-    message = 'Great job!';
-    emoji = '🎉';
-  } else if (successRate >= 50) {
-    message = 'Good effort!';
-    emoji = '👍';
-  } else {
-    message = 'Keep practicing!';
-    emoji = '💪';
-  }
-
-  return (
-    <>
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Shuffle + Allow Re-guess */}
-        <div className="flex gap-4 items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-          <button
-            onClick={() => setShuffle(!shuffle)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-              shuffle
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <Shuffle size={18} /> Shuffle
-          </button>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={allowReguess}
-              onChange={(e) => setAllowReguess(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded"
-            />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Allow re-guessing words
-            </span>
-          </label>
-        </div>
+        <h2 className="text-2xl font-bold text-gray-900">Test Mode</h2>
 
-        {/* Progress */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">
-                Correct: {correctCount} / {totalAttempts}
-              </div>
-              <div className="text-sm text-blue-700 dark:text-blue-300">
-                {totalAttempts > 0 ? Math.round(successRate) : 0}% Success Rate
-              </div>
-            </div>
-            <button
-              onClick={() => setShowResetModal(true)}
-              className="px-4 py-2 text-sm bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors"
-            >
-              Reset Progress
-            </button>
-          </div>
-        </div>
-
-        {/* Current Word */}
-        {currentWord && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-            <div className="text-center mb-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                Word {currentIndex + 1} of {sessionWords.length}
-              </div>
-              <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                {direction === 'en-to-geo'
-                  ? currentWord.english_word
-                  : currentWord.georgian_definitions.join(', ')}
-              </div>
-              {currentWord.description && (
-                <div className="text-sm text-gray-600 dark:text-gray-400 mt-2 italic">
-                  {currentWord.description}
-                </div>
-              )}
-            </div>
-
-            <div className="mb-4">
-              <input
-                type="text"
-                value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !showResult) checkAnswer();
-                  else if (e.key === 'Enter' && showResult) nextWord();
-                }}
-                disabled={showResult}
-                placeholder="Type your answer..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-              />
-            </div>
-
-            {showResult && (
-              <div
-                className={`p-4 rounded-lg ${
-                  isCorrect
-                    ? 'bg-green-50 border border-green-200'
-                    : 'bg-red-50 border border-red-200'
+        <div className="bg-white rounded-lg shadow-lg p-8 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Translation Direction
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDirection('en-to-geo')}
+                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                  direction === 'en-to-geo'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  {isCorrect ? (
-                    <>
-                      <Check className="text-green-600" size={24} />
-                      <span className="font-medium text-green-800">Correct!</span>
-                    </>
-                  ) : (
-                    <>
-                      <X className="text-red-600" size={24} />
-                      <span className="font-medium text-red-800">Incorrect</span>
-                    </>
-                  )}
-                </div>
-                <div className="text-sm text-gray-700">
-                  Correct answer{currentWord.georgian_definitions.length > 1 ? 's' : ''}:{' '}
-                  {direction === 'en-to-geo'
-                    ? currentWord.georgian_definitions.join(', ')
-                    : currentWord.english_word}
-                </div>
-              </div>
-            )}
+                English → Georgian
+              </button>
+              <button
+                onClick={() => setDirection('geo-to-en')}
+                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                  direction === 'geo-to-en'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Georgian → English
+              </button>
+            </div>
+          </div>
 
-            <div className="mt-4">
-              {!showResult ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Number of Words
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {[10, 20, 30].map(count => (
                 <button
-                  onClick={checkAnswer}
-                  disabled={!userAnswer.trim()}
-                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                >
-                  Check Answer
-                </button>
-              ) : (
-                <button
-                  onClick={nextWord}
-                  className={`w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                    currentIndex + 1 >= sessionWords.length
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  key={count}
+                  onClick={() => {
+                    setWordCount(count);
+                    setCustomCount('');
+                  }}
+                  className={`px-4 py-2 rounded-lg border transition-colors ${
+                    wordCount === count
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  {currentIndex + 1 >= sessionWords.length ? 'Finish Practice' : 'Next Word'}
-                  {currentIndex + 1 >= sessionWords.length ? <Check size={20} /> : <ChevronRight size={20} />}
+                  {count}
                 </button>
-              )}
+              ))}
+              <input
+                type="number"
+                value={customCount}
+                onChange={(e) => {
+                  setCustomCount(e.target.value);
+                  setWordCount(0);
+                }}
+                placeholder="Custom"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Reset Modal */}
-      {showResetModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Reset Practice Progress
-            </h3>
-            <p className="text-sm text-gray-500 mb-6">
-              This will clear all current statistics.
-            </p>
-            <div className="flex gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Input Type
+            </label>
+            <div className="flex gap-2">
               <button
-                onClick={() => setShowResetModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition-colors"
+                onClick={() => setInputType('text')}
+                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                  inputType === 'text'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
               >
-                Cancel
+                Text Input
               </button>
               <button
-                onClick={handleResetProgress}
-                className="flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium transition-colors"
+                onClick={() => setInputType('multiple')}
+                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                  inputType === 'multiple'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
               >
-                Reset Progress
+                Multiple Choice
               </button>
             </div>
+          </div>
+
+          <button
+            onClick={startTest}
+            disabled={loading || (wordCount === 0 && !customCount)}
+            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+          >
+            {loading ? 'Loading...' : 'Start Test'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === 'testing') {
+    const currentWord = testWords[currentQuestion];
+    const progress = ((currentQuestion) / testWords.length) * 100;
+
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-900">Test in Progress</h2>
+          <div className="text-sm text-gray-600">
+            Question {currentQuestion + 1} of {testWords.length}
           </div>
         </div>
-      )}
 
-      {/* Completion Modal */}
-      {showCompletionDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-md transition-colors text-center">
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-              {emoji} {message}
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              You got {correctCount} out of {totalAttempts} correct ({Math.round(successRate)}%)
-            </p>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center mb-8">
+            <div className="text-4xl font-bold text-gray-900 mb-4">
+              {direction === 'en-to-geo' 
+                ? currentWord.english_word 
+                : currentWord.georgian_definitions[0]
+              }
+            </div>
+            {currentWord.description && (
+              <div className="text-sm text-gray-600 italic">
+                {currentWord.description}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={userAnswer}
+              onChange={(e) => setUserAnswer(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && userAnswer.trim()) {
+                  submitAnswer();
+                }
+              }}
+              placeholder="Type your answer..."
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+              autoFocus
+            />
+
             <button
-              onClick={handleRestartPractice}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              onClick={submitAnswer}
+              disabled={!userAnswer.trim()}
+              className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
-              OK
+              {currentQuestion < testWords.length - 1 ? 'Next Question' : 'Finish Test'}
             </button>
           </div>
         </div>
-      )}
-    </>
-  );
+      </div>
+    );
+  }
+
+  if (stage === 'results') {
+    const correctCount = testWords.filter(w => w.isCorrect).length;
+    const percentage = Math.round((correctCount / testWords.length) * 100);
+
+    return (
+      <div className="max-w-3xl mx-auto space-y-6">
+        <h2 className="text-2xl font-bold text-gray-900">Test Results</h2>
+
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center mb-8">
+            <div className="text-6xl font-bold text-gray-900 mb-2">
+              {percentage}%
+            </div>
+            <div className="text-xl text-gray-600">
+              {correctCount} out of {testWords.length} correct
+            </div>
+          </div>
+
+          <div className="space-y-4 mb-6">
+            <h3 className="font-bold text-lg text-gray-900">Review:</h3>
+            {testWords.map((word, idx) => (
+              <div
+                key={idx}
+                className={`p-4 rounded-lg border ${
+                  word.isCorrect
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-red-50 border-red-200'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {word.isCorrect ? (
+                    <Check className="text-green-600 flex-shrink-0 mt-1" size={20} />
+                  ) : (
+                    <X className="text-red-600 flex-shrink-0 mt-1" size={20} />
+                  )}
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">
+                      {direction === 'en-to-geo' ? word.english_word : word.georgian_definitions[0]}
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Your answer: <span className="font-medium">{word.userAnswer || '(empty)'}</span>
+                    </div>
+                    {!word.isCorrect && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        Correct: <span className="font-medium">
+                          {direction === 'en-to-geo' 
+                            ? word.georgian_definitions.join(', ')
+                            : word.english_word
+                          }
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={resetTest}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors"
+          >
+            <RotateCcw size={20} />
+            Take Another Test
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
