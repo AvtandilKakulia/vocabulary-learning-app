@@ -130,14 +130,6 @@ export default function FreeMode() {
       setCurrentIndex(0);
       setUserAnswer('');
       setShowResult(false);
-      
-      // Initialize progress tracker
-      const initialProgress: ProgressTracker[] = wordsToUse.map(word => ({
-        wordId: word.id,
-        attempts: 0,
-        correctAnswers: 0
-      }));
-      setProgress(initialProgress);
       setShowCompletionModal(false);
     } catch (error: any) {
       console.error('Error loading words:', error);
