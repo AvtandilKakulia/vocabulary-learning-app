@@ -359,7 +359,34 @@ export default function WordManagement() {
           </div>
         </div>
 
-        {/* Pagination */}\n        {totalPages > 1 && (\n          <div className=\"flex flex-col md:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200 dark:border-gray-700\">\n            <div className=\"text-sm font-semibold text-gray-700 dark:text-gray-300\">\n              Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalCount)} of {totalCount} words\n            </div>\n            <div className=\"flex gap-3\">\n              <button\n                onClick={() => setPage(Math.max(0, page - 1))}\n                disabled={page === 0}\n                className=\"px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105\"\n              >\n                Previous\n              </button>\n              <div className=\"px-6 py-3 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 rounded-2xl text-sm font-bold text-blue-800 dark:text-blue-300 shadow-sm\">\n                Page {page + 1} of {totalPages}\n              </div>\n              <button\n                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}\n                disabled={page >= totalPages - 1}\n                className=\"px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105\"\n              >\n                Next\n              </button>\n            </div>\n          </div>\n        )}\n      </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalCount)} of {totalCount} words
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPage(Math.max(0, page - 1))}
+                disabled={page === 0}
+                className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
+              >
+                Previous
+              </button>
+              <div className="px-6 py-3 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 rounded-2xl text-sm font-bold text-blue-800 dark:text-blue-300 shadow-sm">
+                Page {page + 1} of {totalPages}
+              </div>
+              <button
+                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                disabled={page >= totalPages - 1}
+                className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Modals moved outside space-y container to prevent margin interference */}
       {(showAddModal || editingWord) && (
@@ -715,7 +742,70 @@ function WordModal({
               <button
                 type="button"
                 onClick={() => applyFormatting('bold')}
-                className="p-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105\"\n                title=\"Bold\"\n              >\n                <Bold size={18} />\n              </button>\n              <div className=\"relative\">\n                <button\n                  type=\"button\"\n                  onClick={() => setShowColorPicker(!showColorPicker)}\n                  className=\"p-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105\"\n                  title=\"Text Color\"\n                >\n                  <Palette size={18} />\n                </button>\n                {showColorPicker && (\n                  <div className=\"absolute top-full mt-2 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border border-white/20 dark:border-gray-700/20 rounded-2xl p-3 shadow-2xl z-10 flex gap-2\">\n                    {colors.map((color) => (\n                      <button\n                        key={color}\n                        type=\"button\"\n                        onClick={() => {\n                          applyFormatting('color', color);\n                          setShowColorPicker(false);\n                        }}\n                        className=\"w-8 h-8 rounded-xl border-2 border-white dark:border-gray-600 hover:scale-110 transition-all duration-200 shadow-lg\"\n                        style={{ backgroundColor: color }}\n                      />\n                    ))}\n                  </div>\n                )}\n              </div>\n            </div>\n            <textarea\n              id=\"description-textarea\"\n              value={description}\n              onChange={(e) => setDescription(e.target.value)}\n              rows={3}\n              className=\"w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm font-mono text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200\"\n              placeholder=\"Add description (supports bold and colors)\"\n            />\n            {description && (\n              <div className=\"mt-3 p-4 border-2 border-gray-200 dark:border-gray-600 rounded-2xl bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/50 dark:to-blue-900/20\">\n                <div className=\"text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2\">Preview:</div>\n                <div dangerouslySetInnerHTML={{ __html: description }} />\n              </div>\n            )}\n          </div>\n\n          <div className=\"flex gap-4\">\n            <button\n              type=\"button\"\n              onClick={onClose}\n              className=\"flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200\"\n            >\n              Cancel\n            </button>\n            <button\n              type=\"submit\"\n              disabled={saving}\n              className=\"flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl\"\n            >\n              {saving ? 'Saving...' : 'Save'}\n            </button>\n          </div>
+                className="p-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105"
+                title="Bold"
+              >
+                <Bold size={18} />
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowColorPicker(!showColorPicker)}
+                  className="p-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105"
+                  title="Text Color"
+                >
+                  <Palette size={18} />
+                </button>
+                {showColorPicker && (
+                  <div className="absolute top-full mt-2 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border border-white/20 dark:border-gray-700/20 rounded-2xl p-3 shadow-2xl z-10 flex gap-2">
+                    {colors.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => {
+                          applyFormatting('color', color);
+                          setShowColorPicker(false);
+                        }}
+                        className="w-8 h-8 rounded-xl border-2 border-white dark:border-gray-600 hover:scale-110 transition-all duration-200 shadow-lg"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <textarea
+              id="description-textarea"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm font-mono text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+              placeholder="Add description (supports bold and colors)"
+            />
+            {description && (
+              <div className="mt-3 p-4 border-2 border-gray-200 dark:border-gray-600 rounded-2xl bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/50 dark:to-blue-900/20">
+                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Preview:</div>
+                <div dangerouslySetInnerHTML={{ __html: description }} />
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -783,4 +873,8 @@ function DuplicateWordModal({
           >
             Copy Definitions
           </button>
-        </div>\n      </div>\n    </div>\n  );\n}
+        </div>
+      </div>
+    </div>
+  );
+}
