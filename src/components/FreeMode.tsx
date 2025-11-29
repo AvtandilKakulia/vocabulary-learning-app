@@ -378,367 +378,219 @@ export default function FreeMode() {
   const currentWord = words[currentIndex];
 
   return (
-    <>
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Free Mode - Practice
-          </h2>
-        </div>
+    return (
+  <>
+    <div className="max-w-3xl mx-auto space-y-10">
+      {/* ===================== TOP CONTROLS ===================== */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-start gap-8">
 
-        <div className="bg-white rounded-lg shadow-lg p-8 space-y-6">
-          {/* Top bar: Translation Direction + Progress + Shuffle/Reset */}
-          <div className="flex flex-wrap justify-between gap-6 items-start">
-            {/* Translation Direction */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Translation Direction
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setDirection('en-to-geo');
-                    setUserAnswer('');
-                    setShowResult(false);
-                    setIsCorrect(false);
-                  }}
-                  className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
-                    direction === 'en-to-geo'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Eng → Geo
-                </button>
-                <button
-                  onClick={() => {
-                    setDirection('geo-to-en');
-                    setUserAnswer('');
-                    setShowResult(false);
-                    setIsCorrect(false);
-                  }}
-                  className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
-                    direction === 'geo-to-en'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Geo → Eng
-                </button>
-              </div>
-            </div>
-
-            {/* Progress + controls */}
-            <div className="flex flex-col items-end gap-3">
-              <div className="text-right">
-                <div className="text-xs uppercase tracking-wide text-gray-400">
-                  Progress
-                </div>
-                <div className="text-lg font-semibold text-blue-900">
-                  Correct: {correctCount} / {totalAttempts}
-                </div>
-                <div className="text-sm text-blue-700">
-                  {successRate}% Success Rate
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={toggleShuffle}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-                    shuffle
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <Shuffle size={18} />
-                  Shuffle
-                </button>
-                <button
-                  onClick={() => setShowResetModal(true)}
-                  className="px-4 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Current word */}
-          <div className="border-t border-gray-100 pt-6">
-            <div className="text-center mb-8">
-              <div className="text-sm text-gray-500 mb-2">
-                Word {currentIndex + 1} of {words.length}
-              </div>
-              <div className="text-4xl font-bold text-gray-900 mb-2">
-                {direction === 'en-to-geo'
-                  ? currentWord.english_word
-                  : currentWord.georgian_definitions.join(', ')}
-              </div>
-              {currentWord.description && (
-                <div className="text-sm text-gray-600 mt-2 italic">
-                  {currentWord.description}
-                </div>
-              )}
-            </div>
-
-            {/* Answer input + result + actions */}
-            <div className="space-y-4">
-              <div>
-                <input
-                  type="text"
-                  value={userAnswer}
-                  onChange={(e) => setUserAnswer(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !showResult) {
-                      checkAnswer();
-                    } else if (e.key === 'Enter' && showResult) {
-                      nextWord();
-                    }
-                  }}
-                  disabled={showResult}
-                  placeholder="Type your answer..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-                />
-              </div>
-
-              {showResult && (
-                <div
-                  className={`p-4 rounded-lg ${
-                    isCorrect
-                      ? 'bg-green-50 border border-green-200'
-                      : 'bg-red-50 border border-red-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    {isCorrect ? (
-                      <>
-                        <Check className="text-green-600" size={24} />
-                        <span className="font-medium text-green-800">
-                          Correct!
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <X className="text-red-600" size={24} />
-                        <span className="font-medium text-red-800">
-                          Incorrect
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  {!isCorrect && (
-                    <div className="text-sm text-gray-700">
-                      <span className="font-medium">Correct answer:</span>{' '}
-                      {direction === 'en-to-geo'
-                        ? currentWord.georgian_definitions.join(', ')
-                        : currentWord.english_word}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex flex-wrap justify-between gap-3 mt-2">
-                <button
-                  type="button"
-                  onClick={finishPractice}
-                  disabled={savingHistory}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 text-sm font-medium transition-colors"
-                >
-                  {savingHistory ? 'Saving…' : 'Finish Practice'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!showResult) {
-                      checkAnswer();
-                    } else {
-                      nextWord();
-                    }
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2 transition-colors"
-                >
-                  {showResult ? (
-                    <>
-                      Next Word
-                      <ChevronRight size={18} />
-                    </>
-                  ) : (
-                    'Check Answer'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Re-guess toggle */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <label className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={allowReguess}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setAllowReguess(checked);
-                if (allWords.length > 0) {
-                  const newOrder = buildWordOrder(
-                    allWords,
-                    checked,
-                    shuffle,
-                    guessedWords
-                  );
-                  setWords(newOrder);
-                  setCurrentIndex(0);
+          {/* ---- Translation Direction ---- */}
+          <div className="flex flex-col flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Translation Direction
+            </label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setDirection('en-to-geo');
                   setUserAnswer('');
                   setShowResult(false);
-                  setIsCorrect(false);
-                }
-              }}
-              className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <span className="text-sm font-medium text-gray-700">
-              Allow re-guessing previously correct words (Default: No)
-            </span>
-          </label>
+                }}
+                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                  direction === 'en-to-geo'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Eng → Geo
+              </button>
+
+              <button
+                onClick={() => {
+                  setDirection('geo-to-en');
+                  setUserAnswer('');
+                  setShowResult(false);
+                }}
+                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                  direction === 'geo-to-en'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Geo → Eng
+              </button>
+            </div>
+          </div>
+
+          {/* ---- Progress Box ---- */}
+          <div className="flex flex-col items-center flex-1 text-center">
+            <div className="text-xs uppercase tracking-wide text-gray-400">
+              Progress
+            </div>
+
+            <div className="text-lg font-semibold text-blue-900">
+              Correct: {correctCount} / {totalAttempts}
+            </div>
+
+            <div className="text-sm text-blue-700">
+              {totalAttempts > 0
+                ? Math.round((correctCount / totalAttempts) * 100)
+                : 0}
+              % Success Rate
+            </div>
+          </div>
+
+          {/* ---- Shuffle + Reset ---- */}
+          <div className="flex gap-3 flex-1 justify-end items-start">
+            <button
+              onClick={toggleShuffle}
+              className={`px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 ${
+                shuffle
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Shuffle size={18} /> Shuffle
+            </button>
+
+            <button
+              onClick={() => setShowResetModal(true)}
+              className="px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+            >
+              Reset
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Practice Summary Modal */}
-      {showSummaryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Practice Summary
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              You answered{' '}
-              <span className="font-semibold">{correctCount}</span> out of{' '}
-              <span className="font-semibold">{totalAttempts}</span> attempts
-              correctly ({successRate}% success rate).
-            </p>
+      {/* ===================== WORD DISPLAY ===================== */}
+      <div className="bg-white rounded-lg shadow p-8 text-center space-y-4">
+        <div className="text-sm text-gray-500">
+          Word {currentIndex + 1} of {words.length}
+        </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-sm text-blue-900 space-y-1">
-              <div>
-                <strong>Direction:</strong>{' '}
-                {direction === 'en-to-geo' ? 'Eng → Geo' : 'Geo → Eng'}
-              </div>
-              <div>
-                <strong>Total attempts:</strong> {totalAttempts}
-              </div>
-              <div>
-                <strong>Correct answers:</strong> {correctCount}
-              </div>
+        <div className="text-4xl font-bold text-gray-900">
+          {direction === 'en-to-geo'
+            ? currentWord.english_word
+            : currentWord.georgian_definitions.join(', ')}
+        </div>
+
+        {currentWord.description && (
+          <div className="text-sm text-gray-600 italic mt-2">
+            {currentWord.description}
+          </div>
+        )}
+      </div>
+
+      {/* ===================== ANSWER INPUT ===================== */}
+      <div className="bg-white rounded-lg shadow p-8 space-y-6">
+        <input
+          type="text"
+          value={userAnswer}
+          onChange={(e) => setUserAnswer(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter' && !showResult) checkAnswer();
+            else if (e.key === 'Enter' && showResult) nextWord();
+          }}
+          disabled={showResult}
+          placeholder="Type your answer..."
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+
+        {/* RESULT BOX */}
+        {showResult && (
+          <div
+            className={`p-4 rounded-lg ${
+              isCorrect
+                ? 'bg-green-50 border border-green-200'
+                : 'bg-red-50 border border-red-200'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2 mb-1">
+              {isCorrect ? (
+                <>
+                  <Check className="text-green-600" size={24} />
+                  <span className="font-medium text-green-800">Correct!</span>
+                </>
+              ) : (
+                <>
+                  <X className="text-red-600" size={24} />
+                  <span className="font-medium text-red-800">Incorrect</span>
+                </>
+              )}
             </div>
 
-            {mistakes.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-gray-800 mb-2">
-                  Your Mistakes
-                </h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {mistakes.map((m, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 rounded-lg p-2 text-sm"
-                    >
-                      <div className="font-medium text-gray-900">
-                        {m.english_word}
-                      </div>
-                      <div className="text-gray-600">
-                        Your answer:{' '}
-                        <span className="font-semibold">
-                          {m.user_answer || '—'}
-                        </span>
-                      </div>
-                      <div className="text-gray-600">
-                        Correct:{' '}
-                        <span className="font-semibold">
-                          {m.correct_definitions.join(', ')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {!isCorrect && (
+              <div className="text-sm text-gray-700 text-center">
+                <strong>Correct answer:</strong>{' '}
+                {direction === 'en-to-geo'
+                  ? currentWord.georgian_definitions.join(', ')
+                  : currentWord.english_word}
               </div>
             )}
-
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => setShowSummaryModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition-colors"
-              >
-                Close
-              </button>
-              <button
-                onClick={handlePracticeAgain}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-              >
-                Practice Again
-              </button>
-            </div>
           </div>
+        )}
+
+        {/* ===================== ACTION BUTTONS ===================== */}
+        <div className="flex gap-4 justify-between">
+          <button
+            onClick={finishPractice}
+            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Finish Practice
+          </button>
+
+          <button
+            onClick={() => {
+              if (!showResult) checkAnswer();
+              else nextWord();
+            }}
+            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+          >
+            {showResult ? (
+              <>
+                Next Word <ChevronRight size={18} />
+              </>
+            ) : (
+              'Check Answer'
+            )}
+          </button>
         </div>
-      )}
+      </div>
 
-      {/* Reset Progress Modal */}
-      {showResetModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <div className="flex items-start gap-4 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="text-amber-600"
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                  <path d="M3 3v5h5"></path>
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Reset Practice Progress
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  This will clear all your current session statistics including
-                  correct/total attempts and word progress.
-                </p>
-              </div>
-            </div>
+      {/* ===================== REGUESS OPTION ===================== */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={allowReguess}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setAllowReguess(checked);
+              if (allWords.length > 0) {
+                const newOrder = buildWordOrder(
+                  allWords,
+                  checked,
+                  shuffle,
+                  guessedWords
+                );
+                setWords(newOrder);
+                setCurrentIndex(0);
+                setUserAnswer('');
+                setShowResult(false);
+                setIsCorrect(false);
+              }
+            }}
+            className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <span className="text-sm font-medium text-gray-700">
+            Allow re-guessing previously correct words
+          </span>
+        </label>
+      </div>
+    </div>
+  </>
+);
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-              <p className="text-sm text-amber-800">
-                <strong>Current Progress:</strong>
-                <br />
-                Correct: {correctCount} / {totalAttempts} attempts
-                <br />
-                Success Rate: {successRate}%
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowResetModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleResetConfirm}
-                className="flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium transition-colors"
-              >
-                Reset Progress
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
 }
