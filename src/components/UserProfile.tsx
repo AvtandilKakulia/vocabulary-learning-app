@@ -96,27 +96,30 @@ export default function UserProfile({ onClose, onProfileUpdated }: UserProfilePr
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-          <div className="text-center text-gray-500">Loading...</div>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mb-4"></div>
+            <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">Loading profile...</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-gray-900">Edit Profile</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Edit Profile</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
             <X size={24} />
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Display Name (optional)
             </label>
             <input
@@ -124,15 +127,15 @@ export default function UserProfile({ onClose, onProfileUpdated }: UserProfilePr
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your name"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
               This name will be displayed in the app
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Email
             </label>
             <input
@@ -140,37 +143,37 @@ export default function UserProfile({ onClose, onProfileUpdated }: UserProfilePr
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-xl p-3 border border-orange-200 dark:border-orange-800">
               Changing your email requires confirmation
             </p>
           </div>
 
           {error && (
-            <div className="p-3 rounded-lg text-sm bg-red-50 text-red-800 border border-red-200">
+            <div className="p-4 rounded-2xl border-2 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800 shadow-lg shadow-red-500/10">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="p-3 rounded-lg text-sm bg-green-50 text-green-800 border border-green-200">
+            <div className="p-4 rounded-2xl border-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800 shadow-lg shadow-green-500/10">
               {success}
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               <Save size={18} />
               {saving ? 'Saving...' : 'Save Changes'}
@@ -215,24 +218,24 @@ export function DeleteAccountModal({ onClose, onDeleted }: DeleteAccountProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-            <AlertTriangle className="text-red-600" size={24} />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
+        <div className="text-center mb-6">
+          <div className="w-20 h-20 mx-auto bg-gradient-to-br from-red-500 to-pink-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+            <AlertTriangle className="text-white" size={32} />
           </div>
-          <h3 className="text-xl font-bold text-gray-900">Delete Account</h3>
+          <h3 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">Delete Account</h3>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800 font-medium mb-2">
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-2 border-red-200 dark:border-red-800 rounded-2xl p-6">
+            <p className="text-lg text-red-800 dark:text-red-300 font-bold mb-3">
               This action cannot be undone!
             </p>
-            <p className="text-sm text-red-700">
+            <p className="text-sm text-red-700 dark:text-red-400 mb-4">
               Deleting your account will permanently remove:
             </p>
-            <ul className="list-disc list-inside text-sm text-red-700 mt-2 space-y-1">
+            <ul className="list-disc list-inside text-sm text-red-700 dark:text-red-400 space-y-2">
               <li>All your vocabulary words</li>
               <li>All test history and statistics</li>
               <li>Your profile and account data</li>
@@ -240,36 +243,36 @@ export function DeleteAccountModal({ onClose, onDeleted }: DeleteAccountProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Type <span className="font-bold text-red-600">DELETE</span> to confirm:
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Type <span className="font-bold text-red-600 dark:text-red-400">DELETE</span> to confirm:
             </label>
             <input
               type="text"
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
             />
           </div>
 
           {error && (
-            <div className="p-3 rounded-lg text-sm bg-red-50 text-red-800 border border-red-200">
+            <div className="p-4 rounded-2xl border-2 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800 shadow-lg shadow-red-500/10">
               {error}
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
               disabled={confirmText !== 'DELETE' || deleting}
-              className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-red-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               {deleting ? 'Deleting...' : 'Delete Account'}
             </button>

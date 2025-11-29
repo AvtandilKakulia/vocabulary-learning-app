@@ -56,29 +56,29 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 flex items-center justify-center p-4 transition-colors">
       {/* Theme Toggle */}
       <button
         onClick={toggleTheme}
-        className="absolute top-4 right-4 p-2 rounded-lg bg-white dark:bg-gray-800 shadow-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        className="absolute top-4 right-4 p-3 rounded-2xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-xl border border-white/20 dark:border-gray-700/20 text-gray-600 dark:text-gray-300 hover:bg-white/90 dark:hover:bg-gray-700/80 transition-all duration-200 transform hover:scale-105"
         title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
       >
         {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
       </button>
       
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md transition-colors">
+      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
             English-Georgian Vocabulary
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-lg text-gray-600 dark:text-gray-400">
             {isLogin ? 'Sign in to continue learning' : 'Create your account'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Email
             </label>
             <input
@@ -86,18 +86,18 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
               placeholder="your@gmail.com"
             />
             {!isLogin && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
                 Use a real email address (Gmail, Outlook, etc.). Test domains like example.com are not accepted.
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Password
             </label>
             <input
@@ -106,16 +106,16 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <div className={`p-3 rounded-lg text-sm transition-colors ${
+            <div className={`p-4 rounded-2xl border-2 transition-all duration-300 ${
               error.includes('created') 
-                ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800' 
-                : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
+                ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800 shadow-lg shadow-green-500/10' 
+                : 'bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800 shadow-lg shadow-red-500/10'
             }`}>
               {error}
             </div>
@@ -124,19 +124,19 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 dark:bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-2xl font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
           >
             {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Sign Up'}
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="mt-8 text-center">
           <button
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
             }}
-            className="text-blue-600 dark:text-blue-400 hover:underline text-sm transition-colors"
+            className="text-blue-600 dark:text-blue-400 hover:text-purple-600 dark:hover:text-purple-400 font-semibold transition-all duration-200 hover:underline"
           >
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
