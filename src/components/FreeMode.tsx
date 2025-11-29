@@ -516,7 +516,6 @@ export default function FreeMode() {
           </div>
         </div>
       </div>
-    </div>
 
       {/* Reset Progress Modal */}
       {showResetModal && (
@@ -645,6 +644,6 @@ export default function FreeMode() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
