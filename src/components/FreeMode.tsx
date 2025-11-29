@@ -377,8 +377,7 @@ export default function FreeMode() {
 
   const currentWord = words[currentIndex];
 
-  return (
-    return (
+return (
   <>
     <div className="max-w-3xl mx-auto space-y-10">
       {/* ===================== TOP CONTROLS ===================== */}
@@ -593,4 +592,3 @@ export default function FreeMode() {
   </>
 );
 
-}
