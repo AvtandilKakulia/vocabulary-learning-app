@@ -226,424 +226,227 @@ export default function FreeMode() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
-            Vocabulary Practice
-          </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Master new words with interactive practice sessions
-          </p>
-        </div>
+return (
+  <>
+    <div className="max-w-4xl mx-auto">
+      {/* MAIN DASHBOARD CARD */}
+      <div className="bg-white rounded-xl shadow p-6">
 
-        {/* Progress Dashboard */}
-        <div className="mb-8">
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-4 mb-2">
-                  <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    {correctCount}
-                  </div>
-                  <div className="text-2xl text-gray-400">/</div>
-                  <div className="text-3xl font-bold text-gray-600 dark:text-gray-400">
-                    {totalAttempts}
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Success Rate: <span className="font-semibold text-blue-600 dark:text-blue-400">
-                    {totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0}%
-                  </span>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-20 h-20">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                      <path
-                        d="M18 2.0845
-                          a 15.9155 15.9155 0 0 1 0 31.831
-                          a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        className="text-gray-200 dark:text-gray-700"
-                      />
-                      <path
-                        d="M18 2.0845
-                          a 15.9155 15.9155 0 0 1 0 31.831
-                          a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        strokeWidth="3"
-                        strokeDasharray={`${totalAttempts > 0 ? (correctCount / totalAttempts) * 100 : 0}, 100`}
-                        className="text-blue-600 dark:text-blue-400"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => setShowResetModal(true)}
-                  className="px-4 py-2 text-sm bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  Reset Progress
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* ===================== GRID LAYOUT (60/40) ===================== */}
+        <div className="grid grid-cols-5 gap-6">
 
-        {/* Controls Row */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Translation Direction */}
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-              Translation Direction
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  setDirection('en-to-geo');
-                  setUserAnswer('');
-                  setShowResult(false);
-                }}
-                className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
-                  direction === 'en-to-geo'
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                English → Georgian
-              </button>
-              <button
-                onClick={() => {
-                  setDirection('geo-to-en');
-                  setUserAnswer('');
-                  setShowResult(false);
-                }}
-                className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
-                  direction === 'geo-to-en'
-                    ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                Georgian → English
-              </button>
-            </div>
-          </div>
+          {/* ===================== LEFT COLUMN (60%) ===================== */}
+          <div className="col-span-3 space-y-4">
 
-          {/* Settings */}
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Shuffle Words
-                </span>
+            {/* Translation Direction */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Translation Direction
+              </label>
+
+              <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    setShuffle(!shuffle);
-                    // Let the useEffect handle the reload
+                    setDirection('en-to-geo');
+                    setUserAnswer('');
+                    setShowResult(false);
                   }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    shuffle ? 'bg-gradient-to-r from-green-500 to-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                  className={`flex-1 px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                    direction === 'en-to-geo'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    shuffle ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
+                  Eng → Geo
                 </button>
-              </div>
-              
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allowReguess}
-                  onChange={(e) => {
-                    setAllowReguess(e.target.checked);
-                    // Don't immediately reload words - let the useEffect handle it with debouncing
+
+                <button
+                  onClick={() => {
+                    setDirection('geo-to-en');
+                    setUserAnswer('');
+                    setShowResult(false);
                   }}
-                  className="sr-only"
-                />
-                <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                  allowReguess ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gray-300 dark:bg-gray-600'
-                }`}>
-                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                    allowReguess ? 'translate-x-5' : 'translate-x-1'
-                  }`} />
-                </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Allow re-guessing words
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Practice Card */}
-        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/30 dark:border-gray-700/30 overflow-hidden transition-all duration-300">
-          {/* Progress Bar */}
-          <div className="h-2 bg-gray-200 dark:bg-gray-700">
-            <div 
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
-              style={{ width: `${((currentIndex + 1) / words.length) * 100}%` }}
-            />
-          </div>
-
-          <div className="p-8 md:p-12">
-            {/* Word Counter */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                <span>Word {currentIndex + 1} of {words.length}</span>
-                {currentIndex >= words.length - 1 && (
-                  <span className="ml-2 px-2 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full text-xs font-bold animate-pulse">
-                    Final Word!
-                  </span>
-                )}
+                  className={`flex-1 px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                    direction === 'geo-to-en'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Geo → Eng
+                </button>
               </div>
             </div>
 
             {/* Word Display */}
-            <div className="text-center mb-12">
-              <div className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-4 leading-tight">
-                {direction === 'en-to-geo' 
-                  ? currentWord.english_word 
-                  : currentWord.georgian_definitions.join(', ')
-                }
+            <div className="text-center space-y-1">
+              <div className="text-xs text-gray-500">
+                Word {currentIndex + 1} of {words.length}
               </div>
+
+              <div className="text-3xl font-bold text-gray-900">
+                {direction === 'en-to-geo'
+                  ? currentWord.english_word
+                  : currentWord.georgian_definitions.join(', ')}
+              </div>
+
               {currentWord.description && (
-                <div className="text-lg text-gray-500 dark:text-gray-400 italic max-w-2xl mx-auto">
+                <div className="text-xs text-gray-600 italic">
                   {currentWord.description}
                 </div>
               )}
             </div>
 
-            {/* Answer Input */}
-            <div className="max-w-md mx-auto space-y-6">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={userAnswer}
-                  onChange={(e) => setUserAnswer(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !showResult) {
-                      checkAnswer();
-                    } else if (e.key === 'Enter' && showResult) {
-                      nextWord();
-                    }
-                  }}
-                  disabled={showResult}
-                  placeholder="Type your answer..."
-                  className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200"
-                />
-              </div>
+            {/* Input Field */}
+            <input
+              type="text"
+              value={userAnswer}
+              onChange={(e) => setUserAnswer(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !showResult) checkAnswer();
+                else if (e.key === 'Enter' && showResult) nextWord();
+              }}
+              disabled={showResult}
+              placeholder="Type answer…"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500"
+            />
 
-              {/* Result Feedback */}
-              {showResult && (
-                <div className={`p-6 rounded-2xl border-2 transition-all duration-300 transform ${
-                  isCorrect 
-                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-lg shadow-green-500/10' 
-                    : 'bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-red-200 dark:border-red-800 shadow-lg shadow-red-500/10'
-                }`}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`p-2 rounded-full ${
-                      isCorrect ? 'bg-green-500' : 'bg-red-500'
-                    }`}>
-                      {isCorrect ? (
-                        <Check className="text-white" size={24} />
-                      ) : (
-                        <X className="text-white" size={24} />
-                      )}
-                    </div>
-                    <span className={`text-xl font-bold ${
-                      isCorrect ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
-                    }`}>
-                      {isCorrect ? 'Perfect!' : 'Not quite right'}
-                    </span>
-                  </div>
-                  <div className={`text-base ${
-                    isCorrect ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
-                  }`}>
-                    <span className="font-semibold">
-                      Correct answer{currentWord.georgian_definitions.length > 1 ? 's' : ''}:
-                    </span>{' '}
-                    {direction === 'en-to-geo' 
-                      ? currentWord.georgian_definitions.join(', ')
-                      : currentWord.english_word
-                    }
-                  </div>
+            {/* Result Box */}
+            {showResult && (
+              <div
+                className={`p-3 rounded-md text-sm ${
+                  isCorrect
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-red-50 border border-red-200'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  {isCorrect ? (
+                    <>
+                      <Check className="text-green-600" size={18} />
+                      <span className="font-medium text-green-800">
+                        Correct!
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="text-red-600" size={18} />
+                      <span className="font-medium text-red-800">
+                        Incorrect
+                      </span>
+                    </>
+                  )}
                 </div>
-              )}
 
-              {/* Action Button */}
-              <div className="pt-4">
-                {!showResult ? (
-                  <button
-                    onClick={checkAnswer}
-                    disabled={!userAnswer.trim()}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-                  >
-                    Check Answer
-                  </button>
-                ) : (
-                  <button
-                    onClick={nextWord}
-                    className={`w-full px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 ${
-                      currentIndex >= words.length - 1 
-                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700' 
-                        : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700'
-                    }`}
-                  >
-                    {currentIndex >= words.length - 1 ? 'Finish Practice' : 'Next Word'}
-                    {currentIndex >= words.length - 1 ? (
-                      <Check size={24} />
-                    ) : (
-                      <ChevronRight size={24} />
-                    )}
-                  </button>
+                {!isCorrect && (
+                  <div className="text-center text-gray-700">
+                    <strong>Correct answer:</strong>{' '}
+                    {direction === 'en-to-geo'
+                      ? currentWord.georgian_definitions.join(', ')
+                      : currentWord.english_word}
+                  </div>
                 )}
               </div>
-            </div>
+            )}
+
           </div>
-        </div>
-      </div>
 
-      {/* Reset Progress Modal */}
-      {showResetModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
-            <div className="text-center mb-6">
-              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-                <svg className="text-white" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                  <path d="M3 3v5h5"></path>
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent mb-2">
-                Reset Progress
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                This will clear all your current session statistics and start fresh
-              </p>
-            </div>
+          {/* ===================== RIGHT COLUMN (40%) ===================== */}
+          <div className="col-span-2 space-y-4">
 
-            <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-6 mb-8">
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Current Progress:</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{correctCount}</div>
-                  <div className="text-gray-600 dark:text-gray-400">Correct</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{totalAttempts}</div>
-                  <div className="text-gray-600 dark:text-gray-400">Total Attempts</div>
-                </div>
+            {/* Progress Box */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-center">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">
+                Progress
               </div>
-              <div className="text-center mt-4 pt-4 border-t border-orange-200 dark:border-orange-700">
-                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                  {totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0}%
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Success Rate</div>
+
+              <div className="text-lg font-semibold text-blue-900">
+                {correctCount} / {totalAttempts}
+              </div>
+
+              <div className="text-xs text-blue-700">
+                {totalAttempts > 0
+                  ? Math.round((correctCount / totalAttempts) * 100)
+                  : 0}
+                % success
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <button
-                onClick={() => setShowResetModal(false)}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setCorrectCount(0);
-                  setTotalAttempts(0);
-                  setGuessedWords(new Set());
-                  localStorage.removeItem('vocab_practice_progress');
-                  setShowResetModal(false);
-                  setSessionCompleted(false);
-                  // Reload words to reflect the reset progress
-                  loadWords();
+            {/* Shuffle */}
+            <button
+              onClick={toggleShuffle}
+              className={`w-full px-3 py-2 rounded-md text-sm border flex items-center justify-center gap-1 transition-colors ${
+                shuffle
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Shuffle size={16} />
+              Shuffle
+            </button>
+
+            {/* Reset */}
+            <button
+              onClick={() => setShowResetModal(true)}
+              className="w-full px-3 py-2 text-sm rounded-md bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+            >
+              Reset Progress
+            </button>
+
+            {/* Re-guess Toggle */}
+            <label className="flex items-center gap-2 text-sm mt-2">
+              <input
+                type="checkbox"
+                checked={allowReguess}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setAllowReguess(checked);
+                  if (allWords.length > 0) {
+                    const newOrder = buildWordOrder(
+                      allWords,
+                      checked,
+                      shuffle,
+                      guessedWords
+                    );
+                    setWords(newOrder);
+                    setCurrentIndex(0);
+                    setUserAnswer('');
+                    setShowResult(false);
+                    setIsCorrect(false);
+                  }
                 }}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-              >
-                Reset Progress
-              </button>
-            </div>
+                className="w-4 h-4"
+              />
+              Allow re-guessing correct words
+            </label>
+
           </div>
         </div>
-      )}
 
-      {/* Completion Dialog */}
-      {showCompletionDialog && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-lg transition-all duration-300">
-            <div className="text-center mb-8">
-              <div className="w-24 h-24 mx-auto bg-gradient-to-br from-green-400 via-emerald-500 to-teal-500 rounded-full flex items-center justify-center mb-6 shadow-2xl animate-pulse">
-                <Check className="text-white" size={48} strokeWidth={3} />
-              </div>
-              <h3 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-3">
-                🎉 Amazing Work!
-              </h3>
-              <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
-                You've completed all {words.length} words!
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-500">
-                Ready for your next challenge?
-              </p>
-            </div>
+        {/* ===================== BOTTOM BUTTONS ===================== */}
+        <div className="flex gap-4 justify-between mt-6">
+          <button
+            onClick={finishPractice}
+            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Finish Practice
+          </button>
 
-            <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-6 mb-8">
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full mb-4 shadow-lg">
-                  <span className="text-3xl font-bold text-white">
-                    {totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0}%
-                  </span>
-                </div>
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  Success Rate
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-6">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">{correctCount}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">Correct Answers</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{totalAttempts}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">Total Attempts</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-center mb-6">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Your progress will be reset so you can start fresh for your next practice session.
-              </p>
-            </div>
-
-            <div className="flex gap-4">
-              <button
-                onClick={handleCompletionDialogOk}
-                className="flex-1 px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-bold text-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-xl hover:shadow-2xl flex items-center justify-center gap-3"
-              >
-                <Check size={24} />
-                Continue Learning
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={() => (!showResult ? checkAnswer() : nextWord())}
+            className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center gap-1"
+          >
+            {showResult ? (
+              <>
+                Next <ChevronRight size={16} />
+              </>
+            ) : (
+              'Check Answer'
+            )}
+          </button>
         </div>
-      )}
+
+      </div>
     </div>
-  );
+  </>
+);
 }
