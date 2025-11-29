@@ -773,4 +773,14 @@ function DuplicateWordModal({
         <div className="flex gap-4">
           <button
             onClick={onClose}
-            className=\"flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200\"\n          >\n            Make Unique Definition\n          </button>\n          <button\n            onClick={onCopy}\n            className=\"flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl\"\n          >\n            Copy Definitions\n          </button>\n        </div>\n      </div>\n    </div>\n  );\n}
+            className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+          >
+            Make Unique Definition
+          </button>
+          <button
+            onClick={onCopy}
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+          >
+            Copy Definitions
+          </button>
+        </div>\n      </div>\n    </div>\n  );\n}
