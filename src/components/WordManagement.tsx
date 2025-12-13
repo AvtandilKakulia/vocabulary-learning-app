@@ -650,15 +650,43 @@ function WordModal({
   const [saving, setSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
+  const initialStateRef = useRef<{ englishWord: string; georgianDefs: string[]; description: string }>({
+    englishWord: word?.english_word || '',
+    georgianDefs: word?.georgian_definitions || [''],
+    description: word?.description || '',
+  });
 
   useEffect(() => {
     setEnglishWord(word?.english_word || '');
     setGeorgianDefs(word?.georgian_definitions || ['']);
     setDescription(word?.description || '');
     setShowColorPicker(false);
+    initialStateRef.current = {
+      englishWord: word?.english_word || '',
+      georgianDefs: word?.georgian_definitions || [''],
+      description: word?.description || '',
+    };
   }, [word]);
 
+  const isDirty = () => {
+    const initial = initialStateRef.current;
+    const defsDirty =
+      georgianDefs.length !== initial.georgianDefs.length ||
+      georgianDefs.some((def, idx) => def !== initial.georgianDefs[idx]);
+
+    return (
+      englishWord !== initial.englishWord ||
+      description !== initial.description ||
+      defsDirty
+    );
+  };
+
   const handleClose = () => {
+    if (isDirty()) {
+      const confirmClose = window.confirm('Discard changes? Your inputs will be lost.');
+      if (!confirmClose) return;
+    }
+
     setShowColorPicker(false);
     onClose();
   };
@@ -907,18 +935,11 @@ function WordModal({
             )}
           </div>
 
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
-            >
-              Cancel
-            </button>
+          <div className="flex justify-end">
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               {saving ? 'Saving...' : 'Save'}
             </button>
