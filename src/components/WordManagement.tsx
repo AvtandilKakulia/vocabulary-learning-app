@@ -1,3 +1,4 @@
 export default function WordManagement() {
-  return null;
+  return <div>TEST</div>;
 }
+
