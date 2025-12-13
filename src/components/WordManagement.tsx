@@ -1084,8 +1084,9 @@ function WordModal({
               {saving ? 'Saving...' : word ? 'Save changes' : 'Add word'}
             </button>
           </div>
+		          </div>
         </form>
-        </div>
+
 
         {showCloseConfirm && (
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-3xl">
@@ -1121,7 +1122,7 @@ function WordModal({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function DuplicateWordModal({
