@@ -95,25 +95,26 @@ img {
 
 /* Soft scrollbar styling for modal content */
 .smooth-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.7) transparent;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(148, 163, 184, 0.9) transparent;
   scrollbar-gutter: stable both-edges;
   overscroll-behavior: contain;
   border-radius: 1rem;
 }
 
 .smooth-scrollbar::-webkit-scrollbar {
-  width: 10px;
+  width: 14px;
 }
 
 .smooth-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 9999px;
 }
 
 .smooth-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(96, 165, 250, 0.6), rgba(167, 139, 250, 0.7));
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.8), rgba(167, 139, 250, 0.85));
   border-radius: 9999px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  border: 3px solid rgba(255, 255, 255, 0.65);
 }
 
 /* Ensure modals appear above navigation */
