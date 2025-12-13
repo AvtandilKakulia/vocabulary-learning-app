@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, Word } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Edit2, Trash2, Plus, X, AlertCircle, CheckSquare, Square, Bold, Palette } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, X, AlertCircle, CheckSquare, Square, Bold, Palette, Sparkles, Layers } from 'lucide-react';
 
 export default function WordManagement() {
   const { user } = useAuth();
@@ -36,7 +36,7 @@ export default function WordManagement() {
 
   async function loadWords() {
     if (!user) return;
-    
+
     setLoading(true);
     try {
       let query = supabase
@@ -48,7 +48,7 @@ export default function WordManagement() {
 
       if (searchTerm) {
         query = query.or(
-          `english_word.ilike.%${searchTerm}%,georgian_definitions.cs.["${searchTerm}"]`
+          `english_word.ilike.%${searchTerm}%,georgian_definitions.cs.[\"${searchTerm}\"]`
         );
       }
 
@@ -66,7 +66,7 @@ export default function WordManagement() {
 
   async function deleteWord(id: string) {
     if (!user) return;
-    
+
     setDeleting(true);
     try {
       const { error } = await supabase
@@ -87,7 +87,7 @@ export default function WordManagement() {
 
   async function bulkDeleteWords() {
     if (!user || selectedIds.size === 0) return;
-    
+
     setDeleting(true);
     try {
       const { error } = await supabase
@@ -128,6 +128,7 @@ export default function WordManagement() {
   const totalPages = Math.ceil(totalCount / pageSize);
   const allSelected = words.length > 0 && selectedIds.size === words.length;
   const someSelected = selectedIds.size > 0;
+  const selectionRatio = totalCount ? Math.min((selectedIds.size / totalCount) * 100, 100) : 0;
 
   const handleCopyDefinition = () => {
     if (duplicateWord && newWordData) {
@@ -158,7 +159,7 @@ export default function WordManagement() {
     description: string;
   }) => {
     if (!user) return;
-    
+
     try {
       const { error } = await supabase
         .from('words')
@@ -181,40 +182,102 @@ export default function WordManagement() {
     <>
       <div className="space-y-8">
         {/* Header Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
-            Word Management
-          </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Manage your vocabulary collection with ease
-          </p>
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 dark:border-white/5 bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-800 text-white shadow-2xl">
+          <div
+            className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.12),transparent_35%),radial-gradient(circle_at_80%_0,rgba(14,165,233,0.2),transparent_40%),radial-gradient(circle_at_40%_80%,rgba(168,85,247,0.18),transparent_42%)]"
+            aria-hidden
+          />
+          <div className="relative grid gap-8 md:grid-cols-[1.15fr_0.85fr] px-6 py-8 md:px-10 md:py-10">
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-indigo-100 shadow-sm backdrop-blur">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                Live word workspace
+              </div>
+              <div className="flex items-start gap-3">
+                <Sparkles className="mt-1 text-indigo-200" size={24} />
+                <div>
+                  <h1 className="text-3xl md:text-4xl font-black leading-tight drop-shadow-[0_10px_35px_rgba(59,130,246,0.35)]">
+                    Word Studio
+                  </h1>
+                  <p className="mt-3 text-lg text-slate-100/85 max-w-2xl">
+                    Curate a bilingual library with a calmer, glassy surface and clearer actions.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-indigo-50">
+                <span className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 shadow-sm backdrop-blur">
+                  <Layers size={16} />
+                  Organize faster
+                </span>
+                <span className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 shadow-sm backdrop-blur">
+                  <CheckSquare size={16} />
+                  Bulk ready
+                </span>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur p-4 shadow-xl">
+                <p className="text-xs uppercase tracking-widest text-indigo-100/80 mb-1">Total words</p>
+                <p className="text-3xl font-extrabold">{totalCount}</p>
+                <p className="text-xs text-indigo-100/70 mt-2">Synced to your account</p>
+              </div>
+              <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur p-4 shadow-xl flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs uppercase tracking-widest text-indigo-100/80">
+                  <span>Selected</span>
+                  <span>{selectionRatio.toFixed(0)}%</span>
+                </div>
+                <p className="text-3xl font-extrabold">{selectedIds.size}</p>
+                <div className="h-2 rounded-full bg-white/10 overflow-hidden border border-white/20">
+                  <div className="h-full bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400" style={{ width: `${selectionRatio}%` }} />
+                </div>
+                <p className="text-xs text-indigo-100/70">Ready for bulk actions</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <div className="flex gap-3">
+        <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-white shadow-lg">
+                <Sparkles size={16} />
+                <span className="text-sm font-semibold">Manage words</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Smoother tooling for creating, editing, and reviewing entries.</p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 justify-end">
               {someSelected && (
-                <button
-                  onClick={() => setShowBulkDeleteModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
-                >
-                  <Trash2 size={18} />
-                  Delete ({selectedIds.size})
-                </button>
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm">
+                  <span className="text-sm font-semibold">{selectedIds.size} selected</span>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-xs font-semibold rounded-full px-3 py-1 bg-white/70 dark:bg-white/10 text-rose-700 dark:text-rose-200 hover:bg-white/90 dark:hover:bg-white/20 transition"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    className="flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-orange-500 px-3 py-1 text-white shadow hover:from-rose-600 hover:to-orange-600 transition"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
               )}
               <button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
               >
                 <Plus size={18} />
-                Add Word
+                Add word
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 transform text-gray-400 dark:text-gray-500" size={20}/>
               <input
                 type="text"
                 value={searchTerm}
@@ -223,17 +286,17 @@ export default function WordManagement() {
                   setPage(0);
                 }}
                 placeholder="Search English or Georgian words..."
-                className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200 shadow-inner"
               />
             </div>
-            <div>
+            <div className="flex gap-3">
               <select
                 value={pageSize}
                 onChange={(e) => {
                   setPageSize(Number(e.target.value));
                   setPage(0);
                 }}
-                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 transition-all duration-200"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm text-gray-900 dark:text-gray-100 transition-all duration-200 shadow-inner"
               >
                 <option value={10}>10 per page</option>
                 <option value={25}>25 per page</option>
@@ -245,9 +308,9 @@ export default function WordManagement() {
         </div>
 
         {/* Table */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 overflow-hidden transition-all duration-300">
+        <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 overflow-hidden transition-all duration-300">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600">
                 <tr>
                   <th className="px-4 py-4 text-left w-12">
@@ -438,16 +501,16 @@ export default function WordManagement() {
   );
 }
 
-function DeleteWordModal({ 
-  word, 
-  deleting, 
-  onClose, 
-  onConfirm 
-}: { 
-  word: Word; 
-  deleting: boolean; 
-  onClose: () => void; 
-  onConfirm: () => void 
+function DeleteWordModal({
+  word,
+  deleting,
+  onClose,
+  onConfirm
+}: {
+  word: Word;
+  deleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
@@ -503,16 +566,16 @@ function DeleteWordModal({
   );
 }
 
-function BulkDeleteModal({ 
-  count, 
-  deleting, 
-  onClose, 
-  onConfirm 
-}: { 
-  count: number; 
-  deleting: boolean; 
-  onClose: () => void; 
-  onConfirm: () => void 
+function BulkDeleteModal({
+  count,
+  deleting,
+  onClose,
+  onConfirm
+}: {
+  count: number;
+  deleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
@@ -531,7 +594,7 @@ function BulkDeleteModal({
 
         <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-4 mb-6">
           <p className="text-sm text-orange-800 dark:text-orange-300">
-            You are about to delete <strong>{count}</strong> word{count > 1 ? 's' : ''}. 
+            You are about to delete <strong>{count}</strong> word{count > 1 ? 's' : ''}.
             This action cannot be undone.
           </p>
         </div>
@@ -557,16 +620,20 @@ function BulkDeleteModal({
   );
 }
 
-function WordModal({ 
-  word, 
-  onClose, 
-  onSave, 
-  onDuplicateDetected 
-}: { 
-  word: Word | null; 
-  onClose: () => void; 
+function WordModal({
+  word,
+  onClose,
+  onSave,
+  onDuplicateDetected
+}: {
+  word: Word | null;
+  onClose: () => void;
   onSave: () => void;
-  onDuplicateDetected: (existingWord: Word, wordData: { englishWord: string; georgianDefs: string[]; description: string }) => void;
+  onDuplicateDetected: (existingWord: Word, wordData: {
+    englishWord: string;
+    georgianDefs: string[];
+    description: string;
+  }) => void;
 }) {
   const { user } = useAuth();
   const [englishWord, setEnglishWord] = useState(word?.english_word || '');
@@ -575,34 +642,25 @@ function WordModal({
   const [saving, setSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  const applyFormatting = (format: 'bold' | 'color', color?: string) => {
+  const applyFormatting = (type: 'bold' | 'color', value?: string) => {
     const textarea = document.getElementById('description-textarea') as HTMLTextAreaElement;
-    if (!textarea) return;
-
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = description.substring(start, end);
+    const selectedText = description.slice(start, end);
 
-    if (!selectedText) {
-      alert('Please select text to format');
-      return;
+    let newText;
+    if (type === 'bold') {
+      newText = `${description.slice(0, start)}<strong>${selectedText}</strong>${description.slice(end)}`;
+    } else {
+      const color = value || '#000000';
+      newText = `${description.slice(0, start)}<span style=\"color: ${color}\">${selectedText}</span>${description.slice(end)}`;
     }
 
-    let formattedText = '';
-    if (format === 'bold') {
-      formattedText = `<strong>${selectedText}</strong>`;
-    } else if (format === 'color' && color) {
-      formattedText = `<span style="color: ${color}">${selectedText}</span>`;
-    }
-
-    const newDescription = description.substring(0, start) + formattedText + description.substring(end);
-    setDescription(newDescription);
-
-    // Set cursor position after formatted text
+    setDescription(newText);
+    setShowColorPicker(false);
     setTimeout(() => {
       textarea.focus();
-      const newPosition = start + formattedText.length;
-      textarea.setSelectionRange(newPosition, newPosition);
+      textarea.setSelectionRange(end + 17, end + 17);
     }, 0);
   };
 
@@ -612,8 +670,8 @@ function WordModal({
 
     setSaving(true);
     try {
-      const filteredDefs = georgianDefs.filter(d => d.trim() !== '');
-      
+      const filteredDefs = georgianDefs.filter(def => def.trim() !== '');
+
       if (word) {
         // Editing existing word
         const { error } = await supabase
@@ -812,14 +870,14 @@ function WordModal({
   );
 }
 
-function DuplicateWordModal({ 
-  existingWord, 
-  onClose, 
-  onCopy 
-}: { 
-  existingWord: Word; 
-  onClose: () => void; 
-  onCopy: () => void; 
+function DuplicateWordModal({
+  existingWord,
+  onClose,
+  onCopy
+}: {
+  existingWord: Word;
+  onClose: () => void;
+  onCopy: () => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[75]">
