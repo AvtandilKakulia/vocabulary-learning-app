@@ -1,12 +1,13 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/src/contexts/AuthContext.tsx b/src/contexts/AuthContext.tsx
-index 0be809aa82c1a2274ba775ac2d03dfc43a83aede..ca20f9d14308da648b56871ed62501a28e5cf73c 100644
+index 0be809aa82c1a2274ba775ac2d03dfc43a83aede..13e19a11cf1541b5c3c74286ebb217ec0f643f57 100644
 --- a/src/contexts/AuthContext.tsx
 +++ b/src/contexts/AuthContext.tsx
-@@ -1,65 +1,69 @@
+@@ -1,65 +1,73 @@
  import React, { createContext, useContext, useEffect, useState } from 'react';
- import { supabase } from '../lib/supabase';
+-import { supabase } from '../lib/supabase';
  import type { User } from '@supabase/supabase-js';
++import { supabase } from '../lib/supabase';
  
  interface AuthContextType {
    user: User | null;
@@ -26,21 +27,26 @@ index 0be809aa82c1a2274ba775ac2d03dfc43a83aede..ca20f9d14308da648b56871ed62501a2
  
    useEffect(() => {
 -    // Load user on mount
-+    // Load user on mount using local session (avoids network stalls)
-     async function loadUser() {
+-    async function loadUser() {
++    let isMounted = true;
++
++    const loadUser = async () => {
        try {
 -        const { data: { user } } = await supabase.auth.getUser();
 -        setUser(user);
 +        const { data, error } = await supabase.auth.getSession();
 +        if (error) throw error;
++        if (!isMounted) return;
 +        setUser(data.session?.user ?? null);
 +      } catch (error) {
 +        console.error('Failed to load session', error);
-+        setUser(null);
++        if (isMounted) setUser(null);
        } finally {
-         setLoading(false);
+-        setLoading(false);
++        if (isMounted) setLoading(false);
        }
-     }
+-    }
++    };
 +
      loadUser();
  
@@ -50,14 +56,16 @@ index 0be809aa82c1a2274ba775ac2d03dfc43a83aede..ca20f9d14308da648b56871ed62501a2
 -        setUser(session?.user || null);
 -      }
 -    );
-+    // Listen for auth changes and clear loading once we have a session update
-+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
++    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
 +      setUser(session?.user ?? null);
 +      setLoading(false);
 +    });
  
 -    return () => subscription.unsubscribe();
-+    return () => data.subscription?.unsubscribe();
++    return () => {
++      isMounted = false;
++      authListener.subscription?.unsubscribe();
++    };
    }, []);
  
    const signIn = async (email: string, password: string) => {
