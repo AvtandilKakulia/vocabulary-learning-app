@@ -297,7 +297,7 @@ export default function WordManagement() {
                 className="w-full h-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-12 pr-4 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
               />
             </div>
-            <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-4 shadow-inner">
+            <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-4 shadow-inner overflow-hidden">
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Page size</span>
               <div className="relative flex-1 h-full">
                 <select
@@ -306,12 +306,12 @@ export default function WordManagement() {
                     setPageSize(Number(e.target.value));
                     setPage(0);
                   }}
-                  className="w-full h-full appearance-none pr-10 pl-4 rounded-xl border border-transparent bg-white text-sm font-semibold text-gray-900 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  className="w-full h-full appearance-none pr-10 pl-4 rounded-2xl border border-transparent bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 shadow-sm"
                 >
-                  <option value={10}>10 per page</option>
-                  <option value={25}>25 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
+                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={10}>10 per page</option>
+                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={25}>25 per page</option>
+                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={50}>50 per page</option>
+                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={100}>100 per page</option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400" size={18} />
               </div>
@@ -328,7 +328,9 @@ export default function WordManagement() {
                   <th className="px-4 py-4 text-left w-12">
                     <button
                       onClick={toggleSelectAll}
-                      className="p-2 rounded-xl border transition-all duration-200 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 bg-slate-50/80 dark:bg-gray-800/60 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/70 dark:hover:bg-gray-700/60 disabled:opacity-60"
+                      className={`p-2 rounded-xl border transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${allSelected
+                        ? 'text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-700 bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-800 shadow-inner'
+                        : 'text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 bg-slate-50/80 dark:bg-gray-800/60 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/70 dark:hover:bg-gray-700/60'}`}
                       disabled={words.length === 0}
                     >
                       {allSelected ? (
@@ -528,7 +530,7 @@ function DeleteWordModal({
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w/full max-w-md transition-all duration-300">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
         <div className="text-center mb-6">
           <div className="w-20 h-20 mx-auto bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
             <AlertCircle className="text-white" size={32} />
@@ -593,7 +595,7 @@ function BulkDeleteModal({
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w/full max-w-md transition-all duration-300">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
         <div className="text-center mb-6">
           <div className="w-20 h-20 mx-auto bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
             <AlertCircle className="text-white" size={32} />
@@ -820,17 +822,23 @@ function WordModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w/full max-w-md my-4 relative max-h-[90vh] overflow-y-auto smooth-scrollbar transition-all duration-300">
-        <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            {word ? 'Edit Word' : 'Add New Word'}
-          </h3>
-          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
-            <X size={24} />
-          </button>
-        </div>
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-xl my-4 relative transition-all duration-300">
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10"
+        >
+          <X size={24} />
+        </button>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="max-h-[82vh] overflow-y-auto smooth-scrollbar p-8 pt-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              {word ? 'Edit Word' : 'Add New Word'}
+            </h3>
+            <div className="h-10" aria-hidden />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               English Word
@@ -952,7 +960,7 @@ function WordModal({
 
         {showCloseConfirm && (
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-3xl">
-            <div className="bg-white/95 dark:bg-gray-800/95 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 w/full max-w-sm space-y-4">
+            <div className="bg-white/95 dark:bg-gray-800/95 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 w-full max-w-sm space-y-4">
               <div className="flex items-start gap-3">
                 <AlertCircle className="text-blue-500" size={24} />
                 <div>
@@ -981,6 +989,7 @@ function WordModal({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -1016,7 +1025,7 @@ function DuplicateWordModal({
       onMouseDown={() => setShowCloseConfirm(true)}
     >
       <div
-        className="relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w/full max-w-md transition-all duration-300"
+        className="relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button
@@ -1081,7 +1090,7 @@ function DuplicateWordModal({
 
         {showCloseConfirm && (
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-3xl">
-            <div className="bg-white/95 dark:bg-gray-800/95 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 w/full max-w-sm space-y-4">
+            <div className="bg-white/95 dark:bg-gray-800/95 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 w-full max-w-sm space-y-4">
               <div className="flex items-start gap-3">
                 <AlertCircle className="text-blue-500" size={24} />
                 <div>
