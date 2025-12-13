@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase, Word } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Edit2, Trash2, Plus, X, AlertCircle, CheckSquare, Square, Bold, Palette, Sparkles, Layers } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, X, AlertCircle, CheckSquare, Square, Bold, Palette, Sparkles, Layers, ChevronDown } from 'lucide-react';
 
 export default function WordManagement() {
   const { user } = useAuth();
@@ -153,6 +153,14 @@ export default function WordManagement() {
     setNewWordData(null);
   };
 
+  const handleCancelDuplicate = () => {
+    setShowDuplicateModal(false);
+    setDuplicateWord(null);
+    setNewWordData(null);
+    setShowAddModal(false);
+    setEditingWord(null);
+  };
+
   const addWordWithData = async (wordData: {
     englishWord: string;
     georgianDefs: string[];
@@ -290,19 +298,22 @@ export default function WordManagement() {
               />
             </div>
             <div className="flex gap-3">
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(0);
-                }}
-                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm text-gray-900 dark:text-gray-100 transition-all duration-200 shadow-inner"
-              >
-                <option value={10}>10 per page</option>
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
-                <option value={100}>100 per page</option>
-              </select>
+              <div className="relative w-full">
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(0);
+                  }}
+                  className="w-full appearance-none pr-12 pl-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm text-gray-900 dark:text-gray-100 transition-all duration-200 shadow-inner"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={25}>25 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400" size={18} />
+              </div>
             </div>
           </div>
         </div>
@@ -493,8 +504,9 @@ export default function WordManagement() {
       {showDuplicateModal && duplicateWord && (
         <DuplicateWordModal
           existingWord={duplicateWord}
-          onClose={handleIgnoreDuplicate}
+          onMakeUnique={handleIgnoreDuplicate}
           onCopy={handleCopyDefinition}
+          onCancel={handleCancelDuplicate}
         />
       )}
     </>
@@ -919,12 +931,14 @@ function WordModal({
 
 function DuplicateWordModal({
   existingWord,
-  onClose,
-  onCopy
+  onMakeUnique,
+  onCopy,
+  onCancel
 }: {
   existingWord: Word;
-  onClose: () => void;
+  onMakeUnique: () => void;
   onCopy: () => void;
+  onCancel: () => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[75]">
@@ -965,18 +979,25 @@ function DuplicateWordModal({
           </p>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={onClose}
-            className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+            onClick={onCancel}
+            className="w-full sm:flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
           >
-            Make Unique Definition
+            Cancel
           </button>
           <button
             onClick={onCopy}
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+            className="w-full sm:flex-1 px-6 py-3 border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-200 rounded-2xl font-semibold bg-white/70 dark:bg-gray-800/60 hover:bg-blue-50 dark:hover:bg-gray-700 transition-all duration-200"
           >
             Copy Definitions
+          </button>
+          <button
+            onClick={onMakeUnique}
+            autoFocus
+            className="w-full sm:flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+          >
+            Make Unique Definition
           </button>
         </div>
       </div>
