@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase, Word } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Search, Edit2, Trash2, Plus, X, AlertCircle, CheckSquare, Square, Bold, Palette, Sparkles, Layers } from 'lucide-react';
@@ -558,7 +558,7 @@ function DeleteWordModal({
             disabled={deleting}
             className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
           >
-            {deleting ? 'Deleting...' : 'Delete Word'}
+            {deleting ? 'Deleting...' : `Delete ${count} Word${count > 1 ? 's' : ''}`}
           </button>
         </div>
       </div>
@@ -629,11 +629,7 @@ function WordModal({
   word: Word | null;
   onClose: () => void;
   onSave: () => void;
-  onDuplicateDetected: (existingWord: Word, wordData: {
-    englishWord: string;
-    georgianDefs: string[];
-    description: string;
-  }) => void;
+  onDuplicateDetected: (existingWord: Word, wordData: { englishWord: string; georgianDefs: string[]; description: string }) => void;
 }) {
   const { user } = useAuth();
   const [englishWord, setEnglishWord] = useState(word?.english_word || '');
@@ -641,26 +637,41 @@ function WordModal({
   const [description, setDescription] = useState(word?.description || '');
   const [saving, setSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const colorPickerRef = useRef<HTMLDivElement | null>(null);
 
-  const applyFormatting = (type: 'bold' | 'color', value?: string) => {
+  const handleClose = () => {
+    setShowColorPicker(false);
+    onClose();
+  };
+
+  const applyFormatting = (format: 'bold' | 'color', color?: string) => {
     const textarea = document.getElementById('description-textarea') as HTMLTextAreaElement;
+    if (!textarea) return;
+
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = description.slice(start, end);
+    const selectedText = description.substring(start, end);
 
-    let newText;
-    if (type === 'bold') {
-      newText = `${description.slice(0, start)}<strong>${selectedText}</strong>${description.slice(end)}`;
-    } else {
-      const color = value || '#000000';
-      newText = `${description.slice(0, start)}<span style=\"color: ${color}\">${selectedText}</span>${description.slice(end)}`;
+    if (!selectedText) {
+      alert('Please select text to format');
+      return;
     }
 
-    setDescription(newText);
-    setShowColorPicker(false);
+    let formattedText = '';
+    if (format === 'bold') {
+      formattedText = `<strong>${selectedText}</strong>`;
+    } else if (format === 'color' && color) {
+      formattedText = `<span style="color: ${color}">${selectedText}</span>`;
+    }
+
+    const newDescription = description.substring(0, start) + formattedText + description.substring(end);
+    setDescription(newDescription);
+
+    // Set cursor position after formatted text
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(end + 17, end + 17);
+      const newPosition = start + formattedText.length;
+      textarea.setSelectionRange(newPosition, newPosition);
     }, 0);
   };
 
@@ -670,7 +681,7 @@ function WordModal({
 
     setSaving(true);
     try {
-      const filteredDefs = georgianDefs.filter(def => def.trim() !== '');
+      const filteredDefs = georgianDefs.filter(d => d.trim() !== '');
 
       if (word) {
         // Editing existing word
@@ -727,14 +738,43 @@ function WordModal({
 
   const colors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#000000'];
 
+  useEffect(() => {
+    if (!showColorPicker) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
+        setShowColorPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showColorPicker]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowColorPicker(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md my-4 relative max-h-[90vh] overflow-y-auto transition-all duration-300">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md my-4 relative max-h-[90vh] overflow-y-auto smooth-scrollbar transition-all duration-300">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             {word ? 'Edit Word' : 'Add New Word'}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
+          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
             <X size={24} />
           </button>
         </div>
@@ -805,7 +845,7 @@ function WordModal({
               >
                 <Bold size={18} />
               </button>
-              <div className="relative">
+              <div className="relative" ref={colorPickerRef}>
                 <button
                   type="button"
                   onClick={() => setShowColorPicker(!showColorPicker)}
@@ -851,7 +891,7 @@ function WordModal({
           <div className="flex gap-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
             >
               Cancel

@@ -1,11 +1,10 @@
-@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
     --radius: 0.5rem;
-    
+
     /* Light theme colors */
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -26,7 +25,7 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 142.1 76.2% 36.3%;
-    
+
     /* Sidebar colors (light) */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -59,7 +58,7 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 142.4 71.8% 29.2%;
-    
+
     /* Sidebar colors (dark) */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 85%;
@@ -71,7 +70,6 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
-
 
 
 img {
@@ -93,6 +91,29 @@ img {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Soft scrollbar styling for modal content */
+.smooth-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.7) transparent;
+  scrollbar-gutter: stable both-edges;
+  overscroll-behavior: contain;
+  border-radius: 1rem;
+}
+
+.smooth-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.smooth-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.smooth-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.6), rgba(167, 139, 250, 0.7));
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
 /* Ensure modals appear above navigation */
 .z-50 {
   z-index: 50 !important;
@@ -109,47 +130,47 @@ body {
     font-size: 2rem;
     line-height: 2.5rem;
   }
-  
+
   .text-3xl {
     font-size: 1.75rem;
     line-height: 2.25rem;
   }
-  
+
   /* Ensure modals are mobile-friendly */
   .fixed {
     position: fixed;
     padding: 1rem;
   }
-  
+
   /* Fix table overflow on mobile */
   .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
   }
-  
+
   /* Improve mobile navigation */
   .md\\:hidden {
     position: sticky;
     top: 4rem;
     z-index: 30;
   }
-  
+
   /* Better mobile spacing */
   .space-y-6 > * + * {
     margin-top: 1rem;
   }
-  
+
   /* Mobile-friendly button sizes */
   button {
     min-height: 44px; /* iOS recommended touch target */
   }
-  
+
   /* Improve mobile text inputs */
-  input[type="text"], 
-  textarea, 
+  input[type="text"],
+  textarea,
   select {
     font-size: 16px; /* Prevents zoom on iOS */
   }
-  
+
   /* Mobile modal improvements */
   .max-w-md {
     max-width: calc(100vw - 2rem);
@@ -165,8 +186,8 @@ button, .cursor-pointer {
 }
 
 /* Improve touch targets */
-button, 
-input[type="checkbox"], 
+button,
+input[type="checkbox"],
 input[type="radio"] {
   touch-action: manipulation;
 }
