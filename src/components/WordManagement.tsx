@@ -558,7 +558,7 @@ function DeleteWordModal({
             disabled={deleting}
             className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
           >
-            {deleting ? 'Deleting...' : `Delete ${count} Word${count > 1 ? 's' : ''}`}
+            {deleting ? 'Deleting...' : `Delete "${word.english_word}"`}
           </button>
         </div>
       </div>
@@ -638,6 +638,13 @@ function WordModal({
   const [saving, setSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setEnglishWord(word?.english_word || '');
+    setGeorgianDefs(word?.georgian_definitions || ['']);
+    setDescription(word?.description || '');
+    setShowColorPicker(false);
+  }, [word]);
 
   const handleClose = () => {
     setShowColorPicker(false);
