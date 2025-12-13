@@ -655,12 +655,14 @@ function WordModal({
     georgianDefs: word?.georgian_definitions || [''],
     description: word?.description || '',
   });
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
     setEnglishWord(word?.english_word || '');
     setGeorgianDefs(word?.georgian_definitions || ['']);
     setDescription(word?.description || '');
     setShowColorPicker(false);
+    setShowCloseConfirm(false);
     initialStateRef.current = {
       englishWord: word?.english_word || '',
       georgianDefs: word?.georgian_definitions || [''],
@@ -683,12 +685,12 @@ function WordModal({
 
   const handleClose = () => {
     if (isDirty()) {
-      const confirmClose = window.confirm('Discard changes? Your inputs will be lost.');
-      if (!confirmClose) return;
+      setShowColorPicker(false);
+      setShowCloseConfirm(true);
+    } else {
+      setShowColorPicker(false);
+      onClose();
     }
-
-    setShowColorPicker(false);
-    onClose();
   };
 
   const applyFormatting = (format: 'bold' | 'color', color?: string) => {
@@ -945,6 +947,38 @@ function WordModal({
             </button>
           </div>
         </form>
+
+        {showCloseConfirm && (
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-3xl">
+            <div className="bg-white/95 dark:bg-gray-800/95 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 w-full max-w-sm space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="text-blue-500" size={24} />
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Discard changes?</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Your current inputs will be lost.</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="w-full sm:flex-1 px-5 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-800 dark:text-gray-200 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+                >
+                  Keep editing
+                </button>
+                <button
+                  onClick={() => {
+                    setShowColorPicker(false);
+                    setShowCloseConfirm(false);
+                    onClose();
+                  }}
+                  className="w-full sm:flex-1 px-5 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-200 shadow-lg"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
