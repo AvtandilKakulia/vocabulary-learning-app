@@ -273,7 +273,7 @@ export default function WordManagement() {
           </div>
         </div>
 
-        <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
+        <div className="relative bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-white shadow-lg">
@@ -283,7 +283,7 @@ export default function WordManagement() {
               <p className="text-sm text-gray-600 dark:text-gray-400">Smoother tooling for creating, editing, and reviewing entries.</p>
             </div>
 
-            <div className="flex flex-wrap gap-3 justify-end items-center">
+            <div className="relative z-30 flex flex-wrap gap-3 justify-end items-center">
               {someSelected && (
                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm h-12">
                   <span className="text-sm font-semibold">{selectedIds.size} selected</span>
@@ -312,7 +312,7 @@ export default function WordManagement() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
+          <div className="relative z-20 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
             <div className="relative h-12">
               <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
               <input
@@ -328,7 +328,10 @@ export default function WordManagement() {
             </div>
             <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Page size</span>
-              <div ref={pageSizeMenuRef} className="relative flex-1 flex justify-end">
+              <div
+                ref={pageSizeMenuRef}
+                className={`relative flex-1 flex justify-end ${pageSizeMenuOpen ? 'z-[90]' : ''}`}
+              >
                 <button
                   type="button"
                   onClick={() => setPageSizeMenuOpen(open => !open)}
@@ -338,7 +341,7 @@ export default function WordManagement() {
                   <ChevronDown className={`ml-2 text-gray-500 dark:text-gray-400 transition-transform ${pageSizeMenuOpen ? 'rotate-180' : ''}`} size={18} />
                 </button>
                 {pageSizeMenuOpen && (
-                  <div className="absolute right-0 top-[110%] w-full sm:w-44 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden z-40">
+                  <div className="absolute right-0 top-[110%] w-full sm:w-44 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden z-[75]">
                     <div className="divide-y divide-gray-100 dark:divide-gray-700">
                       {pageSizeMenuOpen &&
                         pageSizeOptions.map(option => (
