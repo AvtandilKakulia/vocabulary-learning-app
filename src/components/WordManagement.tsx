@@ -560,54 +560,53 @@ export default function WordManagement() {
           </div>
         </div>
       </div>
-{/* Modals layer */}
-{showAddModal ? (
-  <WordModal
-    word={editingWord}
-    onClose={() => {
-      setShowAddModal(false);
-      setEditingWord(null);
-    }}
-    onSave={() => {
-      setShowAddModal(false);
-      setEditingWord(null);
-      loadWords();
-    }}
-    onDuplicateDetected={(existingWord, wordData) => {
-      setDuplicateWord(existingWord);
-      setNewWordData(wordData);
-      setShowDuplicateModal(true);
-    }}
-  />
-) : null}
 
-{deleteModalWord ? (
-  <DeleteWordModal
-    word={deleteModalWord}
-    deleting={deleting}
-    onClose={() => setDeleteModalWord(null)}
-    onConfirm={() => deleteWord(deleteModalWord.id)}
-  />
-) : null}
+      {showAddModal && (
+        <WordModal
+          word={editingWord}
+          onClose={() => {
+            setShowAddModal(false);
+            setEditingWord(null);
+          }}
+          onSave={() => {
+            setShowAddModal(false);
+            setEditingWord(null);
+            loadWords();
+          }}
+          onDuplicateDetected={(existingWord, wordData) => {
+            setDuplicateWord(existingWord);
+            setNewWordData(wordData);
+            setShowDuplicateModal(true);
+          }}
+        />
+      )}
 
-{showBulkDeleteModal ? (
-  <BulkDeleteModal
-    count={selectedIds.size}
-    deleting={deleting}
-    onClose={() => setShowBulkDeleteModal(false)}
-    onConfirm={bulkDeleteWords}
-  />
-) : null}
+      {deleteModalWord && (
+        <DeleteWordModal
+          word={deleteModalWord}
+          deleting={deleting}
+          onClose={() => setDeleteModalWord(null)}
+          onConfirm={() => deleteWord(deleteModalWord.id)}
+        />
+      )}
 
-{showDuplicateModal && duplicateWord ? (
-  <DuplicateWordModal
-    existingWord={duplicateWord}
-    onMakeUnique={handleIgnoreDuplicate}
-    onCopy={handleCopyDefinition}
-    onCancel={handleCancelDuplicate}
-  />
-) : null}
+      {showBulkDeleteModal && (
+        <BulkDeleteModal
+          count={selectedIds.size}
+          deleting={deleting}
+          onClose={() => setShowBulkDeleteModal(false)}
+          onConfirm={bulkDeleteWords}
+        />
+      )}
 
+      {showDuplicateModal && duplicateWord && (
+        <DuplicateWordModal
+          existingWord={duplicateWord}
+          onMakeUnique={handleIgnoreDuplicate}
+          onCopy={handleCopyDefinition}
+          onCancel={handleCancelDuplicate}
+        />
+      )}
     </>
   );
 }
