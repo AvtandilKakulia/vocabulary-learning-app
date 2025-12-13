@@ -317,7 +317,7 @@ export default function WordManagement() {
           </div>
         </div>
 
-        <div className="relative bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
+        <div className="relative bg-white/90 dark:bg-gray-900/70 rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-white shadow-lg">
@@ -414,7 +414,7 @@ export default function WordManagement() {
         </div>
 
         {/* Table */}
-        <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 overflow-visible transition-all duration-300">
+        <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 overflow-hidden transition-all duration-300">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600">
