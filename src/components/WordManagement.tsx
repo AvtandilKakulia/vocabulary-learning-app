@@ -285,145 +285,137 @@ export default function WordManagement() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 transform text-gray-400 dark:text-gray-500" size={20}/>
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 transform text-gray-400 dark:text-gray-500" size={20} />
               <input
                 type="text"
+                placeholder="Search words..."
+                className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/70 pl-12 pr-4 py-3 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition"
                 value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setPage(0);
-                }}
-                placeholder="Search English or Georgian words..."
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200 shadow-inner"
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex gap-3">
-              <div className="relative w-full">
+
+            <div className="flex items-center gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/70 px-4 py-3 shadow-inner">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Page size</span>
+              <div className="relative flex-1">
                 <select
                   value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(0);
-                  }}
-                  className="w-full appearance-none pr-12 pl-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/90 dark:bg-gray-800/80 backdrop-blur-sm text-gray-900 dark:text-gray-100 transition-all duration-200 shadow-inner"
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="w-full appearance-none rounded-xl border border-gray-200 dark:border-gray-600 bg-white/70 dark:bg-gray-800/70 px-4 py-2 pr-10 text-sm font-semibold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 >
-                  <option value={10}>10 per page</option>
-                  <option value={25}>25 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
+                  {[5, 10, 20, 50].map(size => (
+                    <option key={size} value={size}>{size} / page</option>
+                  ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400" size={18} />
+                <ChevronDown className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" size={16} />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 overflow-hidden transition-all duration-300">
+        <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur rounded-3xl shadow-2xl border border-white/20 dark:border-gray-800 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600">
+              <thead className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800/70 dark:to-blue-900/30">
                 <tr>
-                  <th className="px-4 py-4 text-left w-12">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <button
                       onClick={toggleSelectAll}
-                      className="text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 p-1 rounded-lg hover:bg-white/50 dark:hover:bg-gray-600/50 transition-all duration-200"
-                      disabled={words.length === 0}
+                      className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-300"
                     >
-                      {allSelected ? (
-                        <CheckSquare size={20} className="text-blue-600 dark:text-blue-400" />
-                      ) : (
-                        <Square size={20} />
-                      )}
+                      {allSelected ? <CheckSquare size={18} /> : selectedIds.size > 0 ? <Square className="text-blue-500" size={18} /> : <Square size={18} />}
+                      <span>Select All</span>
                     </button>
                   </th>
-                  <th className="px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">
-                    #
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    English Word
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Georgian Definitions
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider hidden sm:table-cell">
-                    Description
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">English</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Georgian Definitions</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Description</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700 backdrop-blur-sm">
+              <tbody className="bg-white/40 dark:bg-gray-900/40 divide-y divide-gray-200 dark:divide-gray-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
-                      <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mb-4"></div>
-                      <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">Loading words...</div>
+                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 rounded-full border-4 border-blue-200 border-t-blue-500 animate-spin" />
+                        <div className="text-lg font-semibold">Loading your vocabulary...</div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Fetching {pageSize} entries</p>
+                      </div>
                     </td>
                   </tr>
                 ) : words.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
-                      <div className="w-24 h-24 mx-auto bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center mb-6">
-                        <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
+                    <td colSpan={5} className="px-6 py-14 text-center">
+                      <div className="max-w-md mx-auto space-y-3">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold">
+                          <Sparkles size={16} />
+                          No words yet
+                        </div>
+                        <p className="text-xl font-bold text-gray-800 dark:text-gray-100">Start building your vocabulary</p>
+                        <p className="text-gray-600 dark:text-gray-400">Add your first word to begin tracking your bilingual learning journey.</p>
                       </div>
-                      <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                        No words found
-                      </h3>
-                      <p className="text-gray-600 dark:text-gray-400">
-                        Add your first word to get started!
-                      </p>
                     </td>
                   </tr>
                 ) : (
-                  words.map((word, idx) => (
-                    <tr key={word.id} className={`hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-purple-50/50 dark:hover:from-gray-700/50 dark:hover:to-gray-600/50 ${selectedIds.has(word.id) ? 'bg-gradient-to-r from-blue-50/80 to-purple-50/80 dark:from-blue-900/20 dark:to-purple-900/20' : ''} transition-all duration-200`}>
-                      <td className="px-4 py-4">
-                        <button
-                          onClick={() => toggleSelect(word.id)}
-                          className="text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 p-1 rounded-lg hover:bg-white/50 dark:hover:bg-gray-700/50 transition-all duration-200"
-                        >
-                          {selectedIds.has(word.id) ? (
-                            <CheckSquare size={20} className="text-blue-600 dark:text-blue-400" />
-                          ) : (
-                            <Square size={20} />
-                          )}
-                        </button>
+                  words.map((word) => (
+                    <tr key={word.id} className="hover:bg-blue-50/60 dark:hover:bg-gray-800/50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <label className="inline-flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(word.id)}
+                            onChange={() => toggleSelect(word.id)}
+                            className="w-5 h-5 rounded border-2 border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Select</span>
+                        </label>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-gray-600 dark:text-gray-400">
-                        {page * pageSize + idx + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-lg font-bold text-gray-900 dark:text-gray-100">
-                        {word.english_word}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/40 dark:to-purple-900/40 flex items-center justify-center text-blue-700 dark:text-blue-200 font-bold shadow-inner">
+                            {word.english_word.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-base font-bold text-gray-900 dark:text-gray-100">{word.english_word}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">Added recently</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-2">
-                          {word.georgian_definitions.map((def, defIdx) => (
-                            <span key={defIdx} className="inline-block bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 text-blue-800 dark:text-blue-300 px-3 py-1 rounded-full text-sm font-medium shadow-sm">
+                          {word.georgian_definitions.map((def, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-semibold">
+                              <Sparkles size={14} className="text-blue-500" />
                               {def}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-xs">
-                        <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: word.description || '-' }} />
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                        {word.description ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: word.description }} />
+                        ) : (
+                          <span className="text-gray-400 italic">No description</span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => setEditingWord(word)}
-                          className="text-blue-600 dark:text-blue-400 hover:text-purple-600 dark:hover:text-purple-400 mr-4 p-2 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/50 transition-all duration-200 transform hover:scale-105"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteModalWord(word)}
-                          className="text-gray-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="inline-flex gap-2">
+                          <button
+                            onClick={() => setEditingWord(word)}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-200 bg-blue-50/70 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200"
+                          >
+                            <Edit2 size={16} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setDeleteModalWord(word)}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 bg-red-50/70 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200"
+                          >
+                            <Trash2 size={16} />
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -431,38 +423,38 @@ export default function WordManagement() {
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalCount)} of {totalCount} words
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setPage(Math.max(0, page - 1))}
-                disabled={page === 0}
-                className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
-              >
-                Previous
-              </button>
-              <div className="px-6 py-3 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 rounded-2xl text-sm font-bold text-blue-800 dark:text-blue-300 shadow-sm">
-                Page {page + 1} of {totalPages}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-5 border-t border-gray-200 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 via-white to-blue-50/50 dark:from-gray-900 dark:via-gray-900/80 dark:to-blue-900/20">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                Showing <span className="font-bold text-gray-900 dark:text-gray-100">{page * pageSize + 1}</span> to{' '}
+                <span className="font-bold text-gray-900 dark:text-gray-100">{Math.min((page + 1) * pageSize, totalCount)}</span> of{' '}
+                <span className="font-bold text-gray-900 dark:text-gray-100">{totalCount}</span> words
               </div>
-              <button
-                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                disabled={page >= totalPages - 1}
-                className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
-              >
-                Next
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => setPage(Math.max(0, page - 1))}
+                  disabled={page === 0}
+                  className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
+                >
+                  Previous
+                </button>
+                <div className="px-6 py-3 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 rounded-2xl text-sm font-bold text-blue-800 dark:text-blue-300 shadow-sm">
+                  Page {page + 1} of {totalPages}
+                </div>
+                <button
+                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Modals moved outside space-y container to prevent margin interference */}
       {(showAddModal || editingWord) && (
         <WordModal
           word={editingWord}
@@ -539,7 +531,7 @@ function DeleteWordModal({
           </p>
         </div>
 
-        <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/50 dark:to-blue-900/20 rounded-2xl p-6 mb-6 border border-gray-200 dark:border-gray-600">
+        <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/50 dark:to-blue-900/50 rounded-2xl p-6 mb-6 border border-gray-200 dark:border-gray-600">
           <div className="font-bold text-gray-900 dark:text-gray-100 text-lg mb-3">
             {word.english_word}
           </div>
@@ -742,26 +734,25 @@ function WordModal({
             description: description || null,
           })
           .eq('id', word.id)
-          .eq('user_id', user.id); // Ensure user can only edit their own words
+          .eq('user_id', user.id);
 
         if (error) throw error;
         onSave();
       } else {
         // Adding new word - check for duplicates first
-        const { data: existingWords, error: checkError } = await supabase
+        const { data: existing, error: dupError } = await supabase
           .from('words')
           .select('*')
-          .eq('user_id', user.id) // Check only in user's words
+          .eq('user_id', user.id)
           .ilike('english_word', englishWord.trim());
 
-        if (checkError) throw checkError;
+        if (dupError) throw dupError;
 
-        // If word already exists, notify parent component
-        if (existingWords && existingWords.length > 0) {
-          onDuplicateDetected(existingWords[0], {
+        if (existing && existing.length > 0) {
+          onDuplicateDetected(existing[0], {
             englishWord,
             georgianDefs: filteredDefs,
-            description
+            description,
           });
         } else {
           // No duplicate, proceed with adding
@@ -995,9 +986,36 @@ function DuplicateWordModal({
   onCopy: () => void;
   onCancel: () => void;
 }) {
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowCloseConfirm(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[75]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[75]"
+      onMouseDown={() => setShowCloseConfirm(true)}
+    >
+      <div
+        className="relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button
+          onClick={() => setShowCloseConfirm(true)}
+          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+          aria-label="Close"
+        >
+          <X size={22} />
+        </button>
+
         <div className="text-center mb-6">
           <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
             <AlertCircle className="text-white" size={32} />
@@ -1036,12 +1054,6 @@ function DuplicateWordModal({
 
         <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={onCancel}
-            className="w-full sm:flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
-          >
-            Cancel
-          </button>
-          <button
             onClick={onCopy}
             className="w-full sm:flex-1 px-6 py-3 border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-200 rounded-2xl font-semibold bg-white/70 dark:bg-gray-800/60 hover:bg-blue-50 dark:hover:bg-gray-700 transition-all duration-200"
           >
@@ -1055,6 +1067,37 @@ function DuplicateWordModal({
             Make Unique Definition
           </button>
         </div>
+
+        {showCloseConfirm && (
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-3xl">
+            <div className="bg-white/95 dark:bg-gray-800/95 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 w-full max-w-sm space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="text-blue-500" size={24} />
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Close without saving?</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Closing now will discard your filled information.</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="w-full sm:flex-1 px-5 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-800 dark:text-gray-200 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+                >
+                  Go back
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCloseConfirm(false);
+                    onCancel();
+                  }}
+                  className="w-full sm:flex-1 px-5 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-200 shadow-lg"
+                >
+                  Close and discard
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
