@@ -12,6 +12,7 @@ export default function WordManagement() {
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [pageSizeMenuOpen, setPageSizeMenuOpen] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteModalWord, setDeleteModalWord] = useState<Word | null>(null);
@@ -24,6 +25,8 @@ export default function WordManagement() {
     georgianDefs: string[];
     description: string;
   } | null>(null);
+  const pageSizeMenuRef = useRef<HTMLDivElement>(null);
+  const pageSizeOptions = [10, 25, 50, 100];
 
   useEffect(() => {
     loadWords();
@@ -33,6 +36,32 @@ export default function WordManagement() {
   useEffect(() => {
     setSelectedIds(new Set());
   }, [page, pageSize, searchTerm]);
+
+  useEffect(() => {
+    if (!pageSizeMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (pageSizeMenuRef.current && !pageSizeMenuRef.current.contains(event.target as Node)) {
+        setPageSizeMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPageSizeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [pageSizeMenuOpen]);
 
   async function loadWords() {
     if (!user) return;
@@ -297,23 +326,41 @@ export default function WordManagement() {
                 className="w-full h-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-12 pr-4 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
               />
             </div>
-            <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-4 shadow-inner overflow-hidden">
+            <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-3 shadow-inner">
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Page size</span>
-              <div className="relative flex-1 h-full">
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(0);
-                  }}
-                  className="w-full h-full appearance-none pr-10 pl-4 rounded-2xl border border-transparent bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 shadow-sm"
+              <div ref={pageSizeMenuRef} className="relative flex-1 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPageSizeMenuOpen(open => !open)}
+                  className={`inline-flex items-center justify-between w-full sm:w-44 h-10 px-3 rounded-xl border border-white/40 dark:border-gray-700/70 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${pageSizeMenuOpen ? 'ring-2 ring-blue-500/30' : ''}`}
                 >
-                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={10}>10 per page</option>
-                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={25}>25 per page</option>
-                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={50}>50 per page</option>
-                  <option className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800" value={100}>100 per page</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400" size={18} />
+                  <span className="truncate">{pageSize} per page</span>
+                  <ChevronDown className={`ml-2 text-gray-500 dark:text-gray-400 transition-transform ${pageSizeMenuOpen ? 'rotate-180' : ''}`} size={18} />
+                </button>
+                {pageSizeMenuOpen && (
+                  <div className="absolute right-0 top-[110%] w-full sm:w-44 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden">
+                    <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                      {pageSizeMenuOpen &&
+                        pageSizeOptions.map(option => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setPageSize(option);
+                              setPage(0);
+                              setPageSizeMenuOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between px-4 py-2 text-sm font-semibold transition-colors ${option === pageSize
+                              ? 'bg-blue-50/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+                              : 'text-gray-800 dark:text-gray-100 hover:bg-gray-100/80 dark:hover:bg-gray-700/70'}`}
+                          >
+                            {option} per page
+                            {option === pageSize && <CheckSquare size={16} className="text-blue-600 dark:text-blue-300" />}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -610,8 +657,7 @@ function BulkDeleteModal({
 
         <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-4 mb-6">
           <p className="text-sm text-orange-800 dark:text-orange-300">
-            You are about to delete <strong>{count}</strong> word{count > 1 ? 's' : ''}.
-            This action cannot be undone.
+            You are about to delete <strong>{count}</strong> word{count > 1 ? 's' : ''}. This action cannot be undone.
           </p>
         </div>
 
@@ -822,7 +868,7 @@ function WordModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-xl my-4 relative transition-all duration-300">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-xl my-3 relative transition-all duration-300">
         <button
           onClick={handleClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10"
@@ -830,8 +876,8 @@ function WordModal({
           <X size={24} />
         </button>
 
-        <div className="max-h-[82vh] overflow-y-auto smooth-scrollbar p-8 pt-6">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-h-[70vh] overflow-y-auto smooth-scrollbar p-6 pt-5">
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               {word ? 'Edit Word' : 'Add New Word'}
             </h3>
