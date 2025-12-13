@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import AuthPage from './components/AuthPage';
 import WordManagement from './components/WordManagement';
+import ErrorBoundary from './components/ErrorBoundary';
 import FreeMode from './components/FreeMode';
 import TestMode from './components/TestMode';
 import History from './components/History';
@@ -88,7 +89,7 @@ function AppContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
-              <button 
+              <button
                 onClick={handleLogoClick}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
@@ -151,7 +152,7 @@ function AppContent() {
               >
                 {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
               </button>
-              
+
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
@@ -172,7 +173,7 @@ function AppContent() {
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
                     </div>
-                    
+
                     <button
                       onClick={() => {
                         setShowProfileModal(true);
@@ -183,7 +184,7 @@ function AppContent() {
                       <User size={16} />
                       Edit Profile
                     </button>
-                    
+
                     <button
                       onClick={() => {
                         setShowDeleteModal(true);
@@ -194,9 +195,9 @@ function AppContent() {
                       <Trash2 size={16} />
                       Delete Account
                     </button>
-                    
+
                     <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                    
+
                     <button
                       onClick={() => {
                         signOut();
@@ -265,7 +266,11 @@ function AppContent() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === 'words' && <WordManagement />}
+        {currentView === 'words' && (
+          <ErrorBoundary>
+            <WordManagement />
+          </ErrorBoundary>
+        )}
         {currentView === 'free' && <FreeMode />}
         {currentView === 'test' && <TestMode />}
         {currentView === 'history' && <History />}

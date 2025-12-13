@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, Word, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Check, X, RotateCcw } from 'lucide-react';
+import { sanitizeDescription } from '../lib/sanitizeDescription';
 
 interface TestWord extends Word {
   userAnswer: string;
@@ -268,7 +269,7 @@ export default function TestMode() {
 
     const currentWord = testWords[currentQuestion];
     const progress = ((currentQuestion) / testWords.length) * 100;
-    
+
     console.log('currentWord:', currentWord?.english_word || currentWord?.georgian_definitions);
     console.log('progress:', progress + '%');
 
@@ -291,14 +292,14 @@ export default function TestMode() {
         <div className="bg-white rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
             <div className="text-4xl font-bold text-gray-900 mb-4">
-              {direction === 'en-to-geo' 
-                ? currentWord.english_word 
+              {direction === 'en-to-geo'
+                ? currentWord.english_word
                 : currentWord.georgian_definitions.join(', ')
               }
             </div>
             {currentWord.description && (
               <div className="text-sm text-gray-600 italic">
-                <div dangerouslySetInnerHTML={{ __html: currentWord.description }} />
+                <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(currentWord.description) }} />
               </div>
             )}
           </div>
@@ -341,8 +342,8 @@ export default function TestMode() {
               onClick={submitAnswer}
               disabled={!userAnswer.trim()}
               className={`w-full px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors ${
-                currentQuestion >= testWords.length - 1 
-                  ? 'bg-green-600 hover:bg-green-700 text-white' 
+                currentQuestion >= testWords.length - 1
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
             >
@@ -407,7 +408,7 @@ export default function TestMode() {
                     {!word.isCorrect && (
                       <div className="text-sm text-gray-600 mt-1">
                         Correct: <span className="font-medium">
-                          {direction === 'en-to-geo' 
+                          {direction === 'en-to-geo'
                             ? word.georgian_definitions.join(', ')
                             : word.english_word
                           }

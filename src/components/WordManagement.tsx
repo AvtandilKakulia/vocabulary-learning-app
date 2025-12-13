@@ -2,12 +2,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase, Word } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Search, Edit2, Trash2, Plus, X, AlertCircle, CheckSquare, Square, Bold, Palette, Sparkles, Layers, ChevronDown } from 'lucide-react';
+import { sanitizeDescription } from '../lib/sanitizeDescription';
+import { normalizeEnglishWord } from '../lib/normalizeEnglishWord';
+import { applyFormatting } from '../lib/applyFormatting';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+
+const isUniqueConstraintError = (error: any) => {
+  if (!error) return false;
+  return error.code === '23505' || (typeof error.message === 'string' && error.message.includes('words_user_word_unique'));
+};
 
 export default function WordManagement() {
   const { user } = useAuth();
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [page, setPage] = useState(0);
@@ -30,12 +40,12 @@ export default function WordManagement() {
 
   useEffect(() => {
     loadWords();
-  }, [page, pageSize, searchTerm]);
+  }, [page, pageSize, debouncedSearchTerm]);
 
   // Clear selections when page changes
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, pageSize, searchTerm]);
+  }, [page, pageSize, debouncedSearchTerm]);
 
   useEffect(() => {
     if (!pageSizeMenuOpen) return;
@@ -67,25 +77,41 @@ export default function WordManagement() {
     if (!user) return;
 
     setLoading(true);
+    const term = debouncedSearchTerm.trim();
     try {
-      let query = supabase
-        .from('words')
-        .select('*', { count: 'exact' })
-        .eq('user_id', user.id) // Filter by current user
-        .order('english_word', { ascending: true })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+      if (term) {
+        const [searchResult, countResult] = await Promise.all([
+          supabase.rpc('search_words', {
+            p_user_id: user.id,
+            p_term: term,
+            p_offset: page * pageSize,
+            p_limit: pageSize
+          }),
+          supabase.rpc('search_words_count', {
+            p_user_id: user.id,
+            p_term: term
+          })
+        ]);
 
-      if (searchTerm) {
-        query = query.or(
-          `english_word.ilike.%${searchTerm}%,georgian_definitions.cs.[\"${searchTerm}\"]`
-        );
+        if (searchResult.error) throw searchResult.error;
+        if (countResult.error) throw countResult.error;
+
+        setWords(searchResult.data || []);
+        setTotalCount(typeof countResult.data === 'number' ? countResult.data : 0);
+      } else {
+        let query = supabase
+          .from('words')
+          .select('*', { count: 'exact' })
+          .eq('user_id', user.id) // Filter by current user
+          .order('english_word', { ascending: true })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        const { data, error, count } = await query;
+
+        if (error) throw error;
+        setWords(data || []);
+        setTotalCount(count || 0);
       }
-
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-      setWords(data || []);
-      setTotalCount(count || 0);
     } catch (error: any) {
       console.error('Error loading words:', error);
     } finally {
@@ -157,7 +183,7 @@ export default function WordManagement() {
   const totalPages = Math.ceil(totalCount / pageSize);
   const allSelected = words.length > 0 && selectedIds.size === words.length;
   const someSelected = selectedIds.size > 0;
-  const selectionRatio = totalCount ? Math.min((selectedIds.size / totalCount) * 100, 100) : 0;
+  const selectionRatio = words.length ? Math.min((selectedIds.size / words.length) * 100, 100) : 0;
 
   const handleCopyDefinition = () => {
     if (duplicateWord && newWordData) {
@@ -207,7 +233,25 @@ export default function WordManagement() {
           description: wordData.description || null,
         });
 
-      if (error) throw error;
+      if (error) {
+        if (isUniqueConstraintError(error)) {
+          const normalized = normalizeEnglishWord(wordData.englishWord);
+          const { data: existingWord } = await supabase
+            .from('words')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('english_word_norm', normalized)
+            .maybeSingle();
+
+          if (existingWord) {
+            setDuplicateWord(existingWord);
+            setNewWordData(wordData);
+            setShowDuplicateModal(true);
+            return;
+          }
+        }
+        throw error;
+      }
       loadWords();
       setShowAddModal(false);
     } catch (error: any) {
@@ -260,14 +304,14 @@ export default function WordManagement() {
               </div>
               <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur p-4 shadow-xl flex flex-col gap-2">
                 <div className="flex items-center justify-between text-xs uppercase tracking-widest text-indigo-100/80">
-                  <span>Selected</span>
+                  <span>Selected (this page)</span>
                   <span>{selectionRatio.toFixed(0)}%</span>
                 </div>
                 <p className="text-3xl font-extrabold">{selectedIds.size}</p>
                 <div className="h-2 rounded-full bg-white/10 overflow-hidden border border-white/20">
                   <div className="h-full bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400" style={{ width: `${selectionRatio}%` }} />
                 </div>
-                <p className="text-xs text-indigo-100/70">Ready for bulk actions</p>
+                <p className="text-xs text-indigo-100/70">Selection applies to this page</p>
               </div>
             </div>
           </div>
@@ -286,7 +330,7 @@ export default function WordManagement() {
             <div className="relative z-30 flex flex-wrap gap-3 justify-end items-center">
               {someSelected && (
                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm h-12">
-                  <span className="text-sm font-semibold">{selectedIds.size} selected</span>
+                  <span className="text-sm font-semibold">{selectedIds.size} selected (this page)</span>
                   <button
                     onClick={() => setSelectedIds(new Set())}
                     className="inline-flex items-center justify-center h-9 text-xs font-semibold rounded-full px-3 bg-white/70 dark:bg-white/10 text-rose-700 dark:text-rose-200 hover:bg-white/90 dark:hover:bg-white/20 transition"
@@ -458,26 +502,31 @@ export default function WordManagement() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-xs">
-                        <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: word.description || '-' }} />
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 hidden sm:table-cell max-w-md">
+                        {word.description ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeDescription(word.description) }} />
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-600">—</span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => setEditingWord(word)}
-                            aria-label={`Edit ${word.english_word}`}
-                            className="text-blue-600 dark:text-blue-400 hover:text-purple-600 dark:hover:text-purple-400 p-2 rounded-xl hover:bg-blue-100/90 dark:hover:bg-blue-900/50 transition-all duration-200 transform hover:scale-105"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteModalWord(word)}
-                            aria-label={`Delete ${word.english_word}`}
-                            className="text-gray-500 hover:text-red-600 p-2 rounded-xl hover:bg-red-100/90 dark:hover:bg-red-900/50 transition-all duration-200"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
+                      <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            setEditingWord(word);
+                            setShowAddModal(true);
+                          }}
+                          className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50/80 dark:hover:bg-gray-700/60 transition-all duration-200"
+                          aria-label="Edit"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteModalWord(word)}
+                          className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-red-500 dark:text-red-400 hover:bg-red-50/80 dark:hover:bg-gray-700/60 transition-all duration-200"
+                          aria-label="Delete"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -485,39 +534,34 @@ export default function WordManagement() {
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalCount)} of {totalCount} words
+          {/* Pagination */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Page {page + 1} of {totalPages || 1}
             </div>
-            <div className="flex gap-3">
+
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setPage(Math.max(0, page - 1))}
+                onClick={() => setPage(page - 1)}
                 disabled={page === 0}
-                className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 text-sm font-semibold text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition"
               >
                 Previous
               </button>
-              <div className="px-6 py-3 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 rounded-2xl text-sm font-bold text-blue-800 dark:text-blue-300 shadow-sm">
-                Page {page + 1} of {totalPages}
-              </div>
               <button
-                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                onClick={() => setPage(page + 1)}
                 disabled={page >= totalPages - 1}
-                className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-gray-700 dark:text-gray-300 font-semibold transition-all duration-200 transform hover:scale-105"
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 text-sm font-semibold text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 transition"
               >
                 Next
               </button>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Modals moved outside space-y container to prevent margin interference */}
-      {(showAddModal || editingWord) && (
+      {showAddModal && (
         <WordModal
           word={editingWord}
           onClose={() => {
@@ -525,9 +569,9 @@ export default function WordManagement() {
             setEditingWord(null);
           }}
           onSave={() => {
-            loadWords();
             setShowAddModal(false);
             setEditingWord(null);
+            loadWords();
           }}
           onDuplicateDetected={(existingWord, wordData) => {
             setDuplicateWord(existingWord);
@@ -606,7 +650,7 @@ function DeleteWordModal({
           </div>
           {word.description && (
             <div className="text-sm text-gray-600 dark:text-gray-400 italic border-t border-gray-200 dark:border-gray-600 pt-3">
-              <div dangerouslySetInnerHTML={{ __html: word.description }} />
+              <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(word.description) }} />
             </div>
           )}
         </div>
@@ -703,6 +747,7 @@ function WordModal({
   const [saving, setSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const initialStateRef = useRef<{ englishWord: string; georgianDefs: string[]; description: string }>({
     englishWord: word?.english_word || '',
     georgianDefs: word?.georgian_definitions || [''],
@@ -746,35 +791,33 @@ function WordModal({
     }
   };
 
-  const applyFormatting = (format: 'bold' | 'color', color?: string) => {
-    const textarea = document.getElementById('description-textarea') as HTMLTextAreaElement;
+  const handleFormatting = (format: 'bold' | 'color', color?: string) => {
+    const textarea = descriptionRef.current;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = description.substring(start, end);
 
-    if (!selectedText) {
-      alert('Please select text to format');
+    const result = applyFormatting(
+      description,
+      { start, end },
+      format,
+      color
+    );
+
+    if (!result) {
       return;
     }
 
-    let formattedText = '';
-    if (format === 'bold') {
-      formattedText = `<strong>${selectedText}</strong>`;
-    } else if (format === 'color' && color) {
-      formattedText = `<span style="color: ${color}">${selectedText}</span>`;
-    }
-
-    const newDescription = description.substring(0, start) + formattedText + description.substring(end);
-    setDescription(newDescription);
+    setDescription(result.nextText);
 
     // Set cursor position after formatted text
-    setTimeout(() => {
-      textarea.focus();
-      const newPosition = start + formattedText.length;
-      textarea.setSelectionRange(newPosition, newPosition);
-    }, 0);
+    requestAnimationFrame(() => {
+      const nextTextarea = descriptionRef.current;
+      if (!nextTextarea) return;
+      nextTextarea.focus();
+      nextTextarea.setSelectionRange(result.nextCursor, result.nextCursor);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -827,7 +870,28 @@ function WordModal({
               description: description || null,
             });
 
-          if (error) throw error;
+          if (error) {
+            if (isUniqueConstraintError(error)) {
+              const normalized = normalizeEnglishWord(englishWord);
+              const { data: existingWord } = await supabase
+                .from('words')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('english_word_norm', normalized)
+                .maybeSingle();
+
+              if (existingWord) {
+                onDuplicateDetected(existingWord, {
+                  englishWord,
+                  georgianDefs: filteredDefs,
+                  description
+                });
+                return;
+              }
+            }
+
+            throw error;
+          }
           onSave();
         }
       }
@@ -934,46 +998,54 @@ function WordModal({
             <button
               type="button"
               onClick={() => setGeorgianDefs([...georgianDefs, ''])}
-              className="mt-3 text-blue-600 dark:text-blue-400 hover:text-purple-600 dark:hover:text-purple-400 text-sm font-semibold transition-colors"
+              className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-gray-200 dark:border-gray-600 bg-white/70 dark:bg-gray-700/60 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-gray-700 transition-all duration-200"
             >
-              + Add synonym
+              <Plus size={16} />
+              Add definition
             </button>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Description (optional)
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+              Description
+              <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                <Bold size={14} />
+                <span>Rich text</span>
+              </span>
             </label>
-            <div className="mb-3 flex gap-2">
+            <div className="flex gap-2 mb-2">
               <button
                 type="button"
-                onClick={() => applyFormatting('bold')}
-                className="p-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105"
-                title="Bold"
+                onClick={() => handleFormatting('bold')}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
               >
-                <Bold size={18} />
+                <Bold size={16} />
+                Bold
               </button>
-              <div className="relative" ref={colorPickerRef}>
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowColorPicker(!showColorPicker)}
-                  className="p-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105"
-                  title="Text Color"
+                  onClick={() => setShowColorPicker(open => !open)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 >
-                  <Palette size={18} />
+                  <Palette size={16} />
+                  Color
                 </button>
                 {showColorPicker && (
-                  <div className="absolute top-full mt-2 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border border-white/20 dark:border-gray-700/20 rounded-2xl p-3 shadow-2xl z-10 flex gap-2">
+                  <div
+                    ref={colorPickerRef}
+                    className="absolute top-full left-0 mt-2 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg flex gap-2 z-20"
+                  >
                     {colors.map((color) => (
                       <button
                         key={color}
                         type="button"
                         onClick={() => {
-                          applyFormatting('color', color);
+                          handleFormatting('color', color);
                           setShowColorPicker(false);
                         }}
-                        className="w-8 h-8 rounded-xl border-2 border-white dark:border-gray-600 hover:scale-110 transition-all duration-200 shadow-lg"
                         style={{ backgroundColor: color }}
+                        className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       />
                     ))}
                   </div>
@@ -981,31 +1053,39 @@ function WordModal({
               </div>
             </div>
             <textarea
-              id="description-textarea"
+              ref={descriptionRef}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm font-mono text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
-              placeholder="Add description (supports bold and colors)"
+              rows={4}
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+              placeholder="Add additional context or example sentences..."
             />
             {description && (
-              <div className="mt-3 p-4 border-2 border-gray-200 dark:border-gray-600 rounded-2xl bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/50 dark:to-blue-900/20">
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Preview:</div>
-                <div dangerouslySetInnerHTML={{ __html: description }} />
+              <div className="mt-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/60 dark:bg-gray-800/60">
+                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Preview</div>
+                <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeDescription(description) }} />
               </div>
             )}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-700 mt-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-full sm:flex-1 px-5 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-800 dark:text-gray-200 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={saving}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+              className="w-full sm:flex-1 px-5 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-60"
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? 'Saving...' : word ? 'Save changes' : 'Add word'}
             </button>
           </div>
         </form>
+        </div>
 
         {showCloseConfirm && (
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-3xl">
@@ -1013,8 +1093,8 @@ function WordModal({
               <div className="flex items-start gap-3">
                 <AlertCircle className="text-blue-500" size={24} />
                 <div>
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Discard changes?</h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Your current inputs will be lost.</p>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Close without saving?</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Closing now will discard your filled information.</p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -1110,7 +1190,7 @@ function DuplicateWordModal({
           </div>
           {existingWord.description && (
             <div className="text-sm text-gray-600 dark:text-gray-400 italic border-t border-gray-200 dark:border-gray-600 pt-3">
-              <div dangerouslySetInnerHTML={{ __html: existingWord.description }} />
+              <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(existingWord.description) }} />
             </div>
           )}
         </div>
