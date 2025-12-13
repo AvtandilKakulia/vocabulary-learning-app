@@ -283,19 +283,19 @@ export default function WordManagement() {
               <p className="text-sm text-gray-600 dark:text-gray-400">Smoother tooling for creating, editing, and reviewing entries.</p>
             </div>
 
-            <div className="flex flex-wrap gap-3 justify-end">
+            <div className="flex flex-wrap gap-3 justify-end items-center">
               {someSelected && (
-                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm h-12">
                   <span className="text-sm font-semibold">{selectedIds.size} selected</span>
                   <button
                     onClick={() => setSelectedIds(new Set())}
-                    className="text-xs font-semibold rounded-full px-3 py-1 bg-white/70 dark:bg-white/10 text-rose-700 dark:text-rose-200 hover:bg-white/90 dark:hover:bg-white/20 transition"
+                    className="inline-flex items-center justify-center h-9 text-xs font-semibold rounded-full px-3 bg-white/70 dark:bg-white/10 text-rose-700 dark:text-rose-200 hover:bg-white/90 dark:hover:bg-white/20 transition"
                   >
                     Clear
                   </button>
                   <button
                     onClick={() => setShowBulkDeleteModal(true)}
-                    className="flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-orange-500 px-3 py-1 text-white shadow hover:from-rose-600 hover:to-orange-600 transition"
+                    className="inline-flex items-center justify-center h-9 gap-2 rounded-full bg-gradient-to-r from-rose-500 to-orange-500 px-3 text-white shadow hover:from-rose-600 hover:to-orange-600 transition"
                   >
                     <Trash2 size={16} />
                     Delete
@@ -304,7 +304,7 @@ export default function WordManagement() {
               )}
               <button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
+                className="inline-flex items-center justify-center h-12 gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
               >
                 <Plus size={18} />
                 Add word
@@ -326,7 +326,7 @@ export default function WordManagement() {
                 className="w-full h-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-12 pr-4 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
               />
             </div>
-            <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-3 shadow-inner">
+            <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Page size</span>
               <div ref={pageSizeMenuRef} className="relative flex-1 flex justify-end">
                 <button
@@ -338,7 +338,7 @@ export default function WordManagement() {
                   <ChevronDown className={`ml-2 text-gray-500 dark:text-gray-400 transition-transform ${pageSizeMenuOpen ? 'rotate-180' : ''}`} size={18} />
                 </button>
                 {pageSizeMenuOpen && (
-                  <div className="absolute right-0 top-[110%] w-full sm:w-44 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden">
+                  <div className="absolute right-0 top-[110%] w-full sm:w-44 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden z-40">
                     <div className="divide-y divide-gray-100 dark:divide-gray-700">
                       {pageSizeMenuOpen &&
                         pageSizeOptions.map(option => (
@@ -868,7 +868,7 @@ function WordModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-xl my-3 relative transition-all duration-300">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-lg my-3 relative transition-all duration-300">
         <button
           onClick={handleClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10"
