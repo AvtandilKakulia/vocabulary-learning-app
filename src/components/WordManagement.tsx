@@ -738,7 +738,7 @@ function WordModal({
   word: Word | null;
   onClose: () => void;
   onSave: () => void;
-  onDuplicateDetected: (existingWord: Word, wordData: { englishWord: string; georgianDefs: string[]; description: string }) => void
+  onDuplicateDetected: (existingWord: Word, wordData: { englishWord: string; georgianDefs: string[]; description: string }) => void;
 }) {
   const { user } = useAuth();
   const [englishWord, setEnglishWord] = useState(word?.english_word || '');
@@ -1121,7 +1121,7 @@ function WordModal({
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 function DuplicateWordModal({
