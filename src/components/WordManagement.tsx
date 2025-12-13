@@ -1250,7 +1250,6 @@ function DuplicateWordModal({
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
