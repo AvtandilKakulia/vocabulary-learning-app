@@ -1154,7 +1154,10 @@ function DuplicateWordModal({
       onMouseDown={() => setShowCloseConfirm(true)}
     >
       <div
-        className="relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300"
+        className={[
+          'relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl',
+          'border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300',
+        ].join(' ')}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button
