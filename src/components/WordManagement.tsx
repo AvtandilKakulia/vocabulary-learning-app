@@ -348,7 +348,7 @@ const { user } = useAuth();
                   <button
                     onClick={() => setSelectedIds(new Set())}
                     className="inline-flex items-center justify-center h-9 text-xs font-semibold rounded-full px-3 bg-white/70 dark:bg-white/10 text-rose-700 dark:text-rose-200 hover:bg-white/90 dark:hover:bg-white/20 transition"
-                  >
+>
                     Clear
                   </button>
                   <button
@@ -373,6 +373,19 @@ const { user } = useAuth();
           <div className="relative z-20 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
             <div className="relative h-12">
               <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
+              {searchTerm.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setPage(0);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition"
+                  aria-label="Clear search"
+                >
+                  <X size={18} />
+                </button>
+              )}
               <input
                 type="text"
                 value={searchTerm}
@@ -381,7 +394,7 @@ const { user } = useAuth();
                   setPage(0);
                 }}
                 placeholder="Search English or Georgian words..."
-                className="w-full h-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-12 pr-4 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                className="w-full h-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-12 pr-12 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
               />
             </div>
             <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
@@ -406,7 +419,7 @@ const { user } = useAuth();
                           <button
                             key={option}
                             type="button"
-                            onClick={() => {
+                            onClick={() => {() => {
                               setPageSize(option);
                               setPage(0);
                               setPageSizeMenuOpen(false);
