@@ -13,7 +13,7 @@ const isUniqueConstraintError = (error: any) => {
 };
 
 export default function WordManagement() {
- const { user } = useAuth();
+const { user } = useAuth();
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -100,6 +100,7 @@ export default function WordManagement() {
             p_offset: page * pageSize,
             p_limit: pageSize
           }),
+          // search_words_count only accepts user and term parameters
           supabase.rpc('search_words_count', {
             p_user_id: user.id,
             p_term: term
