@@ -13,7 +13,7 @@ const isUniqueConstraintError = (error: any) => {
 };
 
 export default function WordManagement() {
-  const { user } = useAuth();
+ const { user } = useAuth();
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,7 +38,20 @@ export default function WordManagement() {
   const pageSizeMenuRef = useRef<HTMLDivElement>(null);
   const pageSizeOptions = [10, 25, 50, 100];
 
+  const prevSearchTermRef = useRef(debouncedSearchTerm);
+
   useEffect(() => {
+    const searchChanged = debouncedSearchTerm !== prevSearchTermRef.current;
+
+    if (searchChanged) {
+      prevSearchTermRef.current = debouncedSearchTerm;
+
+      if (page !== 0) {
+        setPage(0);
+        return;
+      }
+    }
+
     loadWords();
   }, [page, pageSize, debouncedSearchTerm]);
 
