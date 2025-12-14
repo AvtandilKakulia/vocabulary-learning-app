@@ -312,12 +312,12 @@ const { user } = useAuth();
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur p-4 shadow-xl">
+              <div className="rounded-2xl border border-white/20 bg-white/10 p-4 shadow-xl">
                 <p className="text-xs uppercase tracking-widest text-indigo-100/80 mb-1">Total words</p>
                 <p className="text-3xl font-extrabold">{totalCount}</p>
                 <p className="text-xs text-indigo-100/70 mt-2">Synced to your account</p>
               </div>
-              <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur p-4 shadow-xl flex flex-col gap-2">
+              <div className="rounded-2xl border border-white/20 bg-white/10 p-4 shadow-xl flex flex-col gap-2">
                 <div className="flex items-center justify-between text-xs uppercase tracking-widest text-indigo-100/80">
                   <span>Selected (this page)</span>
                   <span>{selectionRatio.toFixed(0)}%</span>
