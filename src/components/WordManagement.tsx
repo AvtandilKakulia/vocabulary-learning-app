@@ -419,7 +419,7 @@ const { user } = useAuth();
                           <button
                             key={option}
                             type="button"
-                            onClick={() => {() => {
+                            onClick={() => {
                               setPageSize(option);
                               setPage(0);
                               setPageSizeMenuOpen(false);
