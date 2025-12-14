@@ -25,7 +25,6 @@ const { user } = useAuth();
   const [pageSizeMenuOpen, setPageSizeMenuOpen] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [hydrated, setHydrated] = useState(false);
   const [deleteModalWord, setDeleteModalWord] = useState<Word | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -61,9 +60,6 @@ const { user } = useAuth();
     setSelectedIds(new Set());
   }, [page, pageSize, debouncedSearchTerm]);
   
-  useEffect(() => {
-  setHydrated(true);
-}, []);
 
   useEffect(() => {
     if (!pageSizeMenuOpen) return;
@@ -327,14 +323,15 @@ const { user } = useAuth();
                   <span>{selectionRatio.toFixed(0)}%</span>
                 </div>
                 <p className="text-3xl font-extrabold">{selectedIds.size}</p>
-<div className="h-2 rounded-full bg-white/10 overflow-hidden border border-white/20">
-  {selectionRatio > 0 && (
+{!loading && words.length > 0 && selectedIds.size > 0 && (
+  <div className="h-2 rounded-full bg-white/10 overflow-hidden border border-white/20">
     <div
       className="h-full bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400"
       style={{ width: `${selectionRatio}%` }}
     />
-  )}
-</div>
+  </div>
+)}
+
 
 
                 <p className="text-xs text-indigo-100/70">Selection applies to this page</p>
