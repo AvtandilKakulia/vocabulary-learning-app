@@ -372,19 +372,21 @@ const { user } = useAuth();
 
           <div className="relative z-20 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
             <div className="relative h-12">
-              <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
+              <Search className="pointer-events-none absolute z-10 left-4 top-1/2 -translate-y-1/2 text-indigo-400 dark:text-indigo-300" size={20} />
+
               {searchTerm.length > 0 && (
                 <button
-                  type="button"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setPage(0);
-                  }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition"
-                  aria-label="Clear search"
-                >
-                  <X size={18} />
-                </button>
+  type="button"
+  onClick={() => {
+    setSearchTerm('');
+    setPage(0);
+  }}
+  className="absolute z-10 right-3 top-1/2 -translate-y-1/2 text-indigo-400 hover:text-indigo-600 dark:text-indigo-300 dark:hover:text-indigo-200 transition"
+  aria-label="Clear search"
+>
+  <X size={18} />
+</button>
+
               )}
               <input
                 type="text"
