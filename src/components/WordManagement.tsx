@@ -25,6 +25,7 @@ const { user } = useAuth();
   const [pageSizeMenuOpen, setPageSizeMenuOpen] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [hydrated, setHydrated] = useState(false);
   const [deleteModalWord, setDeleteModalWord] = useState<Word | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -59,6 +60,10 @@ const { user } = useAuth();
   useEffect(() => {
     setSelectedIds(new Set());
   }, [page, pageSize, debouncedSearchTerm]);
+  
+  useEffect(() => {
+  setHydrated(true);
+}, []);
 
   useEffect(() => {
     if (!pageSizeMenuOpen) return;
