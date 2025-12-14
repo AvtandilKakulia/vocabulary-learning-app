@@ -327,9 +327,15 @@ const { user } = useAuth();
                   <span>{selectionRatio.toFixed(0)}%</span>
                 </div>
                 <p className="text-3xl font-extrabold">{selectedIds.size}</p>
-                <div className="h-2 rounded-full bg-white/10 overflow-hidden border border-white/20">
-                  <div className="h-full bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400" style={{ width: `${selectionRatio}%` }} />
-                </div>
+<div className="h-2 rounded-full bg-white/10 overflow-hidden border border-white/20">
+  {hydrated && (
+    <div
+      className="h-full bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400 transition-[width] duration-300"
+      style={{ width: `${selectionRatio}%` }}
+    />
+  )}
+</div>
+
                 <p className="text-xs text-indigo-100/70">Selection applies to this page</p>
               </div>
             </div>
