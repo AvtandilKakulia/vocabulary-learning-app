@@ -4,6 +4,7 @@ import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
 import { AddWordResult, WordFormData } from "../useWords";
+import ModalPortal from "./ModalPortal";
 
 interface WordModalProps {
   word: Word | null;
@@ -183,22 +184,23 @@ export default function WordModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-lg my-3 relative transition-all duration-300">
-        <button
-          onClick={handleClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10"
-        >
-          <X size={24} />
-        </button>
+<ModalPortal>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-lg my-3 relative transition-all duration-300">
+          <button
+            onClick={handleClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10"
+          >
+            <X size={24} />
+          </button>
 
-        <div className="absolute -left-3 -top-3 rotate-6">
-          <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg">
-            <Sparkles size={14} />
-            {word ? "Edit Word" : "New Word"}
+          <div className="absolute -left-3 -top-3 rotate-6">
+            <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg">
+              <Sparkles size={14} />
+              {word ? "Edit Word" : "New Word"}
+            </div>
           </div>
         </div>
-
         <div className="p-6 md:p-8 space-y-6">
           <div className="space-y-2">
             <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 leading-tight">
@@ -401,5 +403,6 @@ export default function WordModal({
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }
