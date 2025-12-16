@@ -190,8 +190,7 @@ export default function WordModal({
           className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm
              rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20
              w-full max-w-lg relative transition-all duration-300
-             max-h-[85vh] overflow-y-auto overflow-hidden
-             scrollbar-thin scrollbar-thumb-gray-500/60 scrollbar-track-transparent"
+             max-h-[85vh] overflow-y-auto overflow-hidden modal-scrollbar"
         >
           <button
             onClick={handleClose}
@@ -200,7 +199,7 @@ export default function WordModal({
             <X size={24} />
           </button>
 
-          <div className="absolute -left-3 -top-3 rotate-6">
+          <div className="absolute left-4 top-3 -rotate-3">
             <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg">
               <Sparkles size={14} />
               {word ? "Edit Word" : "New Word"}
@@ -263,7 +262,7 @@ export default function WordModal({
                               );
                               setGeorgianDefs(newDefs);
                             }}
-                            className="flex items-center justify-center px-3 rounded-2xl border-2 border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-600 transition-all duration-200"
+                            className="flex items-center justify-center px-3 rounded-full bg-gray-100/70 dark:bg-gray-700/40 text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-900/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 transition-all duration-200"
                             aria-label="Remove definition"
                           >
                             <X size={16} />

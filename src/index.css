@@ -73,7 +73,6 @@
   }
 }
 
-
 img {
   object-position: top;
 }
@@ -89,32 +88,53 @@ img {
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }
 
 /* Soft scrollbar styling for modal content */
-.smooth-scrollbar {
-  scrollbar-width: auto;
-  scrollbar-color: rgba(148, 163, 184, 0.9) transparent;
+.smooth-scrollbar,
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.45) transparent;
   scrollbar-gutter: stable both-edges;
   overscroll-behavior: contain;
   border-radius: 1rem;
 }
 
-.smooth-scrollbar::-webkit-scrollbar {
-  width: 14px;
+.smooth-scrollbar::-webkit-scrollbar,
+.modal-scrollbar::-webkit-scrollbar {
+  width: 8px;
 }
 
-.smooth-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.4);
+.smooth-scrollbar::-webkit-scrollbar-track,
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.08),
+    transparent 65%
+  );
   border-radius: 9999px;
 }
 
-.smooth-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(96, 165, 250, 0.8), rgba(167, 139, 250, 0.85));
+.smooth-scrollbar::-webkit-scrollbar-thumb,
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(99, 102, 241, 0.55),
+    rgba(124, 58, 237, 0.5)
+  );
   border-radius: 9999px;
-  border: 3px solid rgba(255, 255, 255, 0.65);
+  border: 2px solid transparent;
+}
+
+.smooth-scrollbar::-webkit-scrollbar-thumb:hover,
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(79, 70, 229, 0.65),
+    rgba(109, 40, 217, 0.6)
+  );
 }
 
 /* Ensure modals appear above navigation */
@@ -124,7 +144,8 @@ img {
 
 /* Georgian font support */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans Georgian', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans Georgian", sans-serif;
 }
 
 /* Mobile responsiveness improvements */
@@ -181,7 +202,8 @@ body {
 }
 
 /* Prevent text selection on UI elements */
-button, .cursor-pointer {
+button,
+.cursor-pointer {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
