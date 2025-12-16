@@ -187,9 +187,11 @@ export default function WordModal({
     <ModalPortal>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
         <div
-          className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20
-                w-full max-w-lg my-3 relative transition-all duration-300
-                max-h-[85vh] overflow-y-auto"
+          className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm
+             rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20
+             w-full max-w-lg relative transition-all duration-300
+             max-h-[85vh] overflow-y-auto overflow-hidden
+             scrollbar-thin scrollbar-thumb-gray-500/60 scrollbar-track-transparent"
         >
           <button
             onClick={handleClose}
