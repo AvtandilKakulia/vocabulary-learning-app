@@ -146,7 +146,6 @@ export default function WordTable({
                             className="text-blue-600 dark:text-indigo-300"
                             strokeWidth={2.5}
                           />
-                          <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 shadow-sm" />
                           {def}
                         </span>
                       ))}
