@@ -46,6 +46,7 @@ export default function WordToolbar({
   onAddWord,
 }: WordToolbarProps) {
   const pageSizeMenuRef = useRef<HTMLDivElement>(null);
+  const sortSelectRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     if (!pageSizeMenuOpen) return;
@@ -154,10 +155,12 @@ export default function WordToolbar({
               Sort
             </span>
             <select
+              ref={sortSelectRef}
               value={sortOption}
               onChange={(e) => {
                 onSortChange(e.target.value);
                 setPage(0);
+                sortSelectRef.current?.blur();
               }}
               className="h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/70 px-3 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-inner outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
             >
