@@ -159,7 +159,7 @@ export default function WordToolbar({
                 onSortChange(e.target.value);
                 setPage(0);
               }}
-              className="h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/70 px-3 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+              className="h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/70 px-3 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-inner outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
             >
               <option value="alpha-asc">Alphabetical (A → Z)</option>
               <option value="alpha-desc">Alphabetical (Z → A)</option>
@@ -167,7 +167,7 @@ export default function WordToolbar({
             </select>
           </div>
           <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            <span className="whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
               Page size
             </span>
             <div
@@ -179,11 +179,15 @@ export default function WordToolbar({
               <button
                 type="button"
                 onClick={() => setPageSizeMenuOpen((open) => !open)}
-                className={`inline-flex items-center justify-between w-full sm:w-44 h-10 px-3 rounded-xl border border-white/40 dark:border-gray-700/70 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
-                  pageSizeMenuOpen ? "ring-2 ring-blue-500/30" : ""
+                className={`inline-flex items-center justify-between w-full sm:w-48 min-w-[11rem] h-10 px-3 rounded-xl border border-gray-200/90 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm outline-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
+                  pageSizeMenuOpen
+                    ? "border-blue-500 ring-2 ring-blue-500/30"
+                    : ""
                 }`}
               >
-                <span className="truncate">{pageSize} per page</span>
+                <span className="truncate whitespace-nowrap">
+                  {pageSize} per page
+                </span>
                 <ChevronDown
                   className={`ml-2 text-gray-500 dark:text-gray-400 transition-transform ${
                     pageSizeMenuOpen ? "rotate-180" : ""
