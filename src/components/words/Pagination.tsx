@@ -11,6 +11,10 @@ export default function Pagination({
   totalPages,
   setPage,
 }: PaginationProps) {
+  const visibleTotalPages = Math.max(totalPages, 1);
+  const startPage = Math.max(0, page - 3);
+  const endPage = Math.min(visibleTotalPages - 1, page + 3);
+
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 border-t border-gray-200 dark:border-gray-700">
       <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -25,6 +29,23 @@ export default function Pagination({
         >
           Previous
         </button>
+        {Array.from(
+          { length: endPage - startPage + 1 },
+          (_, idx) => startPage + idx
+        ).map((pageIndex) => (
+          <button
+            key={pageIndex}
+            onClick={() => setPage(pageIndex)}
+            disabled={pageIndex === page || totalPages === 1}
+            className={`px-4 py-2 rounded-xl border text-sm font-semibold transition ${
+              pageIndex === page
+                ? "border-blue-500 bg-blue-600 text-white cursor-default"
+                : "border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {pageIndex + 1}
+          </button>
+        ))}
         <button
           onClick={() => setPage(page + 1)}
           disabled={page >= totalPages - 1}
