@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Search,
   Plus,
@@ -46,7 +46,14 @@ export default function WordToolbar({
   onAddWord,
 }: WordToolbarProps) {
   const pageSizeMenuRef = useRef<HTMLDivElement>(null);
-  const sortSelectRef = useRef<HTMLSelectElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+
+  const sortOptions = [
+    { value: "alpha-asc", label: "Alphabetical (A → Z)" },
+    { value: "alpha-desc", label: "Alphabetical (Z → A)" },
+    { value: "recent", label: "Recently added" },
+  ];
 
   useEffect(() => {
     if (!pageSizeMenuOpen) return;
@@ -76,6 +83,35 @@ export default function WordToolbar({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [pageSizeMenuOpen, setPageSizeMenuOpen]);
+
+  useEffect(() => {
+    if (!sortMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        sortMenuRef.current &&
+        !sortMenuRef.current.contains(event.target as Node)
+      ) {
+        setSortMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSortMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [sortMenuOpen]);
 
   return (
     <div className="relative bg-white/90 dark:bg-gray-900/70 rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
@@ -150,24 +186,68 @@ export default function WordToolbar({
           />
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-4 py-2 shadow-inner">
+          <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               Sort
             </span>
-            <select
-              ref={sortSelectRef}
-              value={sortOption}
-              onChange={(e) => {
-                onSortChange(e.target.value);
-                setPage(0);
-                sortSelectRef.current?.blur();
-              }}
-              className="h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/70 px-3 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-inner outline-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+            <div
+              ref={sortMenuRef}
+              className={`relative flex-1 flex justify-end ${
+                sortMenuOpen ? "z-[90]" : ""
+              }`}
             >
-              <option value="alpha-asc">Alphabetical (A → Z)</option>
-              <option value="alpha-desc">Alphabetical (Z → A)</option>
-              <option value="recent">Recently added</option>
-            </select>
+              <button
+                type="button"
+                onClick={() => setSortMenuOpen((open) => !open)}
+                className={`inline-flex items-center justify-between w-full sm:w-48 min-w-[11rem] h-10 px-3 rounded-xl border border-gray-200/90 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm outline-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
+                  sortMenuOpen ? "border-blue-500 ring-2 ring-blue-500/30" : ""
+                }`}
+              >
+                <span className="truncate whitespace-nowrap">
+                  {
+                    sortOptions.find((option) => option.value === sortOption)
+                      ?.label
+                  }
+                </span>
+                <ChevronDown
+                  className={`ml-2 text-gray-500 dark:text-gray-400 transition-transform ${
+                    sortMenuOpen ? "rotate-180" : ""
+                  }`}
+                  size={18}
+                />
+              </button>
+              {sortMenuOpen && (
+                <div className="absolute right-0 top-[110%] w-full sm:w-48 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden z-[75]">
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {sortMenuOpen &&
+                      sortOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            onSortChange(option.value);
+                            setPage(0);
+                            setSortMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between px-4 py-2 text-sm font-semibold transition-colors ${
+                            option.value === sortOption
+                              ? "bg-blue-50/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                              : "text-gray-800 dark:text-gray-100 hover:bg-gray-100/80 dark:hover:bg-gray-700/70"
+                          }`}
+                        >
+                          {option.label}
+                          {option.value === sortOption && (
+                            <CheckSquare
+                              size={16}
+                              className="text-blue-600 dark:text-blue-300"
+                            />
+                          )}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
             <span className="whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
