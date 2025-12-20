@@ -237,7 +237,7 @@ export default function WordModal({
                     </label>
                     <div className="space-y-3">
                       {georgianDefs.map((def, idx) => (
-                        <div key={idx} className="flex items-stretch gap-2">
+                        <div key={idx} className="flex items-center gap-2">
                           <input
                             type="text"
                             value={def}
