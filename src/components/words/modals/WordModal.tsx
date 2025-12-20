@@ -367,8 +367,7 @@ export default function WordModal({
               </form>
             </div>
           </div>
-
-{showCloseConfirm && (
+          {showCloseConfirm && (
   <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-20 rounded-3xl">
     <div className="bg-white/95 dark:bg-gray-800/95 rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-6 w-full max-w-sm space-y-4">
       <div className="flex items-start gap-3">
