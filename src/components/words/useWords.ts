@@ -25,6 +25,8 @@ export interface AddWordResult {
 
 export const pageSizeOptions = [10, 25, 50, 100];
 
+export type SortOption = "alpha-asc" | "alpha-desc" | "recent";
+
 export function useWords() {
   const { user } = useAuth();
   const [words, setWords] = useState<Word[]>([]);
@@ -34,7 +36,26 @@ export function useWords() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
+  const [sortOption, setSortOption] = useState<SortOption>("alpha-asc");
   const prevSearchTermRef = useRef(debouncedSearchTerm);
+
+  const applySorting = useCallback(
+    <T>(query: T) => {
+      switch (sortOption) {
+        case "alpha-desc":
+          // @ts-expect-error Supabase query builder
+          return query.order("english_word", { ascending: false });
+        case "recent":
+          // @ts-expect-error Supabase query builder
+          return query.order("created_at", { ascending: false });
+        case "alpha-asc":
+        default:
+          // @ts-expect-error Supabase query builder
+          return query.order("english_word", { ascending: true });
+      }
+    },
+    [sortOption]
+  );
 
   const loadWords = useCallback(async () => {
     if (!user) return;
@@ -43,13 +64,17 @@ export function useWords() {
     const term = debouncedSearchTerm.trim();
     try {
       if (term) {
-        const [searchResult, countResult] = await Promise.all([
+        const searchQuery = applySorting(
           supabase.rpc("search_words", {
             p_user_id: user.id,
             p_term: term,
             p_offset: page * pageSize,
             p_limit: pageSize,
-          }),
+          })
+        );
+
+        const [searchResult, countResult] = await Promise.all([
+          searchQuery,
           supabase.rpc("search_words_count", {
             p_user_id: user.id,
             p_term: term,
@@ -67,9 +92,12 @@ export function useWords() {
         let query = supabase
           .from("words")
           .select("*", { count: "exact" })
-          .eq("user_id", user.id)
-          .order("english_word", { ascending: true })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
+          .eq("user_id", user.id);
+
+        query = applySorting(query).range(
+          page * pageSize,
+          (page + 1) * pageSize - 1
+        );
 
         const { data, error, count } = await query;
 
@@ -82,7 +110,7 @@ export function useWords() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearchTerm, page, pageSize, user]);
+  }, [applySorting, debouncedSearchTerm, page, pageSize, user]);
 
   useEffect(() => {
     const searchChanged = debouncedSearchTerm !== prevSearchTermRef.current;
@@ -230,6 +258,8 @@ export function useWords() {
     pageSize,
     setPageSize,
     totalCount,
+    sortOption,
+    setSortOption,
     loadWords,
     deleteWord,
     bulkDeleteWords,

@@ -11,7 +11,7 @@ import DeleteWordModal from "./words/modals/DeleteWordModal";
 import BulkDeleteModal from "./words/modals/BulkDeleteModal";
 import DuplicateWordModal from "./words/modals/DuplicateWordModal";
 
-import { useWords, WordFormData } from "./words/useWords";
+import { SortOption, useWords, WordFormData } from "./words/useWords";
 
 export default function WordManagement() {
   const {
@@ -25,6 +25,8 @@ export default function WordManagement() {
     pageSize,
     setPageSize,
     totalCount,
+    sortOption,
+    setSortOption,
     loadWords,
     deleteWord,
     bulkDeleteWords,
@@ -271,6 +273,25 @@ export default function WordManagement() {
         onAddWord={() => setShowAddModal(true)}
       />
 
+      <div className="flex justify-end -mt-12 pr-6 sm:pr-0">
+        <div className="inline-flex items-center gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-4 py-2 shadow-inner">
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Sort
+          </span>
+          <select
+            value={sortOption}
+            onChange={(e) => {
+              setSortOption(e.target.value as SortOption);
+              setPage(0);
+            }}
+            className="h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/70 px-3 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+          >
+            <option value="alpha-asc">Alphabetical (A → Z)</option>
+            <option value="alpha-desc">Alphabetical (Z → A)</option>
+            <option value="recent">Recently added</option>
+          </select>
+        </div>
+      </div>
       <WordTable
         words={words}
         loading={loading}
