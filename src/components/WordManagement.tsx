@@ -96,6 +96,8 @@ export default function WordManagement() {
       }
 
       await loadWords();
+      setShowAddModal(false);
+      setEditingWord(null);
     } catch (error: any) {
       alert("Error adding word: " + error.message);
     } finally {
@@ -119,6 +121,8 @@ export default function WordManagement() {
       }
 
       await loadWords();
+      setShowAddModal(false);
+      setEditingWord(null);
     } catch (error: any) {
       alert("Error adding word: " + error.message);
     } finally {
