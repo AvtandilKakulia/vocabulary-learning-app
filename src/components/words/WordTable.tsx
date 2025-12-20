@@ -155,21 +155,23 @@ export default function WordTable({
                       )}
                     </button>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap relative">
-                    {word.part_of_speech &&
-                      word.part_of_speech !== "unspecified" && (
-                        <span
-                          className={`absolute top-3 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm ${
-                            partOfSpeechStyles[word.part_of_speech] ||
-                            partOfSpeechStyles.unspecified
-                          }`}
-                        >
-                          {partOfSpeechLabels[word.part_of_speech] ||
-                            word.part_of_speech}
-                        </span>
-                      )}
-                    <div className="text-base font-bold text-gray-900 dark:text-gray-100">
-                      {word.english_word}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="text-base font-bold text-gray-900 dark:text-gray-100">
+                        {word.english_word}
+                      </span>
+                      {word.part_of_speech &&
+                        word.part_of_speech !== "unspecified" && (
+                          <span
+                            className={`inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm ${
+                              partOfSpeechStyles[word.part_of_speech] ||
+                              partOfSpeechStyles.unspecified
+                            }`}
+                          >
+                            {partOfSpeechLabels[word.part_of_speech] ||
+                              word.part_of_speech}
+                          </span>
+                        )}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
                       {formatRelativeDate(word.created_at)}
