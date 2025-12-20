@@ -2,6 +2,7 @@ import React from "react";
 import { Edit2, Trash2, CheckSquare, Square, Sparkles } from "lucide-react";
 import { Word } from "../../lib/supabase";
 import { sanitizeDescription } from "../../lib/sanitizeDescription";
+import { formatRelativeDate } from "../../lib/formatRelativeDate";
 
 interface WordTableProps {
   words: Word[];
@@ -131,7 +132,7 @@ export default function WordTable({
                       {word.english_word}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                      Added on {new Date(word.created_at).toLocaleDateString()}
+                      {formatRelativeDate(word.created_at)}
                     </div>
                   </td>
                   <td className="px-6 py-4">
