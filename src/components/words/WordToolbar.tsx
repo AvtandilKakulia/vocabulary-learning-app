@@ -19,6 +19,8 @@ interface WordToolbarProps {
   pageSizeMenuOpen: boolean;
   setPageSizeMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setPage: React.Dispatch<React.SetStateAction<number>>;
+  sortOption: string;
+  onSortChange: (value: string) => void;
   someSelected: boolean;
   selectedCount: number;
   onClearSelection: () => void;
@@ -35,6 +37,8 @@ export default function WordToolbar({
   pageSizeMenuOpen,
   setPageSizeMenuOpen,
   setPage,
+  sortOption,
+  onSortChange,
   someSelected,
   selectedCount,
   onClearSelection,
@@ -144,62 +148,81 @@ export default function WordToolbar({
             className="w-full h-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-12 pr-12 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
           />
         </div>
-        <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
-          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Page size
-          </span>
-          <div
-            ref={pageSizeMenuRef}
-            className={`relative flex-1 flex justify-end ${
-              pageSizeMenuOpen ? "z-[90]" : ""
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => setPageSizeMenuOpen((open) => !open)}
-              className={`inline-flex items-center justify-between w-full sm:w-44 h-10 px-3 rounded-xl border border-white/40 dark:border-gray-700/70 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
-                pageSizeMenuOpen ? "ring-2 ring-blue-500/30" : ""
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Page size
+            </span>
+            <div
+              ref={pageSizeMenuRef}
+              className={`relative flex-1 flex justify-end ${
+                pageSizeMenuOpen ? "z-[90]" : ""
               }`}
             >
-              <span className="truncate">{pageSize} per page</span>
-              <ChevronDown
-                className={`ml-2 text-gray-500 dark:text-gray-400 transition-transform ${
-                  pageSizeMenuOpen ? "rotate-180" : ""
+              <button
+                type="button"
+                onClick={() => setPageSizeMenuOpen((open) => !open)}
+                className={`inline-flex items-center justify-between w-full sm:w-44 h-10 px-3 rounded-xl border border-white/40 dark:border-gray-700/70 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
+                  pageSizeMenuOpen ? "ring-2 ring-blue-500/30" : ""
                 }`}
-                size={18}
-              />
-            </button>
-            {pageSizeMenuOpen && (
-              <div className="absolute right-0 top-[110%] w-full sm:w-44 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden z-[75]">
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {pageSizeMenuOpen &&
-                    pageSizeOptions.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => {
-                          onPageSizeChange(option);
-                          setPage(0);
-                          setPageSizeMenuOpen(false);
-                        }}
-                        className={`flex w-full items-center justify-between px-4 py-2 text-sm font-semibold transition-colors ${
-                          option === pageSize
-                            ? "bg-blue-50/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
-                            : "text-gray-800 dark:text-gray-100 hover:bg-gray-100/80 dark:hover:bg-gray-700/70"
-                        }`}
-                      >
-                        {option} per page
-                        {option === pageSize && (
-                          <CheckSquare
-                            size={16}
-                            className="text-blue-600 dark:text-blue-300"
-                          />
-                        )}
-                      </button>
-                    ))}
+              >
+                <span className="truncate">{pageSize} per page</span>
+                <ChevronDown
+                  className={`ml-2 text-gray-500 dark:text-gray-400 transition-transform ${
+                    pageSizeMenuOpen ? "rotate-180" : ""
+                  }`}
+                  size={18}
+                />
+              </button>
+              {pageSizeMenuOpen && (
+                <div className="absolute right-0 top-[110%] w-full sm:w-44 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden z-[75]">
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {pageSizeMenuOpen &&
+                      pageSizeOptions.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            onPageSizeChange(option);
+                            setPage(0);
+                            setPageSizeMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between px-4 py-2 text-sm font-semibold transition-colors ${
+                            option === pageSize
+                              ? "bg-blue-50/80 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                              : "text-gray-800 dark:text-gray-100 hover:bg-gray-100/80 dark:hover:bg-gray-700/70"
+                          }`}
+                        >
+                          {option} per page
+                          {option === pageSize && (
+                            <CheckSquare
+                              size={16}
+                              className="text-blue-600 dark:text-blue-300"
+                            />
+                          )}
+                        </button>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm px-4 py-2 shadow-inner">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Sort
+            </span>
+            <select
+              value={sortOption}
+              onChange={(e) => {
+                onSortChange(e.target.value);
+                setPage(0);
+              }}
+              className="h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/70 px-3 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+            >
+              <option value="alpha-asc">Alphabetical (A → Z)</option>
+              <option value="alpha-desc">Alphabetical (Z → A)</option>
+              <option value="recent">Recently added</option>
+            </select>
           </div>
         </div>
       </div>

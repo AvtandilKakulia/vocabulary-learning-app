@@ -266,6 +266,8 @@ export default function WordManagement() {
         pageSizeMenuOpen={pageSizeMenuOpen}
         setPageSizeMenuOpen={setPageSizeMenuOpen}
         setPage={setPage}
+        sortOption={sortOption}
+        onSortChange={(value) => setSortOption(value as SortOption)}
         someSelected={someSelected}
         selectedCount={selectedIds.size}
         onClearSelection={() => setSelectedIds(new Set())}
