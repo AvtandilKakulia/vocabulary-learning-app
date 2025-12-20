@@ -139,8 +139,9 @@ export default function WordTable({
                       {word.georgian_definitions.map((def, idx) => (
                         <span
                           key={idx}
-                          className="inline-block bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm"
+                          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm"
                         >
+                          <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 shadow-sm" />
                           {def}
                         </span>
                       ))}

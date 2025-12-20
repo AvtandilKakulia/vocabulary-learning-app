@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertCircle, Bold, Palette, Plus, Sparkles, X } from "lucide-react";
+import { AlertCircle, Bold, Palette, Plus, X } from "lucide-react";
 import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
@@ -199,13 +199,6 @@ export default function WordModal({
             <X size={24} />
           </button>
 
-          <div className="absolute left-4 top-3 -rotate-3">
-            <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white shadow-lg">
-              <Sparkles size={14} />
-              {word ? "Edit Word" : "New Word"}
-            </div>
-          </div>
-
           <div className="p-6 md:p-8 space-y-6">
             <div className="space-y-2">
               <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 leading-tight">
@@ -240,7 +233,7 @@ export default function WordModal({
                   </label>
                   <div className="space-y-3">
                     {georgianDefs.map((def, idx) => (
-                      <div key={idx} className="flex gap-2">
+                      <div key={idx} className="flex items-stretch gap-2">
                         <input
                           type="text"
                           value={def}
@@ -253,21 +246,24 @@ export default function WordModal({
                           placeholder={`Definition ${idx + 1}`}
                           required
                         />
-                        {georgianDefs.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const newDefs = georgianDefs.filter(
-                                (_, i) => i !== idx
-                              );
-                              setGeorgianDefs(newDefs);
-                            }}
-                            className="flex items-center justify-center px-3 rounded-full bg-gray-100/70 dark:bg-gray-700/40 text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-900/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 transition-all duration-200"
-                            aria-label="Remove definition"
-                          >
-                            <X size={16} />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDefs = georgianDefs.filter(
+                              (_, i) => i !== idx
+                            );
+                            setGeorgianDefs(newDefs);
+                          }}
+                          disabled={georgianDefs.length === 1}
+                          className={`flex items-center justify-center h-[52px] w-[52px] rounded-full text-gray-500 transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                            georgianDefs.length === 1
+                              ? "bg-gray-100/60 dark:bg-gray-700/40 cursor-not-allowed opacity-70"
+                              : "bg-gray-100/80 dark:bg-gray-700/50 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400"
+                          }`}
+                          aria-label="Remove definition"
+                        >
+                          <X size={16} />
+                        </button>
                       </div>
                     ))}
                     <button
