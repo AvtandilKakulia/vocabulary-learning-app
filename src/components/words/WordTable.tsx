@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit2, Trash2, CheckSquare, Square } from "lucide-react";
+import { Edit2, Trash2, CheckSquare, Square, Sparkles } from "lucide-react";
 import { Word } from "../../lib/supabase";
 import { sanitizeDescription } from "../../lib/sanitizeDescription";
 
@@ -141,6 +141,11 @@ export default function WordTable({
                           key={idx}
                           className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm"
                         >
+                          <Sparkles
+                            size={16}
+                            className="text-blue-600 dark:text-indigo-300"
+                            strokeWidth={2.5}
+                          />
                           <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 shadow-sm" />
                           {def}
                         </span>
