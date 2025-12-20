@@ -147,6 +147,11 @@ export default function WordManagement() {
     setDeleting(true);
     try {
       await deleteWord(id);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       setDeleteModalWord(null);
       await loadWords();
     } catch (error: any) {
