@@ -17,6 +17,7 @@ export interface WordFormData {
   englishWord: string;
   georgianDefs: string[];
   description: string;
+  partOfSpeech: string;
 }
 
 export interface AddWordResult {
@@ -200,6 +201,7 @@ export function useWords() {
         const { error } = await supabase.from("words").insert({
           user_id: user.id,
           english_word: wordData.englishWord,
+          part_of_speech: wordData.partOfSpeech || "unspecified",
           georgian_definitions: wordData.georgianDefs.filter(
             (d) => d.trim() !== ""
           ),
@@ -234,6 +236,7 @@ export function useWords() {
         .from("words")
         .update({
           english_word: wordData.englishWord,
+          part_of_speech: wordData.partOfSpeech || "unspecified",
           georgian_definitions: wordData.georgianDefs.filter(
             (d) => d.trim() !== ""
           ),

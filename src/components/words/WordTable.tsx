@@ -25,6 +25,34 @@ export default function WordTable({
   onEdit,
   onDelete,
 }: WordTableProps) {
+  const partOfSpeechStyles: Record<string, string> = {
+    noun: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-100",
+    verb: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-100",
+    adjective:
+      "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-100",
+    adverb:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100",
+    preposition:
+      "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-100",
+    conjunction:
+      "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-100",
+    pronoun:
+      "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-100",
+    unspecified:
+      "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-200",
+  };
+
+  const partOfSpeechLabels: Record<string, string> = {
+    noun: "Noun",
+    verb: "Verb",
+    adjective: "Adjective",
+    adverb: "Adverb",
+    preposition: "Preposition",
+    conjunction: "Conjunction",
+    pronoun: "Pronoun",
+    unspecified: "Unspecified",
+  };
+
   return (
     <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 overflow-hidden transition-all duration-300">
       <div className="overflow-x-auto">
@@ -127,7 +155,19 @@ export default function WordTable({
                       )}
                     </button>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap relative">
+                    {word.part_of_speech &&
+                      word.part_of_speech !== "unspecified" && (
+                        <span
+                          className={`absolute top-3 right-4 text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm ${
+                            partOfSpeechStyles[word.part_of_speech] ||
+                            partOfSpeechStyles.unspecified
+                          }`}
+                        >
+                          {partOfSpeechLabels[word.part_of_speech] ||
+                            word.part_of_speech}
+                        </span>
+                      )}
                     <div className="text-base font-bold text-gray-900 dark:text-gray-100">
                       {word.english_word}
                     </div>

@@ -26,6 +26,9 @@ export default function WordModal({
   checkExistingEnglishWord,
 }: WordModalProps) {
   const [englishWord, setEnglishWord] = useState(word?.english_word || "");
+  const [partOfSpeech, setPartOfSpeech] = useState(
+    word?.part_of_speech || "unspecified"
+  );
   const [georgianDefs, setGeorgianDefs] = useState<string[]>(
     word?.georgian_definitions || [""]
   );
@@ -36,10 +39,12 @@ export default function WordModal({
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const initialStateRef = useRef<{
     englishWord: string;
+    partOfSpeech: string;
     georgianDefs: string[];
     description: string;
   }>({
     englishWord: word?.english_word || "",
+    partOfSpeech: word?.part_of_speech || "unspecified",
     georgianDefs: word?.georgian_definitions || [""],
     description: word?.description || "",
   });
@@ -47,12 +52,14 @@ export default function WordModal({
 
   useEffect(() => {
     setEnglishWord(word?.english_word || "");
+    setPartOfSpeech(word?.part_of_speech || "unspecified");
     setGeorgianDefs(word?.georgian_definitions || [""]);
     setDescription(word?.description || "");
     setShowColorPicker(false);
     setShowCloseConfirm(false);
     initialStateRef.current = {
       englishWord: word?.english_word || "",
+      partOfSpeech: word?.part_of_speech || "unspecified",
       georgianDefs: word?.georgian_definitions || [""],
       description: word?.description || "",
     };
@@ -66,6 +73,7 @@ export default function WordModal({
 
     return (
       englishWord !== initial.englishWord ||
+      partOfSpeech !== initial.partOfSpeech ||
       description !== initial.description ||
       defsDirty
     );
@@ -112,6 +120,7 @@ export default function WordModal({
       const filteredDefs = georgianDefs.filter((d) => d.trim() !== "");
       const wordData: WordFormData = {
         englishWord,
+        partOfSpeech,
         georgianDefs: filteredDefs,
         description,
       };
@@ -229,6 +238,26 @@ export default function WordModal({
                       placeholder="Enter the English word"
                       required
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Part of speech (optional)
+                    </label>
+                    <select
+                      value={partOfSpeech}
+                      onChange={(e) => setPartOfSpeech(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                    >
+                      <option value="unspecified">Unspecified</option>
+                      <option value="noun">Noun</option>
+                      <option value="verb">Verb</option>
+                      <option value="adjective">Adjective</option>
+                      <option value="adverb">Adverb</option>
+                      <option value="preposition">Preposition</option>
+                      <option value="conjunction">Conjunction</option>
+                      <option value="pronoun">Pronoun</option>
+                    </select>
                   </div>
 
                   <div>
