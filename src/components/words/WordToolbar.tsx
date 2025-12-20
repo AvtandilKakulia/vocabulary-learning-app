@@ -87,7 +87,7 @@ export default function WordToolbar({
 
         <div className="relative z-30 flex flex-wrap gap-3 justify-end items-center">
           {someSelected && (
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm h-12">
+            <div className="flex flex-wrap items-center content-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm h-12">
               <span className="text-sm font-semibold">
                 {selectedCount} selected (this page)
               </span>
