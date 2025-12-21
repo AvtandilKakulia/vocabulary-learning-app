@@ -80,7 +80,7 @@ export default function ViewWordModal({
         onClick={onClose}
       >
         <div
-          className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-800/40 w-full max-w-2xl overflow-hidden"
+          className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-800/40 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between px-8 pt-8 pb-6">
@@ -107,13 +107,13 @@ export default function ViewWordModal({
             <button
               onClick={onClose}
               aria-label="Close"
-              className="h-10 w-10 flex items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="h-10 w-10 flex items-center justify-center rounded-2xl bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 border border-gray-200/70 dark:border-gray-700/60 shadow-sm hover:bg-gray-200/90 dark:hover:bg-gray-700 transition-colors"
             >
               <X size={18} />
             </button>
           </div>
 
-          <div className="px-8 pb-8 space-y-6">
+          <div className="px-8 pb-8 space-y-6 overflow-hidden">
             <div>
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.18em] mb-3">
                 Georgian Definitions
@@ -136,7 +136,7 @@ export default function ViewWordModal({
                   Description
                 </h3>
                 <div
-                  className="text-base text-gray-700 dark:text-gray-200 leading-7 whitespace-pre-wrap"
+                  className="text-base text-gray-700 dark:text-gray-200 leading-7 whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto pr-2"
                   dangerouslySetInnerHTML={{
                     __html: sanitizeDescription(word.description),
                   }}
