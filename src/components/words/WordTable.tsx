@@ -3,6 +3,7 @@ import { Edit2, Trash2, CheckSquare, Square, Sparkles } from "lucide-react";
 import { Word } from "../../lib/supabase";
 import { sanitizeDescription } from "../../lib/sanitizeDescription";
 import { formatRelativeDate } from "../../lib/formatRelativeDate";
+import { partOfSpeechStyles } from "./partOfSpeechStyles";
 
 interface WordTableProps {
   words: Word[];
@@ -25,41 +26,6 @@ export default function WordTable({
   onEdit,
   onDelete,
 }: WordTableProps) {
-  const partOfSpeechStyles: Record<string, string> = {
-    noun: `
-    bg-blue-100 text-blue-700 border border-blue-200
-    dark:bg-blue-500/15 dark:text-blue-200 dark:border-blue-400/30
-  `,
-    verb: `
-    bg-emerald-100 text-emerald-700 border border-emerald-200
-    dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-400/30
-  `,
-    adjective: `
-    bg-violet-100 text-violet-700 border border-violet-200
-    dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-400/30
-  `,
-    adverb: `
-    bg-amber-100 text-amber-700 border border-amber-200
-    dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-400/30
-  `,
-    preposition: `
-    bg-cyan-100 text-cyan-700 border border-cyan-200
-    dark:bg-cyan-500/15 dark:text-cyan-200 dark:border-cyan-400/30
-  `,
-    conjunction: `
-    bg-rose-100 text-rose-700 border border-rose-200
-    dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-400/30
-  `,
-    pronoun: `
-    bg-indigo-100 text-indigo-700 border border-indigo-200
-    dark:bg-indigo-500/15 dark:text-indigo-200 dark:border-indigo-400/30
-  `,
-    unspecified: `
-    bg-gray-100 text-gray-600 border border-gray-200
-    dark:bg-gray-400/10 dark:text-gray-300 dark:border-gray-400/20
-  `,
-  };
-
   const partOfSpeechLabels: Record<string, string> = {
     noun: "Noun",
     verb: "Verb",

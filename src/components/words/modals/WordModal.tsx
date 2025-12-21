@@ -4,6 +4,7 @@ import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
 import { AddWordResult, WordFormData } from "../useWords";
+import { partOfSpeechStyles } from "../partOfSpeechStyles";
 import ModalPortal from "./ModalPortal";
 
 interface WordModalProps {
@@ -160,6 +161,16 @@ export default function WordModal({
     "#000000",
   ];
 
+  const partOfSpeechOptions = [
+    { value: "noun", label: "Noun" },
+    { value: "verb", label: "Verb" },
+    { value: "adjective", label: "Adjective" },
+    { value: "adverb", label: "Adverb" },
+    { value: "preposition", label: "Preposition" },
+    { value: "conjunction", label: "Conjunction" },
+    { value: "pronoun", label: "Pronoun" },
+  ];
+
   useEffect(() => {
     if (!showColorPicker) return;
 
@@ -244,20 +255,33 @@ export default function WordModal({
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Part of speech (optional)
                     </label>
-                    <select
-                      value={partOfSpeech}
-                      onChange={(e) => setPartOfSpeech(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
-                    >
-                      <option value="unspecified">Unspecified</option>
-                      <option value="noun">Noun</option>
-                      <option value="verb">Verb</option>
-                      <option value="adjective">Adjective</option>
-                      <option value="adverb">Adverb</option>
-                      <option value="preposition">Preposition</option>
-                      <option value="conjunction">Conjunction</option>
-                      <option value="pronoun">Pronoun</option>
-                    </select>
+                    <div className="flex flex-wrap gap-2">
+                      {partOfSpeechOptions.map((option) => {
+                        const isActive = partOfSpeech === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() =>
+                              setPartOfSpeech((current) =>
+                                current === option.value
+                                  ? "unspecified"
+                                  : option.value
+                              )
+                            }
+                            className={`px-3 py-2 rounded-full text-sm font-medium border transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                              isActive
+                                ? `${
+                                    partOfSpeechStyles[option.value]
+                                  } border-transparent shadow-sm`
+                                : "bg-gray-100/80 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div>
