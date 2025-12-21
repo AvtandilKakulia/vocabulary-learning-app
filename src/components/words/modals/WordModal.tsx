@@ -432,7 +432,7 @@ export default function WordModal({
                               setGeorgianDefs(newDefs);
                             }}
                             disabled={georgianDefs.length === 1}
-                            className={`flex items-center justify-center h-11 w-11 rounded-2xl text-gray-500 dark:text-gray-300 transition-all duration-200 border-2 border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                            className={`flex items-center justify-center h-11 w-11 rounded-full text-gray-500 dark:text-gray-300 transition-all duration-200 border-2 border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
                               georgianDefs.length === 1
                                 ? "cursor-not-allowed opacity-70"
                                 : "hover:bg-red-100/90 dark:hover:bg-red-800/70 hover:border-red-200 dark:hover:border-red-700 hover:text-red-700 dark:hover:text-red-200"
