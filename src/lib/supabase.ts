@@ -11,6 +11,9 @@ export interface Word {
   user_id: string;
   english_word: string;
   part_of_speech: string | null;
+  is_irregular_verb: boolean;
+  past_simple: string | null;
+  past_participle: string | null;
   georgian_definitions: string[];
   description: string | null;
   created_at: string;

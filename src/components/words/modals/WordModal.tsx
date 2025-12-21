@@ -30,6 +30,13 @@ export default function WordModal({
   const [partOfSpeech, setPartOfSpeech] = useState(
     word?.part_of_speech || "unspecified"
   );
+  const [isIrregularVerb, setIsIrregularVerb] = useState(
+    word?.is_irregular_verb || false
+  );
+  const [pastSimple, setPastSimple] = useState(word?.past_simple || "");
+  const [pastParticiple, setPastParticiple] = useState(
+    word?.past_participle || ""
+  );
   const [georgianDefs, setGeorgianDefs] = useState<string[]>(
     word?.georgian_definitions || [""]
   );
@@ -41,11 +48,17 @@ export default function WordModal({
   const initialStateRef = useRef<{
     englishWord: string;
     partOfSpeech: string;
+    isIrregularVerb: boolean;
+    pastSimple: string;
+    pastParticiple: string;
     georgianDefs: string[];
     description: string;
   }>({
     englishWord: word?.english_word || "",
     partOfSpeech: word?.part_of_speech || "unspecified",
+    isIrregularVerb: word?.is_irregular_verb || false,
+    pastSimple: word?.past_simple || "",
+    pastParticiple: word?.past_participle || "",
     georgianDefs: word?.georgian_definitions || [""],
     description: word?.description || "",
   });
@@ -54,6 +67,9 @@ export default function WordModal({
   useEffect(() => {
     setEnglishWord(word?.english_word || "");
     setPartOfSpeech(word?.part_of_speech || "unspecified");
+    setIsIrregularVerb(word?.is_irregular_verb || false);
+    setPastSimple(word?.past_simple || "");
+    setPastParticiple(word?.past_participle || "");
     setGeorgianDefs(word?.georgian_definitions || [""]);
     setDescription(word?.description || "");
     setShowColorPicker(false);
@@ -61,6 +77,9 @@ export default function WordModal({
     initialStateRef.current = {
       englishWord: word?.english_word || "",
       partOfSpeech: word?.part_of_speech || "unspecified",
+      isIrregularVerb: word?.is_irregular_verb || false,
+      pastSimple: word?.past_simple || "",
+      pastParticiple: word?.past_participle || "",
       georgianDefs: word?.georgian_definitions || [""],
       description: word?.description || "",
     };
@@ -75,6 +94,9 @@ export default function WordModal({
     return (
       englishWord !== initial.englishWord ||
       partOfSpeech !== initial.partOfSpeech ||
+      isIrregularVerb !== initial.isIrregularVerb ||
+      pastSimple !== initial.pastSimple ||
+      pastParticiple !== initial.pastParticiple ||
       description !== initial.description ||
       defsDirty
     );
@@ -116,14 +138,36 @@ export default function WordModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (
+      partOfSpeech === "verb" &&
+      isIrregularVerb &&
+      (pastSimple.trim() === "" || pastParticiple.trim() === "")
+    ) {
+      alert("Please provide both past simple and past participle forms.");
+      return;
+    }
+
     setSaving(true);
     try {
       const filteredDefs = georgianDefs.filter((d) => d.trim() !== "");
+      const irregularData =
+        partOfSpeech === "verb" && isIrregularVerb
+          ? {
+              isIrregularVerb: true,
+              pastSimple: pastSimple.trim(),
+              pastParticiple: pastParticiple.trim(),
+            }
+          : {
+              isIrregularVerb: false,
+              pastSimple: null,
+              pastParticiple: null,
+            };
       const wordData: WordFormData = {
         englishWord,
         partOfSpeech,
         georgianDefs: filteredDefs,
         description,
+        ...irregularData,
       };
 
       if (word) {
@@ -202,6 +246,14 @@ export default function WordModal({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (partOfSpeech !== "verb") {
+      setIsIrregularVerb(false);
+      setPastSimple("");
+      setPastParticiple("");
+    }
+  }, [partOfSpeech]);
 
   return (
     <ModalPortal>
@@ -283,6 +335,63 @@ export default function WordModal({
                       })}
                     </div>
                   </div>
+
+                  {partOfSpeech === "verb" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="irregular-verb"
+                          type="checkbox"
+                          checked={isIrregularVerb}
+                          onChange={(e) => setIsIrregularVerb(e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label
+                          htmlFor="irregular-verb"
+                          className="text-sm font-semibold text-gray-700 dark:text-gray-300"
+                        >
+                          Irregular verb
+                        </label>
+                      </div>
+
+                      {isIrregularVerb && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                              Past simple
+                            </label>
+                            <input
+                              type="text"
+                              value={pastSimple}
+                              onChange={(e) => setPastSimple(e.target.value)}
+                              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                              placeholder="Enter past simple form"
+                              required={
+                                partOfSpeech === "verb" && isIrregularVerb
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                              Past participle
+                            </label>
+                            <input
+                              type="text"
+                              value={pastParticiple}
+                              onChange={(e) =>
+                                setPastParticiple(e.target.value)
+                              }
+                              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                              placeholder="Enter past participle form"
+                              required={
+                                partOfSpeech === "verb" && isIrregularVerb
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">

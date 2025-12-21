@@ -18,6 +18,9 @@ export interface WordFormData {
   georgianDefs: string[];
   description: string;
   partOfSpeech: string;
+  isIrregularVerb: boolean;
+  pastSimple: string | null;
+  pastParticiple: string | null;
 }
 
 export interface AddWordResult {
@@ -202,6 +205,9 @@ export function useWords() {
           user_id: user.id,
           english_word: wordData.englishWord,
           part_of_speech: wordData.partOfSpeech || "unspecified",
+          is_irregular_verb: wordData.isIrregularVerb,
+          past_simple: wordData.pastSimple,
+          past_participle: wordData.pastParticiple,
           georgian_definitions: wordData.georgianDefs.filter(
             (d) => d.trim() !== ""
           ),
@@ -237,6 +243,9 @@ export function useWords() {
         .update({
           english_word: wordData.englishWord,
           part_of_speech: wordData.partOfSpeech || "unspecified",
+          is_irregular_verb: wordData.isIrregularVerb,
+          past_simple: wordData.pastSimple,
+          past_participle: wordData.pastParticiple,
           georgian_definitions: wordData.georgianDefs.filter(
             (d) => d.trim() !== ""
           ),
