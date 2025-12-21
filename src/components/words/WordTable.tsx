@@ -174,7 +174,7 @@ export default function WordTable({
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="inline-flex items-center gap-2">
+                    <div className="inline-flex items-center gap-4">
                       <span className="text-base font-bold text-gray-900 dark:text-gray-100">
                         {word.english_word}
                       </span>
