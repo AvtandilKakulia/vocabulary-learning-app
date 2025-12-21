@@ -1,33 +1,42 @@
 export function sanitizeDescription(html: string): string {
-  if (!html) return '';
+  if (!html) return "";
 
   const escapeHtml = (value: string) =>
     value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
-  const isDomParserAvailable = typeof DOMParser !== 'undefined';
+  const isDomParserAvailable = typeof DOMParser !== "undefined";
 
   if (!isDomParserAvailable) {
-    return escapeHtml(html);
+    return escapeHtml(html).replace(/\n/g, "<br>");
   }
 
   const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
   const container = doc.body.firstElementChild as HTMLElement | null;
 
   if (!container) {
-    return '';
+    return "";
   }
 
   const colorRegex = /^color\s*:\s*#([0-9a-fA-F]{6})\s*;?$/;
 
   const sanitizeNode = (node: Node, targetParent: HTMLElement) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      targetParent.appendChild(doc.createTextNode(node.textContent || ''));
+      const text = node.textContent || "";
+      const segments = text.split("\n");
+
+      segments.forEach((segment, index) => {
+        targetParent.appendChild(doc.createTextNode(segment));
+
+        if (index < segments.length - 1) {
+          targetParent.appendChild(doc.createElement("br"));
+        }
+      });
       return;
     }
 
@@ -38,33 +47,39 @@ export function sanitizeDescription(html: string): string {
     const element = node as HTMLElement;
     const tag = element.tagName.toLowerCase();
 
-    if (tag === 'script' || tag === 'style') {
+    if (tag === "script" || tag === "style") {
       return;
     }
 
-    if (tag === 'strong' || tag === 'span') {
+    if (tag === "strong" || tag === "span") {
       const cleanEl = doc.createElement(tag);
 
-      if (tag === 'span') {
-        const style = element.getAttribute('style');
+      if (tag === "span") {
+        const style = element.getAttribute("style");
         if (style && colorRegex.test(style.trim())) {
           const match = style.trim().match(colorRegex);
           if (match) {
-            cleanEl.setAttribute('style', `color: #${match[1].toLowerCase()}`);
+            cleanEl.setAttribute("style", `color: #${match[1].toLowerCase()}`);
           }
         }
       }
 
-      Array.from(element.childNodes).forEach((child) => sanitizeNode(child, cleanEl));
+      Array.from(element.childNodes).forEach((child) =>
+        sanitizeNode(child, cleanEl)
+      );
       targetParent.appendChild(cleanEl);
       return;
     }
 
-    Array.from(element.childNodes).forEach((child) => sanitizeNode(child, targetParent));
+    Array.from(element.childNodes).forEach((child) =>
+      sanitizeNode(child, targetParent)
+    );
   };
 
-  const safeContainer = doc.createElement('div');
-  Array.from(container.childNodes).forEach((child) => sanitizeNode(child, safeContainer));
+  const safeContainer = doc.createElement("div");
+  Array.from(container.childNodes).forEach((child) =>
+    sanitizeNode(child, safeContainer)
+  );
 
   return safeContainer.innerHTML;
 }
