@@ -39,6 +39,27 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
+  input,
+  textarea {
+    transition: border-color 0.18s ease, box-shadow 0.2s ease;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.22),
+      0 10px 25px -20px hsl(var(--ring) / 0.35);
+  }
+
+  .dark input:focus-visible,
+  .dark textarea:focus-visible {
+    outline: none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.18),
+      0 12px 28px -20px hsl(var(--ring) / 0.25);
+  }
+
   .dark {
     /* Dark theme colors */
     --background: 240 10% 3.9%;
@@ -95,7 +116,7 @@ img {
 /* Soft scrollbar styling for modal content */
 .smooth-scrollbar,
 .modal-scrollbar {
-  scrollbar-width: thin;
+  scrollbar-width: auto;
   scrollbar-color: rgba(99, 102, 241, 0.45) transparent;
   scrollbar-gutter: stable both-edges;
   overscroll-behavior: contain;
