@@ -80,15 +80,15 @@ export default function ViewWordModal({
         onClick={onClose}
       >
         <div
-          className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-800/40 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+          className="relative bg-gradient-to-br from-white/95 via-white/90 to-slate-50/80 dark:from-gray-950/95 dark:via-gray-900/95 dark:to-slate-950/90 backdrop-blur-xl rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.65)] border border-white/40 dark:border-white/5 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col ring-1 ring-black/5 dark:ring-white/5"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between px-8 pt-8 pb-6">
+          <div className="flex items-start justify-between px-8 pt-8 pb-6 bg-gradient-to-b from-white/70 via-white/50 to-transparent dark:from-gray-900/70 dark:via-gray-900/60 dark:to-transparent border-b border-white/60 dark:border-white/5">
             <div className="space-y-3">
-              <h2 className="text-4xl font-black text-gray-900 dark:text-gray-100 leading-tight">
+              <h2 className="text-4xl font-black text-gray-900 dark:text-gray-100 leading-tight tracking-tight drop-shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
                 {word.english_word}
               </h2>
-              <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600 dark:text-gray-300">
+              <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600/90 dark:text-gray-300/90">
                 {word.part_of_speech &&
                   word.part_of_speech !== "unspecified" && (
                     <span
@@ -107,14 +107,14 @@ export default function ViewWordModal({
             <button
               onClick={onClose}
               aria-label="Close"
-              className="h-10 w-10 flex items-center justify-center rounded-2xl bg-gray-100/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 border border-gray-200/70 dark:border-gray-700/60 shadow-sm hover:bg-gray-200/90 dark:hover:bg-gray-700 transition-colors"
+              className="h-10 w-10 flex items-center justify-center rounded-full bg-white/80 dark:bg-gray-800/70 text-gray-600 dark:text-gray-300 border border-white/60 dark:border-white/10 shadow-md hover:bg-white dark:hover:bg-gray-700/80 transition-all"
             >
               <X size={18} />
             </button>
           </div>
 
-          <div className="px-8 pb-8 space-y-6 overflow-hidden">
-            <div>
+          <div className="px-8 pb-8 space-y-7 overflow-hidden bg-gradient-to-b from-white/40 via-transparent to-transparent dark:from-gray-950/50 dark:via-transparent dark:to-transparent">
+            <div className="p-4 rounded-2xl border border-white/70 dark:border-white/5 bg-gradient-to-br from-indigo-50/70 via-white/75 to-blue-50/60 dark:from-indigo-950/40 dark:via-gray-900/40 dark:to-slate-900/50 shadow-inner">
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.18em] mb-3">
                 Georgian Definitions
               </h3>
@@ -122,7 +122,7 @@ export default function ViewWordModal({
                 {word.georgian_definitions.map((def, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm"
+                    className="inline-flex items-center gap-2 bg-white/85 dark:bg-gray-900/60 text-blue-900 dark:text-blue-100 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ring-1 ring-blue-100/80 dark:ring-indigo-900/50"
                   >
                     {def}
                   </span>
@@ -131,12 +131,12 @@ export default function ViewWordModal({
             </div>
 
             {word.description && (
-              <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+              <div className="space-y-3 pt-2">
                 <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.18em]">
                   Description
                 </h3>
                 <div
-                  className="text-base text-gray-700 dark:text-gray-200 leading-7 whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto pr-2"
+                  className="text-base text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto pr-4 pl-4 py-3 rounded-2xl bg-gradient-to-br from-white/80 via-gray-50/80 to-slate-50/70 dark:from-gray-950/50 dark:via-gray-900/60 dark:to-slate-950/60 border border-white/70 dark:border-white/5 shadow-inner modal-scrollbar"
                   dangerouslySetInnerHTML={{
                     __html: sanitizeDescription(word.description),
                   }}
@@ -145,11 +145,11 @@ export default function ViewWordModal({
             )}
           </div>
 
-          <div className="px-8 pb-8 flex justify-end">
+          <div className="px-8 pb-8 pt-4 flex justify-end bg-gradient-to-t from-white/70 via-white/60 to-transparent dark:from-gray-950/60 dark:via-gray-900/60 dark:to-transparent border-t border-white/60 dark:border-white/5">
             {onEdit && (
               <button
                 onClick={() => onEdit(word)}
-                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-950"
               >
                 Edit
               </button>
