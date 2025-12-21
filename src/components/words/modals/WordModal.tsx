@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertCircle, Bold, Palette, Plus, X } from "lucide-react";
+import { AlertCircle, ArrowRight, Bold, Palette, Plus, X } from "lucide-react";
 import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
@@ -307,32 +307,69 @@ export default function WordModal({
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Part of speech (optional)
                     </label>
-                    <div className="flex flex-wrap gap-2">
-                      {partOfSpeechOptions.map((option) => {
-                        const isActive = partOfSpeech === option.value;
-                        return (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {partOfSpeech === "verb" ? (
+                        <>
                           <button
-                            key={option.value}
                             type="button"
                             onClick={() =>
                               setPartOfSpeech((current) =>
-                                current === option.value
-                                  ? "unspecified"
-                                  : option.value
+                                current === "verb" ? "unspecified" : "verb"
                               )
                             }
                             className={`px-3 py-2 rounded-full text-sm font-medium border transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
-                              isActive
-                                ? `${
-                                    partOfSpeechStyles[option.value]
-                                  } border-transparent shadow-sm`
+                              partOfSpeech === "verb"
+                                ? `${partOfSpeechStyles["verb"]} border-transparent shadow-sm`
                                 : "bg-gray-100/80 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                           >
-                            {option.label}
+                            Verb
                           </button>
-                        );
-                      })}
+                          <span
+                            className="flex items-center text-gray-400"
+                            aria-hidden="true"
+                          >
+                            <ArrowRight size={16} />
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setIsIrregularVerb((prev) => !prev)}
+                            className={`px-3 py-2 rounded-full text-sm font-semibold border transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                              isIrregularVerb
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/30 dark:text-emerald-50 border-transparent shadow-sm"
+                                : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-100 border-emerald-100 dark:border-emerald-500/30 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/25"
+                            }`}
+                          >
+                            Irregular
+                          </button>
+                        </>
+                      ) : (
+                        partOfSpeechOptions.map((option) => {
+                          const isActive = partOfSpeech === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() =>
+                                setPartOfSpeech((current) =>
+                                  current === option.value
+                                    ? "unspecified"
+                                    : option.value
+                                )
+                              }
+                              className={`px-3 py-2 rounded-full text-sm font-medium border transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                                isActive
+                                  ? `${
+                                      partOfSpeechStyles[option.value]
+                                    } border-transparent shadow-sm`
+                                  : "bg-gray-100/80 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
 
