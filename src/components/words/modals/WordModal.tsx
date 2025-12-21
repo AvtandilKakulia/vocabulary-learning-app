@@ -338,17 +338,17 @@ export default function WordModal({
 
                   {partOfSpeech === "verb" && (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <input
                           id="irregular-verb"
                           type="checkbox"
                           checked={isIrregularVerb}
                           onChange={(e) => setIsIrregularVerb(e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="sr-only peer"
                         />
                         <label
                           htmlFor="irregular-verb"
-                          className="text-sm font-semibold text-gray-700 dark:text-gray-300"
+                          className="cursor-pointer select-none inline-flex items-center px-3 py-2 rounded-full border text-sm font-semibold transition-colors duration-200 bg-gray-100/80 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 peer-checked:bg-blue-100 peer-checked:border-blue-200 peer-checked:text-blue-700 dark:peer-checked:bg-blue-500/20 dark:peer-checked:border-blue-500/40 dark:peer-checked:text-blue-50 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-500"
                         >
                           Irregular verb
                         </label>
