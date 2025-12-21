@@ -334,10 +334,10 @@ export default function WordModal({
                           <button
                             type="button"
                             onClick={() => setIsIrregularVerb((prev) => !prev)}
-                            className={`px-3 py-2 rounded-full text-sm font-semibold border transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                            className={`px-3 py-2 rounded-full text-sm font-medium border transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
                               isIrregularVerb
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/30 dark:text-emerald-50 border-transparent shadow-sm"
-                                : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-100 border-emerald-100 dark:border-emerald-500/30 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/25"
+                                ? `${partOfSpeechStyles["verb"]} border-transparent shadow-sm`
+                                : "bg-gray-100/80 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                           >
                             Irregular
@@ -373,60 +373,34 @@ export default function WordModal({
                     </div>
                   </div>
 
-                  {partOfSpeech === "verb" && (
+                  {partOfSpeech === "verb" && isIrregularVerb && (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <input
-                          id="irregular-verb"
-                          type="checkbox"
-                          checked={isIrregularVerb}
-                          onChange={(e) => setIsIrregularVerb(e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <label
-                          htmlFor="irregular-verb"
-                          className="cursor-pointer select-none inline-flex items-center px-3 py-2 rounded-full border text-sm font-semibold transition-colors duration-200 bg-gray-100/80 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 peer-checked:bg-blue-100 peer-checked:border-blue-200 peer-checked:text-blue-700 dark:peer-checked:bg-blue-500/20 dark:peer-checked:border-blue-500/40 dark:peer-checked:text-blue-50 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-500"
-                        >
-                          Irregular verb
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Past simple
                         </label>
+                        <input
+                          type="text"
+                          value={pastSimple}
+                          onChange={(e) => setPastSimple(e.target.value)}
+                          className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                          placeholder="Enter past simple form"
+                          required={partOfSpeech === "verb" && isIrregularVerb}
+                        />
                       </div>
-
-                      {isIrregularVerb && (
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                              Past simple
-                            </label>
-                            <input
-                              type="text"
-                              value={pastSimple}
-                              onChange={(e) => setPastSimple(e.target.value)}
-                              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
-                              placeholder="Enter past simple form"
-                              required={
-                                partOfSpeech === "verb" && isIrregularVerb
-                              }
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                              Past participle
-                            </label>
-                            <input
-                              type="text"
-                              value={pastParticiple}
-                              onChange={(e) =>
-                                setPastParticiple(e.target.value)
-                              }
-                              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
-                              placeholder="Enter past participle form"
-                              required={
-                                partOfSpeech === "verb" && isIrregularVerb
-                              }
-                            />
-                          </div>
-                        </div>
-                      )}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Past participle
+                        </label>
+                        <input
+                          type="text"
+                          value={pastParticiple}
+                          onChange={(e) => setPastParticiple(e.target.value)}
+                          className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                          placeholder="Enter past participle form"
+                          required={partOfSpeech === "verb" && isIrregularVerb}
+                        />
+                      </div>
                     </div>
                   )}
 
