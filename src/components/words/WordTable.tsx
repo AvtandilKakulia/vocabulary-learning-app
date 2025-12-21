@@ -1,5 +1,12 @@
 import React from "react";
-import { Edit2, Trash2, CheckSquare, Square, Sparkles } from "lucide-react";
+import {
+  Edit2,
+  Trash2,
+  CheckSquare,
+  Square,
+  Sparkles,
+  ArrowRight,
+} from "lucide-react";
 import { Word } from "../../lib/supabase";
 import { sanitizeDescription } from "../../lib/sanitizeDescription";
 import { formatRelativeDate } from "../../lib/formatRelativeDate";
@@ -141,9 +148,28 @@ export default function WordTable({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="inline-flex items-center gap-4">
-                      <span className="text-base font-bold text-gray-900 dark:text-gray-100">
-                        {word.english_word}
-                      </span>
+                      {word.part_of_speech === "verb" &&
+                      word.is_irregular_verb &&
+                      word.past_simple &&
+                      word.past_participle ? (
+                        <div className="inline-flex items-center gap-2 text-base font-bold text-gray-900 dark:text-gray-100">
+                          <span>{word.english_word}</span>
+                          <ArrowRight
+                            size={16}
+                            className="text-gray-500 dark:text-gray-400"
+                          />
+                          <span>{word.past_simple}</span>
+                          <ArrowRight
+                            size={16}
+                            className="text-gray-500 dark:text-gray-400"
+                          />
+                          <span>{word.past_participle}</span>
+                        </div>
+                      ) : (
+                        <span className="text-base font-bold text-gray-900 dark:text-gray-100">
+                          {word.english_word}
+                        </span>
+                      )}
                       {word.part_of_speech &&
                         word.part_of_speech !== "unspecified" && (
                           <span
