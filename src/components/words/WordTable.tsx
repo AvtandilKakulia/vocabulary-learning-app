@@ -26,20 +26,38 @@ export default function WordTable({
   onDelete,
 }: WordTableProps) {
   const partOfSpeechStyles: Record<string, string> = {
-    noun: "bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-100",
-    verb: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-100",
-    adjective:
-      "bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-100",
-    adverb:
-      "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-100",
-    preposition:
-      "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-100",
-    conjunction:
-      "bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-100",
-    pronoun:
-      "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-100",
-    unspecified:
-      "bg-gray-50 text-gray-600 dark:bg-gray-400/15 dark:text-gray-200",
+    noun: `
+    bg-blue-100 text-blue-700 border border-blue-200
+    dark:bg-blue-500/15 dark:text-blue-200 dark:border-blue-400/30
+  `,
+    verb: `
+    bg-emerald-100 text-emerald-700 border border-emerald-200
+    dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-400/30
+  `,
+    adjective: `
+    bg-violet-100 text-violet-700 border border-violet-200
+    dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-400/30
+  `,
+    adverb: `
+    bg-amber-100 text-amber-700 border border-amber-200
+    dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-400/30
+  `,
+    preposition: `
+    bg-cyan-100 text-cyan-700 border border-cyan-200
+    dark:bg-cyan-500/15 dark:text-cyan-200 dark:border-cyan-400/30
+  `,
+    conjunction: `
+    bg-rose-100 text-rose-700 border border-rose-200
+    dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-400/30
+  `,
+    pronoun: `
+    bg-indigo-100 text-indigo-700 border border-indigo-200
+    dark:bg-indigo-500/15 dark:text-indigo-200 dark:border-indigo-400/30
+  `,
+    unspecified: `
+    bg-gray-100 text-gray-600 border border-gray-200
+    dark:bg-gray-400/10 dark:text-gray-300 dark:border-gray-400/20
+  `,
   };
 
   const partOfSpeechLabels: Record<string, string> = {
