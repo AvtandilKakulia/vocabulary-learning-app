@@ -10,6 +10,7 @@ import WordModal from "./words/modals/WordModal";
 import DeleteWordModal from "./words/modals/DeleteWordModal";
 import BulkDeleteModal from "./words/modals/BulkDeleteModal";
 import DuplicateWordModal from "./words/modals/DuplicateWordModal";
+import ViewWordModal from "./words/modals/ViewWordModal";
 
 import { SortOption, useWords, WordFormData } from "./words/useWords";
 
@@ -48,6 +49,7 @@ export default function WordManagement() {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateWord, setDuplicateWord] = useState<Word | null>(null);
   const [newWordData, setNewWordData] = useState<WordFormData | null>(null);
+  const [viewingWord, setViewingWord] = useState<Word | null>(null);
 
   /* ---------------------------------------------
    * Selection reset on page / search change
@@ -287,6 +289,7 @@ export default function WordManagement() {
           setShowAddModal(true);
         }}
         onDelete={setDeleteModalWord}
+        onView={setViewingWord}
       />
 
       <Pagination page={page} totalPages={totalPages} setPage={setPage} />
@@ -311,6 +314,18 @@ export default function WordManagement() {
           addWord={addWord}
           updateWord={updateWord}
           checkExistingEnglishWord={checkExistingEnglishWord}
+        />
+      )}
+
+      {viewingWord && (
+        <ViewWordModal
+          word={viewingWord}
+          onClose={() => setViewingWord(null)}
+          onEdit={(word) => {
+            setViewingWord(null);
+            setEditingWord(word);
+            setShowAddModal(true);
+          }}
         />
       )}
 

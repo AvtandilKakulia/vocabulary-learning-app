@@ -21,6 +21,7 @@ interface WordTableProps {
   onToggleSelect: (id: string) => void;
   onEdit: (word: Word) => void;
   onDelete: (word: Word) => void;
+  onView: (word: Word) => void;
 }
 
 export default function WordTable({
@@ -32,6 +33,7 @@ export default function WordTable({
   onToggleSelect,
   onEdit,
   onDelete,
+  onView,
 }: WordTableProps) {
   const partOfSpeechLabels: Record<string, string> = {
     noun: "Noun",
@@ -126,10 +128,14 @@ export default function WordTable({
                 <tr
                   key={word.id}
                   className="hover:bg-blue-50/50 dark:hover:bg-gray-800/60 transition-colors"
+                  onClick={() => onView(word)}
                 >
                   <td className="px-4 py-4">
                     <button
-                      onClick={() => onToggleSelect(word.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSelect(word.id);
+                      }}
                       className={`p-2 rounded-xl border transition-all duration-200 ${
                         selectedIds.has(word.id)
                           ? "text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-700 bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-800 shadow-inner"
@@ -215,14 +221,20 @@ export default function WordTable({
                   <td className="px-6 py-4 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => onEdit(word)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(word);
+                        }}
                         className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50/80 dark:hover:bg-gray-700/60 transition-all duration-200"
                         aria-label="Edit"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button
-                        onClick={() => onDelete(word)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(word);
+                        }}
                         className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-red-500 dark:text-red-400 hover:bg-red-50/80 dark:hover:bg-gray-700/60 transition-all duration-200"
                         aria-label="Delete"
                       >
