@@ -432,10 +432,10 @@ export default function WordModal({
                               setGeorgianDefs(newDefs);
                             }}
                             disabled={georgianDefs.length === 1}
-                            className={`flex items-center justify-center h-11 w-11 rounded-full text-gray-500 transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                            className={`flex items-center justify-center h-11 w-11 rounded-full text-gray-500 dark:text-gray-300 transition-all duration-200 border shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
                               georgianDefs.length === 1
-                                ? "bg-gray-100/60 dark:bg-gray-700/40 cursor-not-allowed opacity-70"
-                                : "bg-gray-100/80 dark:bg-gray-700/50 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400"
+                                ? "bg-gray-100/70 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 cursor-not-allowed opacity-70"
+                                : "bg-gray-100 dark:bg-gray-700/70 border-gray-200 dark:border-gray-600 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-300"
                             }`}
                             aria-label="Remove definition"
                           >
