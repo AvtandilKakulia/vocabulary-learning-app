@@ -27,6 +27,15 @@ export default function ViewWordModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
   const partOfSpeechLabels: Record<string, string> = {
     noun: "Noun",
     verb: "Verb",
@@ -80,11 +89,11 @@ export default function ViewWordModal({
         onClick={onClose}
       >
         <div
-          className="relative bg-gradient-to-br from-white/95 via-white/90 to-slate-50/80 dark:from-gray-950/95 dark:via-gray-900/95 dark:to-slate-950/90 backdrop-blur-xl rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.65)] border border-white/40 dark:border-white/5 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col ring-1 ring-black/5 dark:ring-white/5"
+          className="relative bg-white/95 dark:bg-slate-900/92 backdrop-blur-xl rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.65)] border border-white/50 dark:border-white/10 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col ring-1 ring-black/5 dark:ring-white/5"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between px-8 pt-8 pb-6 bg-gradient-to-b from-white/70 via-white/50 to-transparent dark:from-gray-900/70 dark:via-gray-900/60 dark:to-transparent border-b border-white/60 dark:border-white/5">
-            <div className="space-y-3">
+          <div className="flex items-start justify-between px-8 pt-8 pb-6 bg-gradient-to-b from-white/80 via-white/60 to-white/40 dark:from-slate-900/80 dark:via-slate-900/70 dark:to-slate-900/60 border-b border-white/70 dark:border-white/10">
+            <div className="space-y-4">
               <h2 className="text-4xl font-black text-gray-900 dark:text-gray-100 leading-tight tracking-tight drop-shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
                 {word.english_word}
               </h2>
@@ -113,36 +122,37 @@ export default function ViewWordModal({
             </button>
           </div>
 
-          <div className="px-8 pb-8 space-y-7 overflow-hidden bg-gradient-to-b from-white/40 via-transparent to-transparent dark:from-gray-950/50 dark:via-transparent dark:to-transparent">
-            <div className="p-4 rounded-2xl border border-white/70 dark:border-white/5 bg-gradient-to-br from-indigo-50/70 via-white/75 to-blue-50/60 dark:from-indigo-950/40 dark:via-gray-900/40 dark:to-slate-900/50 shadow-inner">
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.18em] mb-3">
-                Georgian Definitions
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {word.georgian_definitions.map((def, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-2 bg-white/85 dark:bg-gray-900/60 text-blue-900 dark:text-blue-100 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ring-1 ring-blue-100/80 dark:ring-indigo-900/50"
-                  >
-                    {def}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {word.description && (
-              <div className="space-y-3 pt-2">
+          <div className="px-8 pb-8 pt-6 overflow-hidden bg-gradient-to-b from-white/70 via-white/40 to-white/30 dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/50">
+            <div className="rounded-2xl border border-white/70 dark:border-white/10 bg-white/80 dark:bg-slate-900/70 shadow-inner divide-y divide-white/70 dark:divide-white/10">
+              <div className="p-6 space-y-4">
                 <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.18em]">
-                  Description
+                  Georgian Definitions
                 </h3>
-                <div
-                  className="text-base text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto pr-4 pl-4 py-3 rounded-2xl bg-gradient-to-br from-white/80 via-gray-50/80 to-slate-50/70 dark:from-gray-950/50 dark:via-gray-900/60 dark:to-slate-950/60 border border-white/70 dark:border-white/5 shadow-inner modal-scrollbar"
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeDescription(word.description),
-                  }}
-                />
+                <div className="flex flex-wrap gap-2">
+                  {word.georgian_definitions.map((def, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-2 bg-white/85 dark:bg-slate-800/70 text-blue-900 dark:text-blue-100 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ring-1 ring-blue-100/80 dark:ring-indigo-900/50"
+                    >
+                      {def}
+                    </span>
+                  ))}
+                </div>
               </div>
-            )}
+              {word.description && (
+                <div className="p-6 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.18em]">
+                    Description
+                  </h3>
+                  <div
+                    className="text-base text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto pr-3 pl-3 py-3 rounded-xl bg-white/80 dark:bg-slate-900/60 border border-white/70 dark:border-white/10 shadow-inner modal-scrollbar"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeDescription(word.description),
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="px-8 pb-8 pt-4 flex justify-end bg-gradient-to-t from-white/70 via-white/60 to-transparent dark:from-gray-950/60 dark:via-gray-900/60 dark:to-transparent border-t border-white/60 dark:border-white/5">
