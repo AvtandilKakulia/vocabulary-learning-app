@@ -83,12 +83,12 @@ export default function ViewWordModal({
           className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-800/40 w-full max-w-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between px-8 pt-8 pb-4">
-            <div className="space-y-2">
-              <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100">
+          <div className="flex items-start justify-between px-8 pt-8 pb-6">
+            <div className="space-y-3">
+              <h2 className="text-4xl font-black text-gray-900 dark:text-gray-100 leading-tight">
                 {word.english_word}
               </h2>
-              <div className="flex flex-wrap gap-3 items-center">
+              <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600 dark:text-gray-300">
                 {word.part_of_speech &&
                   word.part_of_speech !== "unspecified" && (
                     <span
@@ -131,12 +131,12 @@ export default function ViewWordModal({
             </div>
 
             {word.description && (
-              <div className="space-y-2">
+              <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
                 <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.18em]">
                   Description
                 </h3>
                 <div
-                  className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap"
+                  className="text-base text-gray-700 dark:text-gray-200 leading-7 whitespace-pre-wrap"
                   dangerouslySetInnerHTML={{
                     __html: sanitizeDescription(word.description),
                   }}
@@ -145,13 +145,7 @@ export default function ViewWordModal({
             )}
           </div>
 
-          <div className="px-8 pb-8 flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 rounded-2xl border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Close
-            </button>
+          <div className="px-8 pb-8 flex justify-end">
             {onEdit && (
               <button
                 onClick={() => onEdit(word)}
