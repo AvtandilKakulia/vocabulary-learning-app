@@ -26,20 +26,20 @@ export default function WordTable({
   onDelete,
 }: WordTableProps) {
   const partOfSpeechStyles: Record<string, string> = {
-    noun: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-100",
-    verb: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-100",
+    noun: "bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-100",
+    verb: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-100",
     adjective:
-      "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-100",
+      "bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-100",
     adverb:
-      "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100",
+      "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-100",
     preposition:
-      "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-100",
+      "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-100",
     conjunction:
-      "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-100",
+      "bg-rose-50 text-rose-700 dark:bg-rose-500/20 dark:text-rose-100",
     pronoun:
-      "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-100",
+      "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-100",
     unspecified:
-      "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-200",
+      "bg-gray-50 text-gray-600 dark:bg-gray-400/15 dark:text-gray-200",
   };
 
   const partOfSpeechLabels: Record<string, string> = {
