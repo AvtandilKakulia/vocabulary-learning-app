@@ -47,6 +47,9 @@ export default function ViewWordModal({
     unspecified: "Unspecified",
   };
 
+  const formatEnglishWord = (englishWord: string) =>
+    englishWord ? englishWord[0].toUpperCase() + englishWord.slice(1) : "";
+
   const renderVerbInfo = () => {
     if (
       word.part_of_speech !== "verb" ||
@@ -59,7 +62,7 @@ export default function ViewWordModal({
 
     return (
       <div className="flex flex-wrap items-center gap-2 font-semibold text-sm text-gray-700 dark:text-gray-200">
-        <span>{word.english_word}</span>
+        <span>{formatEnglishWord(word.english_word)}</span>
         <ArrowRight size={16} className="text-gray-500 dark:text-gray-400" />
         <span>{word.past_simple}</span>
         <ArrowRight size={16} className="text-gray-500 dark:text-gray-400" />
@@ -80,10 +83,9 @@ export default function ViewWordModal({
         >
           <div className="flex items-start justify-between gap-4 flex-none">
             <div className="space-y-3 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    {word.english_word}
+              <div className="flex items-baseline gap-3">
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent leading-tight">
+                  {formatEnglishWord(word.english_word)}
                   </h2>
 
                   {word.part_of_speech &&
