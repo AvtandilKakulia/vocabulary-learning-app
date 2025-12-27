@@ -515,7 +515,7 @@ export default function WordModal({
                           Preview
                         </div>
                         <div
-                          className="prose prose-sm dark:prose-invert max-w-none"
+                          className="prose prose-sm dark:prose-invert max-w-none dark:text-gray-200"
                           dangerouslySetInnerHTML={{
                             __html: sanitizeDescription(description),
                           }}
