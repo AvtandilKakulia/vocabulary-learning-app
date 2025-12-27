@@ -83,31 +83,33 @@ export default function ViewWordModal({
         >
           <div className="flex items-start justify-between gap-4 flex-none">
             <div className="space-y-3 flex-1">
-<div className="flex items-start gap-3">
-  <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent leading-snug">
-    {formatEnglishWord(word.english_word)}
-  </h2>
+              <div className="flex items-start gap-3">
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent leading-snug">
+                  {formatEnglishWord(word.english_word)}
+                </h2>
 
-  {word.part_of_speech && word.part_of_speech !== "unspecified" && (
-    <span
-      className={`inline-flex items-center text-[11px] font-semibold px-3 py-1 rounded-full shadow-sm ${
-        partOfSpeechStyles[word.part_of_speech] ||
-        partOfSpeechStyles.unspecified
-      }`}
-    >
-      {word.part_of_speech === "verb"
-        ? word.is_irregular_verb
-          ? "Verb – Irregular"
-          : partOfSpeechLabels[word.part_of_speech] ||
-            word.part_of_speech
-        : partOfSpeechLabels[word.part_of_speech] ||
-          word.part_of_speech}
-    </span>
-  )}
-</div>
+                {word.part_of_speech &&
+                  word.part_of_speech !== "unspecified" && (
+                    <span
+                      className={`inline-flex items-center text-[11px] font-semibold px-3 py-1 rounded-full shadow-sm ${
+                        partOfSpeechStyles[word.part_of_speech] ||
+                        partOfSpeechStyles.unspecified
+                      }`}
+                    >
+                      {word.part_of_speech === "verb"
+                        ? word.is_irregular_verb
+                          ? "Verb – Irregular"
+                          : partOfSpeechLabels[word.part_of_speech] ||
+                            word.part_of_speech
+                        : partOfSpeechLabels[word.part_of_speech] ||
+                          word.part_of_speech}
+                    </span>
+                  )}
               </div>
+
               {renderVerbInfo()}
             </div>
+
             <button
               onClick={onClose}
               aria-label="Close"
