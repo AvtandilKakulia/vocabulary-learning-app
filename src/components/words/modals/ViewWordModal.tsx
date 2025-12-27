@@ -92,7 +92,7 @@ export default function ViewWordModal({
           className="relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-8"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 flex-none">
             <div className="space-y-3">
               <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 {word.english_word}
@@ -122,8 +122,8 @@ export default function ViewWordModal({
             </button>
           </div>
 
-          <div className="mt-6 space-y-6 pr-1 flex-1 min-h-0">
-            <div className="space-y-3">
+          <div className="mt-6 space-y-6 flex-none">
+            <div className="space-y-3 flex-none">
               <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
                 Georgian Definitions
               </h3>
@@ -140,7 +140,7 @@ export default function ViewWordModal({
             </div>
 
             {word.description && (
-              <div className="space-y-3">
+              <div className="space-y-3 flex-none">
                 <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
                   Description
                 </h3>
