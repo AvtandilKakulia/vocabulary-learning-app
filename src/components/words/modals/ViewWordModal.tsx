@@ -81,7 +81,7 @@ export default function ViewWordModal({
           <div className="flex items-start justify-between gap-4 flex-none">
             <div className="space-y-3 flex-1">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-baseline gap-3">
+                <div className="flex items-start gap-3">
                   <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                     {word.english_word}
                   </h2>
