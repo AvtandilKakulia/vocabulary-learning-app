@@ -48,36 +48,22 @@ export default function ViewWordModal({
   };
 
   const renderVerbInfo = () => {
-    if (word.part_of_speech !== "verb") {
+    if (
+      word.part_of_speech !== "verb" ||
+      !word.is_irregular_verb ||
+      !word.past_simple ||
+      !word.past_participle
+    ) {
       return null;
     }
 
-    if (word.is_irregular_verb && word.past_simple && word.past_participle) {
-      return (
-        <div className="flex flex-wrap gap-3 items-center text-sm text-gray-700 dark:text-gray-200">
-          <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-semibold">
-            Irregular verb
-          </span>
-          <div className="flex flex-wrap items-center gap-2 font-semibold">
-            <span>{word.english_word}</span>
-            <ArrowRight
-              size={16}
-              className="text-gray-500 dark:text-gray-400"
-            />
-            <span>{word.past_simple}</span>
-            <ArrowRight
-              size={16}
-              className="text-gray-500 dark:text-gray-400"
-            />
-            <span>{word.past_participle}</span>
-          </div>
-        </div>
-      );
-    }
-
     return (
-      <div className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-sm font-semibold">
-        Regular verb
+      <div className="flex flex-wrap items-center gap-2 font-semibold text-sm text-gray-700 dark:text-gray-200">
+        <span>{word.english_word}</span>
+        <ArrowRight size={16} className="text-gray-500 dark:text-gray-400" />
+        <span>{word.past_simple}</span>
+        <ArrowRight size={16} className="text-gray-500 dark:text-gray-400" />
+        <span>{word.past_participle}</span>
       </div>
     );
   };
@@ -93,11 +79,11 @@ export default function ViewWordModal({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-4 flex-none">
-            <div className="space-y-3">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                {word.english_word}
-              </h2>
-              <div className="flex flex-wrap gap-2 items-center text-sm text-gray-600 dark:text-gray-300">
+            <div className="space-y-3 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  {word.english_word}
+                </h2>
                 {word.part_of_speech &&
                   word.part_of_speech !== "unspecified" && (
                     <span
@@ -106,12 +92,17 @@ export default function ViewWordModal({
                         partOfSpeechStyles.unspecified
                       }`}
                     >
-                      {partOfSpeechLabels[word.part_of_speech] ||
-                        word.part_of_speech}
+                      {word.part_of_speech === "verb"
+                        ? word.is_irregular_verb
+                          ? "Verb – Irregular"
+                          : partOfSpeechLabels[word.part_of_speech] ||
+                            word.part_of_speech
+                        : partOfSpeechLabels[word.part_of_speech] ||
+                          word.part_of_speech}
                     </span>
                   )}
-                {renderVerbInfo()}
               </div>
+              {renderVerbInfo()}
             </div>
             <button
               onClick={onClose}
