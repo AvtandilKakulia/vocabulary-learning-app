@@ -136,7 +136,7 @@ export default function ViewWordModal({
                   Description
                 </h3>
                 <div
-                  className="rounded-2xl border border-gray-200 dark:border-gray-600 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/40 dark:to-blue-900/30 p-5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto modal-scrollbar"
+                  className="rounded-2xl border border-gray-200 dark:border-gray-600 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/40 dark:to-blue-900/30 p-5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words max-h-[calc(85vh-260px)] overflow-y-auto modal-scrollbar"
                   dangerouslySetInnerHTML={{
                     __html: sanitizeDescription(word.description),
                   }}
