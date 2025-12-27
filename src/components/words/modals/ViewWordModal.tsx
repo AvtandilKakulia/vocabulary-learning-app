@@ -122,7 +122,7 @@ export default function ViewWordModal({
             </button>
           </div>
 
-          <div className="mt-6 space-y-6 overflow-y-auto pr-1 modal-scrollbar">
+          <div className="mt-6 space-y-6 overflow-y-auto pr-1 modal-scrollbar flex-1 min-h-0">
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
                 Georgian Definitions
@@ -156,10 +156,10 @@ export default function ViewWordModal({
 
           <div className="mt-8 flex justify-end">
             <button
-              onClick={onClose}
+              onClick={() => onEdit?.(word)}
               className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-md hover:shadow-lg transition-all hover:from-blue-700 hover:to-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
             >
-              Close
+              Edit
             </button>
           </div>
         </div>
