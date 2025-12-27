@@ -130,7 +130,7 @@ export default function WordTable({
               words.map((word) => (
                 <tr
                   key={word.id}
-                  className="hover:bg-blue-50/50 dark:hover:bg-gray-800/60 transition-colors"
+                  className="hover:bg-blue-50/50 dark:hover:bg-gray-800/60 transition-colors border-b border-gray-200 dark:border-gray-700"
                   onClick={() => onView(word)}
                 >
                   <td className="px-4 py-4">
