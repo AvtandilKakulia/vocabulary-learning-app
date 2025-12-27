@@ -156,15 +156,34 @@ export default function WordTable({
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="inline-flex items-center gap-4">
-                      <span className="text-base font-bold text-gray-900 dark:text-gray-100">
-                        {formatEnglishWord(word.english_word)}
-                      </span>
+                    <div className="inline-flex flex-col gap-1">
+                      <div className="inline-flex items-center gap-4">
+                        <span className="text-base font-bold text-gray-900 dark:text-gray-100">
+                          {formatEnglishWord(word.english_word)}
+                        </span>
+                        {word.part_of_speech &&
+                          word.part_of_speech !== "unspecified" && (
+                            <span
+                              className={`inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm ${
+                                partOfSpeechStyles[word.part_of_speech] ||
+                                partOfSpeechStyles.unspecified
+                              }`}
+                            >
+                              {partOfSpeechLabels[word.part_of_speech] ||
+                                word.part_of_speech}
+                            </span>
+                          )}
+                      </div>
                       {word.part_of_speech === "verb" &&
                         word.is_irregular_verb &&
                         word.past_simple &&
                         word.past_participle && (
                           <div className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                            <span>{word.english_word}</span>
+                            <ArrowRight
+                              size={16}
+                              className="text-gray-500 dark:text-gray-400"
+                            />
                             <span>{word.past_simple}</span>
                             <ArrowRight
                               size={16}
@@ -172,18 +191,6 @@ export default function WordTable({
                             />
                             <span>{word.past_participle}</span>
                           </div>
-                        )}
-                      {word.part_of_speech &&
-                        word.part_of_speech !== "unspecified" && (
-                          <span
-                            className={`inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm ${
-                              partOfSpeechStyles[word.part_of_speech] ||
-                              partOfSpeechStyles.unspecified
-                            }`}
-                          >
-                            {partOfSpeechLabels[word.part_of_speech] ||
-                              word.part_of_speech}
-                          </span>
                         )}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">

@@ -62,7 +62,7 @@ export default function ViewWordModal({
 
     return (
       <div className="flex flex-wrap items-center gap-2 font-semibold text-sm text-gray-700 dark:text-gray-200">
-        <span>{formatEnglishWord(word.english_word)}</span>
+        <span>{word.english_word}</span>
         <ArrowRight size={16} className="text-gray-500 dark:text-gray-400" />
         <span>{word.past_simple}</span>
         <ArrowRight size={16} className="text-gray-500 dark:text-gray-400" />
