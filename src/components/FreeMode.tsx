@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronRight, Plus, Shuffle, X } from "lucide-react";
 import { supabase, Word, TestMistake } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import { sanitizeDescription } from "../lib/sanitizeDescription";
 
 const STORAGE_KEY = "vocab_practice_session_state_v2";
 
@@ -520,7 +521,7 @@ export default function FreeMode() {
         </div>
 
         {currentWord && (
-          <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 transition-all duration-300">
+          <div className="relative bg-white/90 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
                 <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -533,23 +534,83 @@ export default function FreeMode() {
               )}
             </div>
 
+            <div
+              className={`absolute right-6 top-6 max-w-sm transition-all duration-300 ${
+                showResult
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 -translate-y-2 pointer-events-none"
+              }`}
+            >
+              <div
+                className={`p-5 rounded-2xl border-2 shadow-lg backdrop-blur-sm ${
+                  isCorrect
+                    ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-green-500/10"
+                    : "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-red-200 dark:border-red-800 shadow-red-500/10"
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className={`p-2 rounded-full ${
+                      isCorrect ? "bg-green-500" : "bg-red-500"
+                    }`}
+                  >
+                    {isCorrect ? (
+                      <Check className="text-white" size={24} />
+                    ) : (
+                      <X className="text-white" size={24} />
+                    )}
+                  </div>
+                  <span
+                    className={`text-xl font-bold ${
+                      isCorrect
+                        ? "text-green-800 dark:text-green-200"
+                        : "text-red-800 dark:text-red-200"
+                    }`}
+                  >
+                    {isCorrect ? "Great job!" : "Not quite right"}
+                  </span>
+                </div>
+                <div
+                  className={`${
+                    isCorrect
+                      ? "text-green-700 dark:text-green-300"
+                      : "text-red-700 dark:text-red-300"
+                  } text-base`}
+                >
+                  <span className="font-semibold">
+                    Correct answer
+                    {direction === "en-to-geo" &&
+                    currentWord.georgian_definitions.length > 1
+                      ? "s"
+                      : ""}
+                    :
+                  </span>{" "}
+                  {direction === "en-to-geo"
+                    ? currentWord.georgian_definitions.join(", ")
+                    : currentWord.english_word}
+                </div>
+              </div>
+            </div>
+
             <div className="text-center mb-6">
               <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2 leading-tight">
                 {direction === "en-to-geo"
                   ? currentWord.english_word
                   : currentWord.georgian_definitions.join(", ")}
               </div>
-              {direction === "en-to-geo" &&
-                currentWord.part_of_speech &&
+              {currentWord.part_of_speech &&
                 currentWord.part_of_speech !== "unspecified" && (
-                  <div className="text-md text-gray-500 dark:text-gray-400 mb-1">
+                  <div className="text-md text-gray-500 dark:text-gray-400 mb-2">
                     ({currentWord.part_of_speech})
                   </div>
                 )}
               {currentWord.description && (
-                <div className="text-lg text-gray-500 dark:text-gray-400 italic max-w-2xl mx-auto">
-                  {currentWord.description}
-                </div>
+                <div
+                  className="text-base text-gray-500 dark:text-gray-400 italic max-w-2xl mx-auto whitespace-pre-wrap break-words max-h-40 md:max-h-48 overflow-y-auto modal-scrollbar"
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeDescription(currentWord.description),
+                  }}
+                />
               )}
             </div>
 
@@ -587,60 +648,6 @@ export default function FreeMode() {
                   )}
                 </div>
               ))}
-
-              <div className="min-h-[140px]">
-                {showResult && (
-                  <div
-                    className={`p-6 rounded-2xl border-2 transition-all duration-300 transform ${
-                      isCorrect
-                        ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-lg shadow-green-500/10"
-                        : "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-red-200 dark:border-red-800 shadow-lg shadow-red-500/10"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <div
-                        className={`p-2 rounded-full ${
-                          isCorrect ? "bg-green-500" : "bg-red-500"
-                        }`}
-                      >
-                        {isCorrect ? (
-                          <Check className="text-white" size={24} />
-                        ) : (
-                          <X className="text-white" size={24} />
-                        )}
-                      </div>
-                      <span
-                        className={`text-xl font-bold ${
-                          isCorrect
-                            ? "text-green-800 dark:text-green-200"
-                            : "text-red-800 dark:text-red-200"
-                        }`}
-                      >
-                        {isCorrect ? "Great job!" : "Not quite right"}
-                      </span>
-                    </div>
-                    <div
-                      className={`${
-                        isCorrect
-                          ? "text-green-700 dark:text-green-300"
-                          : "text-red-700 dark:text-red-300"
-                      } text-base`}
-                    >
-                      <span className="font-semibold">
-                        Correct answer
-                        {direction === "en-to-geo" &&
-                        currentWord.georgian_definitions.length > 1
-                          ? "s"
-                          : ""}
-                        :
-                      </span>{" "}
-                      {direction === "en-to-geo"
-                        ? currentWord.georgian_definitions.join(", ")
-                        : currentWord.english_word}
-                    </div>
-                  </div>
-                )}
-              </div>
 
               <div className="flex flex-col md:flex-row gap-3 pt-4">
                 {!showResult ? (
