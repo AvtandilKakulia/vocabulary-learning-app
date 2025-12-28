@@ -64,6 +64,7 @@ export default function FreeMode() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const previousAllowReguess = useRef(allowReguess);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
@@ -704,6 +705,7 @@ export default function FreeMode() {
                 return (
                   <div key={idx} className="flex items-center gap-2">
                     <input
+                      ref={(el) => (inputRefs.current[idx] = el)}
                       type="text"
                       value={value}
                       onChange={(e) => {
@@ -720,8 +722,16 @@ export default function FreeMode() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
+
                           if (!hasChecked) {
                             handleCheckAnswer();
+
+                            // remove focus so border colors apply immediately
+                            setTimeout(() => {
+                              inputRefs.current.forEach((ref) => ref?.blur());
+                            }, 0);
+                          } else {
+                            proceedToNextWord();
                           }
                         }
                       }}
