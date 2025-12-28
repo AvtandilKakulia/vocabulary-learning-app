@@ -396,15 +396,13 @@ export default function FreeMode() {
       return;
     }
 
-    if (isIrregularActive) {
-      setAnswerInputs(["", "", ""]);
-      setInputStatuses(["idle", "idle", "idle"]);
-    } else {
-      setAnswerInputs([""]);
-      setInputStatuses(["idle"]);
-    }
+    const shouldUseThreeInputs = direction === "geo-to-en" && isIrregularActive;
+    const inputCount = shouldUseThreeInputs ? 3 : 1;
+
+    setAnswerInputs(Array(inputCount).fill(""));
+    setInputStatuses(Array(inputCount).fill("idle"));
     setHasChecked(false);
-  }, [currentWord?.id, isIrregularActive]);
+  }, [currentWord?.id, direction, isIrregularActive]);
 
   useEffect(() => {
     if (!previousAllowReguess.current && allowReguess) {
@@ -733,7 +731,7 @@ export default function FreeMode() {
                       }
                       className={`flex-1 px-6 py-4 text-lg border-2 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-4 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400 ${statusClasses}`}
                     />
-                    {!isIrregularActive &&
+                    {direction === "en-to-geo" &&
                       (idx === answerInputs.length - 1 ? (
                         <button
                           onClick={addInput}
