@@ -8,6 +8,7 @@ const STORAGE_KEY = "vocab_practice_session_state_v2";
 
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
+type InputStatus = "idle" | "correct" | "incorrect";
 
 type StoredSession = {
   userId: string;
@@ -41,7 +42,8 @@ export default function FreeMode() {
   const [orderMode, setOrderMode] = useState<OrderMode>("random");
   const [allowReguess, setAllowReguess] = useState(false);
   const [answerInputs, setAnswerInputs] = useState<string[]>([""]);
-  const [showResult, setShowResult] = useState(false);
+  const [inputStatuses, setInputStatuses] = useState<InputStatus[]>(["idle"]);
+  const [hasChecked, setHasChecked] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [loading, setLoading] = useState(true);
   const [correctCount, setCorrectCount] = useState(0);
@@ -178,14 +180,16 @@ export default function FreeMode() {
 
   const handleDirectionChange = (newDirection: Direction) => {
     setDirection(newDirection);
-    setShowResult(false);
     setAnswerInputs([""]);
+    setInputStatuses(["idle"]);
+    setHasChecked(false);
   };
 
   const handleOrderChange = (newOrder: OrderMode) => {
     setOrderMode(newOrder);
-    setShowResult(false);
     setAnswerInputs([""]);
+    setInputStatuses(["idle"]);
+    setHasChecked(false);
     setCorrectCount(0);
     setTotalAttempts(0);
     setMistakes([]);
@@ -196,30 +200,33 @@ export default function FreeMode() {
 
   const handleCheckAnswer = () => {
     if (!currentWord) return;
-    const cleaned = answerInputs
-      .map((a) => a.trim())
-      .filter((a) => a.length > 0);
-    if (cleaned.length === 0) return;
+    const trimmedInputs = answerInputs.map((a) => a.trim());
+    if (trimmedInputs.every((a) => a.length === 0)) return;
 
-    const normalizedInputs = cleaned.map(normalize);
+    let statuses: InputStatus[] = trimmedInputs.map(() => "incorrect");
     let correct = false;
 
     if (direction === "en-to-geo") {
       const normalizedDefs = currentWord.georgian_definitions.map(normalize);
-      if (normalizedInputs.length === 1) {
-        correct = normalizedDefs.includes(normalizedInputs[0]);
-      } else {
-        correct = normalizedInputs.every((input) =>
-          normalizedDefs.includes(input)
-        );
-      }
+      statuses = trimmedInputs.map((input) => {
+        if (!input) return "incorrect";
+        return normalizedDefs.includes(normalize(input))
+          ? "correct"
+          : "incorrect";
+      });
+      correct = statuses.every((status) => status === "correct");
     } else {
       const target = normalize(currentWord.english_word);
-      correct = normalizedInputs.every((input) => input === target);
+      statuses = trimmedInputs.map((input) => {
+        if (!input) return "incorrect";
+        return normalize(input) === target ? "correct" : "incorrect";
+      });
+      correct = statuses.every((status) => status === "correct");
     }
 
+    setInputStatuses(statuses);
+    setHasChecked(true);
     setIsCorrect(correct);
-    setShowResult(true);
     setTotalAttempts((prev) => prev + 1);
     if (correct) {
       setCorrectCount((prev) => prev + 1);
@@ -228,7 +235,7 @@ export default function FreeMode() {
         ...prev,
         {
           english_word: currentWord.english_word,
-          user_answer: cleaned.join(", "),
+          user_answer: trimmedInputs.filter((a) => a.length > 0).join(", "),
           correct_definitions:
             direction === "en-to-geo"
               ? currentWord.georgian_definitions
@@ -240,7 +247,8 @@ export default function FreeMode() {
 
   const proceedToNextWord = () => {
     if (!currentWord) return;
-    setShowResult(false);
+    setHasChecked(false);
+    setInputStatuses(["idle"]);
     setAnswerInputs([""]);
 
     let updatedQueue = wordQueue.slice(1);
@@ -255,7 +263,8 @@ export default function FreeMode() {
     setTotalAttempts(0);
     setMistakes([]);
     setAnswerInputs([""]);
-    setShowResult(false);
+    setInputStatuses(["idle"]);
+    setHasChecked(false);
     if (words.length > 0) {
       const orderedIds =
         orderMode === "random"
@@ -293,6 +302,25 @@ export default function FreeMode() {
 
   const addInput = () => {
     setAnswerInputs((prev) => [...prev, ""]);
+    setInputStatuses((prev) => [...prev, "idle"]);
+    setHasChecked(false);
+  };
+
+  const removeInput = (index: number) => {
+    if (answerInputs.length === 1) return;
+    setAnswerInputs((prev) => prev.filter((_, idx) => idx !== index));
+    setInputStatuses((prev) => prev.filter((_, idx) => idx !== index));
+    setHasChecked(false);
+  };
+
+  const handleFinishRequest = () => {
+    if (totalAttempts === 0) return;
+    const confirmed = window.confirm(
+      "Are you sure you want to finish this practice session?"
+    );
+    if (confirmed) {
+      setShowFinishModal(true);
+    }
   };
 
   const formattedDate = () => {
@@ -534,64 +562,6 @@ export default function FreeMode() {
               )}
             </div>
 
-            <div
-              className={`absolute right-6 top-6 max-w-sm transition-all duration-300 ${
-                showResult
-                  ? "opacity-100 translate-y-0"
-                  : "opacity-0 -translate-y-2 pointer-events-none"
-              }`}
-            >
-              <div
-                className={`p-5 rounded-2xl border-2 shadow-lg backdrop-blur-sm ${
-                  isCorrect
-                    ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-green-500/10"
-                    : "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-red-200 dark:border-red-800 shadow-red-500/10"
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className={`p-2 rounded-full ${
-                      isCorrect ? "bg-green-500" : "bg-red-500"
-                    }`}
-                  >
-                    {isCorrect ? (
-                      <Check className="text-white" size={24} />
-                    ) : (
-                      <X className="text-white" size={24} />
-                    )}
-                  </div>
-                  <span
-                    className={`text-xl font-bold ${
-                      isCorrect
-                        ? "text-green-800 dark:text-green-200"
-                        : "text-red-800 dark:text-red-200"
-                    }`}
-                  >
-                    {isCorrect ? "Great job!" : "Not quite right"}
-                  </span>
-                </div>
-                <div
-                  className={`${
-                    isCorrect
-                      ? "text-green-700 dark:text-green-300"
-                      : "text-red-700 dark:text-red-300"
-                  } text-base`}
-                >
-                  <span className="font-semibold">
-                    Correct answer
-                    {direction === "en-to-geo" &&
-                    currentWord.georgian_definitions.length > 1
-                      ? "s"
-                      : ""}
-                    :
-                  </span>{" "}
-                  {direction === "en-to-geo"
-                    ? currentWord.georgian_definitions.join(", ")
-                    : currentWord.english_word}
-                </div>
-              </div>
-            </div>
-
             <div className="text-center mb-6">
               <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2 leading-tight">
                 {direction === "en-to-geo"
@@ -615,42 +585,67 @@ export default function FreeMode() {
             </div>
 
             <div className="max-w-xl mx-auto space-y-4">
-              {answerInputs.map((value, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={value}
-                    onChange={(e) => {
-                      const newInputs = [...answerInputs];
-                      newInputs[idx] = e.target.value;
-                      setAnswerInputs(newInputs);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !showResult) {
-                        handleCheckAnswer();
-                      } else if (e.key === "Enter" && showResult) {
-                        proceedToNextWord();
-                      }
-                    }}
-                    disabled={showResult}
-                    placeholder="Type your answer..."
-                    className="flex-1 px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400"
-                  />
-                  {idx === answerInputs.length - 1 && (
-                    <button
-                      onClick={addInput}
-                      className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl disabled:opacity-50"
-                      disabled={showResult}
-                      aria-label="Add another answer"
-                    >
-                      <Plus size={18} />
-                    </button>
-                  )}
-                </div>
-              ))}
+              {answerInputs.map((value, idx) => {
+                const status = hasChecked
+                  ? inputStatuses[idx] || "incorrect"
+                  : "idle";
+                const statusClasses =
+                  status === "correct"
+                    ? "border-green-500 focus:border-green-500 focus:ring-green-500/20 bg-green-50/60 dark:bg-green-900/10"
+                    : status === "incorrect" && hasChecked
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-500/20 bg-red-50/60 dark:bg-red-900/10"
+                    : "border-gray-200 dark:border-gray-600";
+
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => {
+                        const newInputs = [...answerInputs];
+                        newInputs[idx] = e.target.value;
+                        setAnswerInputs(newInputs);
+                        setHasChecked(false);
+                        setInputStatuses((prev) => {
+                          const updated = [...prev];
+                          updated[idx] = "idle";
+                          return updated;
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !hasChecked) {
+                          handleCheckAnswer();
+                        } else if (e.key === "Enter" && hasChecked) {
+                          proceedToNextWord();
+                        }
+                      }}
+                      placeholder="Type your answer..."
+                      className={`flex-1 px-6 py-4 text-lg border-2 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-4 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400 ${statusClasses}`}
+                    />
+                    {idx === answerInputs.length - 1 ? (
+                      <button
+                        onClick={addInput}
+                        className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl"
+                        aria-label="Add another answer"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => removeInput(idx)}
+                        className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label="Remove answer"
+                        disabled={hasChecked}
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
 
               <div className="flex flex-col md:flex-row gap-3 pt-4">
-                {!showResult ? (
+                {!hasChecked ? (
                   <button
                     onClick={handleCheckAnswer}
                     disabled={answerInputs.every((a) => !a.trim())}
@@ -678,8 +673,9 @@ export default function FreeMode() {
 
                 {wordQueue.length > 1 && (
                   <button
-                    onClick={() => setShowFinishModal(true)}
-                    className="px-4 py-3 rounded-2xl font-semibold border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-white/70 dark:bg-gray-800/70 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200"
+                    onClick={handleFinishRequest}
+                    disabled={totalAttempts === 0}
+                    className="px-4 py-3 rounded-2xl font-semibold border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-white/70 dark:bg-gray-800/70 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Finish
                   </button>
