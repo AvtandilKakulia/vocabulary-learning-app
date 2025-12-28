@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Check, ChevronRight, Plus, Shuffle, X } from "lucide-react";
 import { supabase, Word, TestMistake } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
@@ -18,8 +24,11 @@ type StoredSession = {
   allowReguess: boolean;
   correctCount: number;
   totalAttempts: number;
-  mistakes: TestMistake[];
+  mistakes: MistakeWithId[];
+  attemptedWordIds?: string[];
 };
+
+type MistakeWithId = TestMistake & { word_id?: string };
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -48,10 +57,13 @@ export default function FreeMode() {
   const [loading, setLoading] = useState(true);
   const [correctCount, setCorrectCount] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
-  const [mistakes, setMistakes] = useState<TestMistake[]>([]);
+  const [mistakes, setMistakes] = useState<MistakeWithId[]>([]);
+  const [attemptedWordIds, setAttemptedWordIds] = useState<string[]>([]);
   const [showFinishModal, setShowFinishModal] = useState(false);
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [sessionInitialized, setSessionInitialized] = useState(false);
+  const previousAllowReguess = useRef(allowReguess);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
@@ -62,6 +74,16 @@ export default function FreeMode() {
     if (wordQueue.length === 0) return undefined;
     return words.find((w) => w.id === wordQueue[0]);
   }, [wordQueue, words]);
+
+  const isIrregularActive = useMemo(
+    () =>
+      Boolean(
+        currentWord?.is_irregular_verb &&
+          currentWord?.past_simple &&
+          currentWord?.past_participle
+      ),
+    [currentWord]
+  );
 
   const successRate =
     totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
@@ -114,6 +136,7 @@ export default function FreeMode() {
           setTotalAttempts(parsed.totalAttempts ?? 0);
           setMistakes(parsed.mistakes ?? []);
           setWordQueue(parsed.queueIds ?? []);
+          setAttemptedWordIds(parsed.attemptedWordIds ?? []);
         }
       } catch (err) {
         console.error("Error loading saved session", err);
@@ -128,6 +151,18 @@ export default function FreeMode() {
     const validIds = words.map((w) => w.id);
     let queueIds = wordQueue.filter((id) => validIds.includes(id));
 
+    const newWordIds = validIds.filter(
+      (id) => !queueIds.includes(id) && !attemptedWordIds.includes(id)
+    );
+
+    if (newWordIds.length > 0) {
+      const orderedNewIds =
+        orderMode === "db-order"
+          ? words.filter((w) => newWordIds.includes(w.id)).map((w) => w.id)
+          : shuffleArray(newWordIds);
+      queueIds = [...queueIds, ...orderedNewIds];
+    }
+
     if (queueIds.length === 0) {
       if (totalAttempts > 0) return;
       queueIds = orderMode === "random" ? shuffleArray(validIds) : validIds;
@@ -138,7 +173,15 @@ export default function FreeMode() {
     if (JSON.stringify(queueIds) !== JSON.stringify(wordQueue)) {
       setWordQueue(queueIds);
     }
-  }, [orderMode, sessionInitialized, totalAttempts, wordQueue, words]);
+  }, [
+    orderMode,
+    sessionInitialized,
+    totalAttempts,
+    wordQueue,
+    words,
+    attemptedWordIds,
+    user,
+  ]);
 
   useEffect(() => {
     if (!sessionInitialized || !user) return;
@@ -151,12 +194,14 @@ export default function FreeMode() {
       correctCount,
       totalAttempts,
       mistakes,
+      attemptedWordIds,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [
     allowReguess,
     correctCount,
     direction,
+    attemptedWordIds,
     mistakes,
     orderMode,
     totalAttempts,
@@ -195,6 +240,7 @@ export default function FreeMode() {
     setMistakes([]);
     setWordQueue([]);
     setWords([]);
+    setAttemptedWordIds([]);
     localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -206,7 +252,20 @@ export default function FreeMode() {
     let statuses: InputStatus[] = trimmedInputs.map(() => "incorrect");
     let correct = false;
 
-    if (direction === "en-to-geo") {
+    if (isIrregularActive) {
+      const targetForms = [
+        currentWord.english_word,
+        currentWord.past_simple,
+        currentWord.past_participle,
+      ];
+      statuses = trimmedInputs.map((input, index) => {
+        if (!input) return "incorrect";
+        return normalize(input) === normalize(targetForms[index] || "")
+          ? "correct"
+          : "incorrect";
+      });
+      correct = statuses.every((status) => status === "correct");
+    } else if (direction === "en-to-geo") {
       const normalizedDefs = currentWord.georgian_definitions.map(normalize);
       statuses = trimmedInputs.map((input) => {
         if (!input) return "incorrect";
@@ -228,12 +287,16 @@ export default function FreeMode() {
     setHasChecked(true);
     setIsCorrect(correct);
     setTotalAttempts((prev) => prev + 1);
+    setAttemptedWordIds((prev) =>
+      prev.includes(currentWord.id) ? prev : [...prev, currentWord.id]
+    );
     if (correct) {
       setCorrectCount((prev) => prev + 1);
     } else {
       setMistakes((prev) => [
         ...prev,
         {
+          word_id: currentWord.id,
           english_word: currentWord.english_word,
           user_answer: trimmedInputs.filter((a) => a.length > 0).join(", "),
           correct_definitions:
@@ -262,6 +325,7 @@ export default function FreeMode() {
     setCorrectCount(0);
     setTotalAttempts(0);
     setMistakes([]);
+    setAttemptedWordIds([]);
     setAnswerInputs([""]);
     setInputStatuses(["idle"]);
     setHasChecked(false);
@@ -289,7 +353,7 @@ export default function FreeMode() {
         test_direction: direction,
         total_words: totalAttempts,
         correct_count: correctCount,
-        mistakes,
+        mistakes: mistakes.map(({ word_id, ...rest }) => rest),
       });
     } catch (error) {
       console.error("Error saving history:", error);
@@ -315,13 +379,52 @@ export default function FreeMode() {
 
   const handleFinishRequest = () => {
     if (totalAttempts === 0) return;
-    const confirmed = window.confirm(
-      "Are you sure you want to finish this practice session?"
-    );
-    if (confirmed) {
-      setShowFinishModal(true);
-    }
+    setShowFinishConfirm(true);
   };
+
+  const handleConfirmFinish = () => {
+    if (totalAttempts === 0) return;
+    setShowFinishConfirm(false);
+    setShowFinishModal(true);
+  };
+
+  useEffect(() => {
+    if (!currentWord) {
+      setAnswerInputs([""]);
+      setInputStatuses(["idle"]);
+      setHasChecked(false);
+      return;
+    }
+
+    if (isIrregularActive) {
+      setAnswerInputs(["", "", ""]);
+      setInputStatuses(["idle", "idle", "idle"]);
+    } else {
+      setAnswerInputs([""]);
+      setInputStatuses(["idle"]);
+    }
+    setHasChecked(false);
+  }, [currentWord?.id, isIrregularActive]);
+
+  useEffect(() => {
+    if (!previousAllowReguess.current && allowReguess) {
+      const mistakeIds = Array.from(
+        new Set(
+          mistakes
+            .map((mistake) => mistake.word_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+      if (mistakeIds.length) {
+        setWordQueue((prev) => {
+          const existing = new Set(prev);
+          const toAdd = mistakeIds.filter((id) => !existing.has(id));
+          return toAdd.length ? [...prev, ...toAdd] : prev;
+        });
+      }
+    }
+    previousAllowReguess.current = allowReguess;
+  }, [allowReguess, mistakes]);
 
   const formattedDate = () => {
     const now = new Date();
@@ -563,17 +666,21 @@ export default function FreeMode() {
             </div>
 
             <div className="text-center mb-6">
-              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2 leading-tight">
+              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2 leading-relaxed md:leading-[1.4] py-1">
                 {direction === "en-to-geo"
                   ? currentWord.english_word
                   : currentWord.georgian_definitions.join(", ")}
               </div>
-              {currentWord.part_of_speech &&
-                currentWord.part_of_speech !== "unspecified" && (
+              {(() => {
+                const partLabel = currentWord.is_irregular_verb
+                  ? "verb - irregular"
+                  : currentWord.part_of_speech;
+                return partLabel && partLabel !== "unspecified" ? (
                   <div className="text-md text-gray-500 dark:text-gray-400 mb-2">
-                    ({currentWord.part_of_speech})
+                    ({partLabel})
                   </div>
-                )}
+                ) : null;
+              })()}
               {currentWord.description && (
                 <div
                   className="text-base text-gray-500 dark:text-gray-400 italic max-w-2xl mx-auto whitespace-pre-wrap break-words max-h-40 md:max-h-48 overflow-y-auto modal-scrollbar"
@@ -619,27 +726,32 @@ export default function FreeMode() {
                           proceedToNextWord();
                         }
                       }}
-                      placeholder="Type your answer..."
+                      placeholder={
+                        isIrregularActive
+                          ? `Form ${idx + 1}`
+                          : "Type your answer..."
+                      }
                       className={`flex-1 px-6 py-4 text-lg border-2 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-4 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400 ${statusClasses}`}
                     />
-                    {idx === answerInputs.length - 1 ? (
-                      <button
-                        onClick={addInput}
-                        className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl"
-                        aria-label="Add another answer"
-                      >
-                        <Plus size={18} />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => removeInput(idx)}
-                        className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label="Remove answer"
-                        disabled={hasChecked}
-                      >
-                        <X size={18} />
-                      </button>
-                    )}
+                    {!isIrregularActive &&
+                      (idx === answerInputs.length - 1 ? (
+                        <button
+                          onClick={addInput}
+                          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl"
+                          aria-label="Add another answer"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => removeInput(idx)}
+                          className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label="Remove answer"
+                          disabled={hasChecked}
+                        >
+                          <X size={18} />
+                        </button>
+                      ))}
                   </div>
                 );
               })}
@@ -685,6 +797,60 @@ export default function FreeMode() {
           </div>
         )}
       </div>
+
+      {showFinishConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-md transition-all duration-300">
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+                <svg
+                  className="text-white"
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                  <path d="M9 12l2 2 4-4"></path>
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                Finish Practice
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Are you sure you want to finish this practice session?
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6 mb-8 text-center">
+              <div className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                {correctCount}/{totalAttempts} correct ({successRate}%)
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Progress will be saved to your history.
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowFinishConfirm(false)}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmFinish}
+                disabled={totalAttempts === 0}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Finish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showResetModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
