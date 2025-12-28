@@ -50,6 +50,11 @@ export default function FreeMode() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [sessionInitialized, setSessionInitialized] = useState(false);
 
+  const uniqueWordCount = useMemo(
+    () => new Set(words.map((word) => word.id)).size,
+    [words]
+  );
+
   const currentWord = useMemo(() => {
     if (wordQueue.length === 0) return undefined;
     return words.find((w) => w.id === wordQueue[0]);
@@ -121,6 +126,7 @@ export default function FreeMode() {
     let queueIds = wordQueue.filter((id) => validIds.includes(id));
 
     if (queueIds.length === 0) {
+      if (totalAttempts > 0) return;
       queueIds = orderMode === "random" ? shuffleArray(validIds) : validIds;
       setCorrectCount(0);
       setTotalAttempts(0);
@@ -129,7 +135,7 @@ export default function FreeMode() {
     if (JSON.stringify(queueIds) !== JSON.stringify(wordQueue)) {
       setWordQueue(queueIds);
     }
-  }, [orderMode, sessionInitialized, wordQueue, words]);
+  }, [orderMode, sessionInitialized, totalAttempts, wordQueue, words]);
 
   useEffect(() => {
     if (!sessionInitialized || !user) return;
@@ -182,6 +188,9 @@ export default function FreeMode() {
     setCorrectCount(0);
     setTotalAttempts(0);
     setMistakes([]);
+    setWordQueue([]);
+    setWords([]);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   const handleCheckAnswer = () => {
@@ -309,7 +318,7 @@ export default function FreeMode() {
     );
   }
 
-  if (!currentWord) {
+  if (!currentWord && !showFinishModal) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
@@ -375,9 +384,9 @@ export default function FreeMode() {
                   </div>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Success Rate:{" "}
+                  Total words in dictionary:{" "}
                   <span className="font-semibold text-blue-600 dark:text-blue-400">
-                    {successRate}%
+                    {uniqueWordCount}
                   </span>
                 </div>
               </div>
@@ -510,160 +519,168 @@ export default function FreeMode() {
           </div>
         </div>
 
-        <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 transition-all duration-300">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              Practice Session
-            </div>
-            {wordQueue.length === 1 && (
-              <span className="text-xs px-3 py-1 rounded-full bg-gradient-to-r from-yellow-100 to-orange-100 dark:from-yellow-900/20 dark:to-orange-900/20 text-yellow-800 dark:text-yellow-200 font-bold animate-pulse">
-                Final Word!
-              </span>
-            )}
-          </div>
-
-          <div className="text-center mb-6">
-            <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2 leading-tight">
-              {direction === "en-to-geo"
-                ? currentWord.english_word
-                : currentWord.georgian_definitions.join(", ")}
-            </div>
-            {direction === "en-to-geo" && currentWord.part_of_speech && (
-              <div className="text-md text-gray-500 dark:text-gray-400 mb-1">
-                ({currentWord.part_of_speech})
+        {currentWord && (
+          <div className="bg-white/90 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 transition-all duration-300">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                Practice Session
               </div>
-            )}
-            {currentWord.description && (
-              <div className="text-lg text-gray-500 dark:text-gray-400 italic max-w-2xl mx-auto">
-                {currentWord.description}
-              </div>
-            )}
-          </div>
+              {wordQueue.length === 1 && (
+                <span className="text-xs px-3 py-1 rounded-full bg-gradient-to-r from-yellow-100 to-orange-100 dark:from-yellow-900/20 dark:to-orange-900/20 text-yellow-800 dark:text-yellow-200 font-bold animate-pulse">
+                  Final Word!
+                </span>
+              )}
+            </div>
 
-          <div className="max-w-xl mx-auto space-y-4">
-            {answerInputs.map((value, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={value}
-                  onChange={(e) => {
-                    const newInputs = [...answerInputs];
-                    newInputs[idx] = e.target.value;
-                    setAnswerInputs(newInputs);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !showResult) {
-                      handleCheckAnswer();
-                    } else if (e.key === "Enter" && showResult) {
-                      proceedToNextWord();
-                    }
-                  }}
-                  disabled={showResult}
-                  placeholder="Type your answer..."
-                  className="flex-1 px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200"
-                />
-                {idx === answerInputs.length - 1 && (
-                  <button
-                    onClick={addInput}
-                    className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl disabled:opacity-50"
+            <div className="text-center mb-6">
+              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2 leading-tight">
+                {direction === "en-to-geo"
+                  ? currentWord.english_word
+                  : currentWord.georgian_definitions.join(", ")}
+              </div>
+              {direction === "en-to-geo" &&
+                currentWord.part_of_speech &&
+                currentWord.part_of_speech !== "unspecified" && (
+                  <div className="text-md text-gray-500 dark:text-gray-400 mb-1">
+                    ({currentWord.part_of_speech})
+                  </div>
+                )}
+              {currentWord.description && (
+                <div className="text-lg text-gray-500 dark:text-gray-400 italic max-w-2xl mx-auto">
+                  {currentWord.description}
+                </div>
+              )}
+            </div>
+
+            <div className="max-w-xl mx-auto space-y-4">
+              {answerInputs.map((value, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => {
+                      const newInputs = [...answerInputs];
+                      newInputs[idx] = e.target.value;
+                      setAnswerInputs(newInputs);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !showResult) {
+                        handleCheckAnswer();
+                      } else if (e.key === "Enter" && showResult) {
+                        proceedToNextWord();
+                      }
+                    }}
                     disabled={showResult}
-                    aria-label="Add another answer"
+                    placeholder="Type your answer..."
+                    className="flex-1 px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400"
+                  />
+                  {idx === answerInputs.length - 1 && (
+                    <button
+                      onClick={addInput}
+                      className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl disabled:opacity-50"
+                      disabled={showResult}
+                      aria-label="Add another answer"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <div className="min-h-[140px]">
+                {showResult && (
+                  <div
+                    className={`p-6 rounded-2xl border-2 transition-all duration-300 transform ${
+                      isCorrect
+                        ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-lg shadow-green-500/10"
+                        : "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-red-200 dark:border-red-800 shadow-lg shadow-red-500/10"
+                    }`}
                   >
-                    <Plus size={18} />
+                    <div className="flex items-center gap-3 mb-3">
+                      <div
+                        className={`p-2 rounded-full ${
+                          isCorrect ? "bg-green-500" : "bg-red-500"
+                        }`}
+                      >
+                        {isCorrect ? (
+                          <Check className="text-white" size={24} />
+                        ) : (
+                          <X className="text-white" size={24} />
+                        )}
+                      </div>
+                      <span
+                        className={`text-xl font-bold ${
+                          isCorrect
+                            ? "text-green-800 dark:text-green-200"
+                            : "text-red-800 dark:text-red-200"
+                        }`}
+                      >
+                        {isCorrect ? "Great job!" : "Not quite right"}
+                      </span>
+                    </div>
+                    <div
+                      className={`${
+                        isCorrect
+                          ? "text-green-700 dark:text-green-300"
+                          : "text-red-700 dark:text-red-300"
+                      } text-base`}
+                    >
+                      <span className="font-semibold">
+                        Correct answer
+                        {direction === "en-to-geo" &&
+                        currentWord.georgian_definitions.length > 1
+                          ? "s"
+                          : ""}
+                        :
+                      </span>{" "}
+                      {direction === "en-to-geo"
+                        ? currentWord.georgian_definitions.join(", ")
+                        : currentWord.english_word}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-3 pt-4">
+                {!showResult ? (
+                  <button
+                    onClick={handleCheckAnswer}
+                    disabled={answerInputs.every((a) => !a.trim())}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold text-base hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                  >
+                    Check Answer
+                  </button>
+                ) : (
+                  <button
+                    onClick={proceedToNextWord}
+                    className={`flex-1 px-6 py-3 rounded-2xl font-bold text-base transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 ${
+                      wordQueue.length <= 1
+                        ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700"
+                        : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                    }`}
+                  >
+                    {wordQueue.length <= 1 ? "Finish Practice" : "Next Word"}
+                    {wordQueue.length <= 1 ? (
+                      <Check size={20} />
+                    ) : (
+                      <ChevronRight size={20} />
+                    )}
+                  </button>
+                )}
+
+                {wordQueue.length > 1 && (
+                  <button
+                    onClick={() => setShowFinishModal(true)}
+                    className="px-4 py-3 rounded-2xl font-semibold border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-white/70 dark:bg-gray-800/70 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200"
+                  >
+                    Finish
                   </button>
                 )}
               </div>
-            ))}
-
-            {showResult && (
-              <div
-                className={`p-6 rounded-2xl border-2 transition-all duration-300 transform ${
-                  isCorrect
-                    ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-lg shadow-green-500/10"
-                    : "bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-red-200 dark:border-red-800 shadow-lg shadow-red-500/10"
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className={`p-2 rounded-full ${
-                      isCorrect ? "bg-green-500" : "bg-red-500"
-                    }`}
-                  >
-                    {isCorrect ? (
-                      <Check className="text-white" size={24} />
-                    ) : (
-                      <X className="text-white" size={24} />
-                    )}
-                  </div>
-                  <span
-                    className={`text-xl font-bold ${
-                      isCorrect
-                        ? "text-green-800 dark:text-green-200"
-                        : "text-red-800 dark:text-red-200"
-                    }`}
-                  >
-                    {isCorrect ? "Great job!" : "Not quite right"}
-                  </span>
-                </div>
-                <div
-                  className={`${
-                    isCorrect
-                      ? "text-green-700 dark:text-green-300"
-                      : "text-red-700 dark:text-red-300"
-                  } text-base`}
-                >
-                  <span className="font-semibold">
-                    Correct answer
-                    {direction === "en-to-geo" &&
-                    currentWord.georgian_definitions.length > 1
-                      ? "s"
-                      : ""}
-                    :
-                  </span>{" "}
-                  {direction === "en-to-geo"
-                    ? currentWord.georgian_definitions.join(", ")
-                    : currentWord.english_word}
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col md:flex-row gap-3 pt-4">
-              {!showResult ? (
-                <button
-                  onClick={handleCheckAnswer}
-                  disabled={answerInputs.every((a) => !a.trim())}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold text-base hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-                >
-                  Check Answer
-                </button>
-              ) : (
-                <button
-                  onClick={proceedToNextWord}
-                  className={`flex-1 px-6 py-3 rounded-2xl font-bold text-base transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 ${
-                    wordQueue.length <= 1
-                      ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700"
-                      : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-                  }`}
-                >
-                  {wordQueue.length <= 1 ? "Finish Practice" : "Next Word"}
-                  {wordQueue.length <= 1 ? (
-                    <Check size={20} />
-                  ) : (
-                    <ChevronRight size={20} />
-                  )}
-                </button>
-              )}
-
-              <button
-                onClick={() => setShowFinishModal(true)}
-                className="px-4 py-3 rounded-2xl font-semibold border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-white/70 dark:bg-gray-800/70 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200"
-              >
-                Finish
-              </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {showResetModal && (
@@ -747,15 +764,9 @@ export default function FreeMode() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
           <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-lg transition-all duration-300">
             <div className="flex justify-between items-start mb-6">
-              <h3 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Practice Summary
               </h3>
-              <button
-                onClick={handleFinishClose}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              >
-                <X />
-              </button>
             </div>
 
             <div className="text-center mb-6">
@@ -770,7 +781,7 @@ export default function FreeMode() {
               </div>
             </div>
 
-            <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-6 mb-6 text-center">
+            <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-slate-50 dark:from-blue-900/20 dark:via-purple-900/20 dark:to-slate-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6 mb-6 text-center">
               <div className="text-lg text-gray-700 dark:text-gray-300">
                 {successRate >= 80 && "Fantastic performance! Keep it up!"}
                 {successRate >= 60 &&
@@ -787,7 +798,7 @@ export default function FreeMode() {
             <div className="flex justify-end">
               <button
                 onClick={handleFinishClose}
-                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-bold hover:from-green-700 hover:to-emerald-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
               >
                 Close & Save
               </button>
