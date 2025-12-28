@@ -26,6 +26,7 @@ type StoredSession = {
   totalAttempts: number;
   mistakes: MistakeWithId[];
   attemptedWordIds?: string[];
+  hasChecked?: boolean;
 };
 
 type MistakeWithId = TestMistake & { word_id?: string };
@@ -65,6 +66,7 @@ export default function FreeMode() {
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const previousAllowReguess = useRef(allowReguess);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const nextButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
@@ -138,6 +140,7 @@ export default function FreeMode() {
           setMistakes(parsed.mistakes ?? []);
           setWordQueue(parsed.queueIds ?? []);
           setAttemptedWordIds(parsed.attemptedWordIds ?? []);
+          setHasChecked(parsed.hasChecked ?? false);
         }
       } catch (err) {
         console.error("Error loading saved session", err);
@@ -196,6 +199,7 @@ export default function FreeMode() {
       totalAttempts,
       mistakes,
       attemptedWordIds,
+      hasChecked,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [
@@ -209,6 +213,7 @@ export default function FreeMode() {
     user,
     wordQueue,
     sessionInitialized,
+    hasChecked,
   ]);
 
   useEffect(() => {
@@ -253,7 +258,7 @@ export default function FreeMode() {
     let statuses: InputStatus[] = trimmedInputs.map(() => "incorrect");
     let correct = false;
 
-    if (isIrregularActive) {
+    if (isIrregularActive && direction === "geo-to-en") {
       const targetForms = [
         currentWord.english_word,
         currentWord.past_simple,
@@ -307,6 +312,11 @@ export default function FreeMode() {
         },
       ]);
     }
+
+    setTimeout(() => {
+      inputRefs.current.forEach((ref) => ref?.blur());
+      nextButtonRef.current?.focus();
+    }, 0);
   };
 
   const proceedToNextWord = () => {
@@ -725,11 +735,6 @@ export default function FreeMode() {
 
                           if (!hasChecked) {
                             handleCheckAnswer();
-
-                            // remove focus so border colors apply immediately
-                            setTimeout(() => {
-                              inputRefs.current.forEach((ref) => ref?.blur());
-                            }, 0);
                           } else {
                             proceedToNextWord();
                           }
@@ -776,6 +781,7 @@ export default function FreeMode() {
                   </button>
                 ) : (
                   <button
+                    ref={nextButtonRef}
                     onClick={proceedToNextWord}
                     className={`flex-1 px-6 py-3 rounded-2xl font-bold text-base transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 ${
                       wordQueue.length <= 1
