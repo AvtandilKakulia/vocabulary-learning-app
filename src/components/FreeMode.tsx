@@ -67,6 +67,7 @@ export default function FreeMode() {
   const previousAllowReguess = useRef(allowReguess);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
+  const shouldFocusInput = useRef(false);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
@@ -324,6 +325,7 @@ export default function FreeMode() {
     setHasChecked(false);
     setInputStatuses(["idle"]);
     setAnswerInputs([""]);
+    shouldFocusInput.current = true;
 
     let updatedQueue = wordQueue.slice(1);
     if (!isCorrect && allowReguess) {
@@ -414,6 +416,16 @@ export default function FreeMode() {
     setInputStatuses(Array(inputCount).fill("idle"));
     setHasChecked(false);
   }, [currentWord?.id, direction, isIrregularActive]);
+
+  useEffect(() => {
+    if (!shouldFocusInput.current) return;
+
+    const firstInput = inputRefs.current[0];
+    if (firstInput) {
+      firstInput.focus();
+      shouldFocusInput.current = false;
+    }
+  }, [answerInputs]);
 
   useEffect(() => {
     if (!previousAllowReguess.current && allowReguess) {
@@ -519,7 +531,7 @@ export default function FreeMode() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleDirectionChange("en-to-geo")}
-                className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
+                className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                   direction === "en-to-geo"
                     ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg"
                     : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -529,7 +541,7 @@ export default function FreeMode() {
               </button>
               <button
                 onClick={() => handleDirectionChange("geo-to-en")}
-                className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
+                className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                   direction === "geo-to-en"
                     ? "bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg"
                     : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -549,7 +561,7 @@ export default function FreeMode() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleOrderChange("random")}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                       orderMode === "random"
                         ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow"
                         : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
@@ -559,7 +571,7 @@ export default function FreeMode() {
                   </button>
                   <button
                     onClick={() => handleOrderChange("db-order")}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                       orderMode === "db-order"
                         ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow"
                         : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
@@ -751,7 +763,7 @@ export default function FreeMode() {
                       (idx === answerInputs.length - 1 ? (
                         <button
                           onClick={addInput}
-                          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl"
+                          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
                           aria-label="Add another answer"
                         >
                           <Plus size={18} />
@@ -759,7 +771,7 @@ export default function FreeMode() {
                       ) : (
                         <button
                           onClick={() => removeInput(idx)}
-                          className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 shadow disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
                           aria-label="Remove answer"
                           disabled={hasChecked}
                         >
@@ -775,7 +787,7 @@ export default function FreeMode() {
                   <button
                     onClick={handleCheckAnswer}
                     disabled={answerInputs.every((a) => !a.trim())}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold text-base hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold text-base hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
                   >
                     Check Answer
                   </button>
@@ -783,7 +795,7 @@ export default function FreeMode() {
                   <button
                     ref={nextButtonRef}
                     onClick={proceedToNextWord}
-                    className={`flex-1 px-6 py-3 rounded-2xl font-bold text-base transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 ${
+                    className={`flex-1 px-6 py-3 rounded-2xl font-bold text-base transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                       wordQueue.length <= 1
                         ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700"
                         : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
@@ -802,7 +814,7 @@ export default function FreeMode() {
                   <button
                     onClick={handleFinishRequest}
                     disabled={totalAttempts === 0}
-                    className="px-4 py-3 rounded-2xl font-semibold border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-white/70 dark:bg-gray-800/70 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-3 rounded-2xl font-semibold border-2 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-white/70 dark:bg-gray-800/70 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
                   >
                     Finish
                   </button>
@@ -851,14 +863,14 @@ export default function FreeMode() {
             <div className="flex gap-4">
               <button
                 onClick={() => setShowFinishConfirm(false)}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+                className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmFinish}
                 disabled={totalAttempts === 0}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Finish
               </button>
@@ -929,13 +941,13 @@ export default function FreeMode() {
             <div className="flex gap-4">
               <button
                 onClick={() => setShowResetModal(false)}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+                className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Cancel
               </button>
               <button
                 onClick={handleReset}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Reset Progress
               </button>
@@ -982,7 +994,7 @@ export default function FreeMode() {
             <div className="flex justify-end">
               <button
                 onClick={handleFinishClose}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Close & Save
               </button>
