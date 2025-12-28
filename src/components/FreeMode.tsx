@@ -65,6 +65,7 @@ export default function FreeMode() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const previousAllowReguess = useRef(allowReguess);
+  const restoredHasCheckedRef = useRef(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusInput = useRef(false);
@@ -141,7 +142,9 @@ export default function FreeMode() {
           setMistakes(parsed.mistakes ?? []);
           setWordQueue(parsed.queueIds ?? []);
           setAttemptedWordIds(parsed.attemptedWordIds ?? []);
-          setHasChecked(parsed.hasChecked ?? false);
+          const savedHasChecked = parsed.hasChecked ?? false;
+          setHasChecked(savedHasChecked);
+          restoredHasCheckedRef.current = savedHasChecked;
         }
       } catch (err) {
         console.error("Error loading saved session", err);
@@ -216,6 +219,21 @@ export default function FreeMode() {
     sessionInitialized,
     hasChecked,
   ]);
+
+  useEffect(() => {
+    if (
+      !sessionInitialized ||
+      !restoredHasCheckedRef.current ||
+      !hasChecked ||
+      !currentWord
+    ) {
+      return;
+    }
+
+    setWordQueue((prev) => prev.slice(1));
+    setHasChecked(false);
+    restoredHasCheckedRef.current = false;
+  }, [currentWord, hasChecked, sessionInitialized]);
 
   useEffect(() => {
     if (!sessionInitialized || loading) return;
