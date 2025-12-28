@@ -500,73 +500,6 @@ export default function FreeMode() {
           </p>
         </div>
 
-        <div className="mb-8">
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-4 mb-2">
-                  <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    {totalAttempts}
-                  </div>
-                  <div className="text-2xl text-gray-400">/</div>
-                  <div className="text-3xl font-bold text-gray-600 dark:text-gray-400">
-                    {correctCount}
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Total words in dictionary:{" "}
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">
-                    {uniqueWordCount}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-20 h-20">
-                    <svg
-                      className="w-full h-full transform -rotate-90"
-                      viewBox="0 0 36 36"
-                    >
-                      <path
-                        d="M18 2.0845
-                          a 15.9155 15.9155 0 0 1 0 31.831
-                          a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        className="text-gray-200 dark:text-gray-700"
-                      />
-                      <path
-                        d="M18 2.0845
-                          a 15.9155 15.9155 0 0 1 0 31.831
-                          a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        strokeWidth="3"
-                        strokeDasharray={`${successRate}, 100`}
-                        className="text-blue-600 dark:text-blue-400"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {successRate}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setShowResetModal(true)}
-                  className="px-4 py-2 text-sm bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  Reset Progress
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
@@ -649,6 +582,73 @@ export default function FreeMode() {
           </div>
         </div>
 
+        <div className="mb-8">
+          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-4 mb-2">
+                  <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    {totalAttempts}
+                  </div>
+                  <div className="text-2xl text-gray-400">/</div>
+                  <div className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+                    {correctCount}
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Total words in dictionary:{" "}
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
+                    {uniqueWordCount}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="w-20 h-20">
+                    <svg
+                      className="w-full h-full transform -rotate-90"
+                      viewBox="0 0 36 36"
+                    >
+                      <path
+                        d="M18 2.0845
+                          a 15.9155 15.9155 0 0 1 0 31.831
+                          a 15.9155 15.9155 0 0 1 0 -31.831"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        className="text-gray-200 dark:text-gray-700"
+                      />
+                      <path
+                        d="M18 2.0845
+                          a 15.9155 15.9155 0 0 1 0 31.831
+                          a 15.9155 15.9155 0 0 1 0 -31.831"
+                        fill="none"
+                        strokeWidth="3"
+                        strokeDasharray={`${successRate}, 100`}
+                        className="text-blue-600 dark:text-blue-400"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        {successRate}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowResetModal(true)}
+                  className="px-4 py-2 text-sm bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Reset Progress
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {currentWord && (
           <div className="relative bg-white/90 dark:bg-gray-800/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
@@ -718,10 +718,11 @@ export default function FreeMode() {
                         });
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && !hasChecked) {
-                          handleCheckAnswer();
-                        } else if (e.key === "Enter" && hasChecked) {
-                          proceedToNextWord();
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (!hasChecked) {
+                            handleCheckAnswer();
+                          }
                         }
                       }}
                       placeholder={
