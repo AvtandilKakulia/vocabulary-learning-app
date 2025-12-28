@@ -140,11 +140,19 @@ export default function FreeMode() {
           setCorrectCount(parsed.correctCount ?? 0);
           setTotalAttempts(parsed.totalAttempts ?? 0);
           setMistakes(parsed.mistakes ?? []);
-          setWordQueue(parsed.queueIds ?? []);
+          const restoredQueue = parsed.queueIds ?? [];
           setAttemptedWordIds(parsed.attemptedWordIds ?? []);
+
           const savedHasChecked = parsed.hasChecked ?? false;
-          setHasChecked(savedHasChecked);
-          restoredHasCheckedRef.current = savedHasChecked;
+          if (savedHasChecked && restoredQueue.length > 0) {
+            setWordQueue(restoredQueue.slice(1));
+            setHasChecked(false);
+            restoredHasCheckedRef.current = false;
+          } else {
+            setWordQueue(restoredQueue);
+            setHasChecked(savedHasChecked);
+            restoredHasCheckedRef.current = false;
+          }
         }
       } catch (err) {
         console.error("Error loading saved session", err);
@@ -219,21 +227,6 @@ export default function FreeMode() {
     sessionInitialized,
     hasChecked,
   ]);
-
-  useEffect(() => {
-    if (
-      !sessionInitialized ||
-      !restoredHasCheckedRef.current ||
-      !hasChecked ||
-      !currentWord
-    ) {
-      return;
-    }
-
-    setWordQueue((prev) => prev.slice(1));
-    setHasChecked(false);
-    restoredHasCheckedRef.current = false;
-  }, [currentWord, hasChecked, sessionInitialized]);
 
   useEffect(() => {
     if (!sessionInitialized || loading) return;
@@ -420,7 +413,7 @@ export default function FreeMode() {
   };
 
   useEffect(() => {
-    if (!currentWord) {
+    if (!currentWord || !sessionInitialized) {
       setAnswerInputs([""]);
       setInputStatuses(["idle"]);
       setHasChecked(false);
