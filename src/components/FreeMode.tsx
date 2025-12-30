@@ -116,7 +116,7 @@ export default function FreeMode() {
 
   useEffect(() => {
     let frame: number;
-    const duration = 400;
+    const duration = 550;
     const start = performance.now();
     const startValue = animatedRateRef.current;
     const targetValue = successRate;
