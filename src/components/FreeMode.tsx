@@ -116,12 +116,12 @@ export default function FreeMode() {
 
   useEffect(() => {
     let frame: number;
-    const duration = 550;
+    const duration = 650;
     const start = performance.now();
     const startValue = animatedRateRef.current;
     const targetValue = successRate;
 
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 4);
 
     const animate = (now: number) => {
       const elapsed = now - start;
