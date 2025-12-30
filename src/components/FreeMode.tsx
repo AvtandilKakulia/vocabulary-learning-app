@@ -293,9 +293,14 @@ export default function FreeMode() {
 
   const handleDirectionChange = (newDirection: Direction) => {
     setDirection(newDirection);
-    setAnswerInputs([""]);
-    setInputStatuses(["idle"]);
-    setHasChecked(false);
+
+    if (hasChecked) {
+      proceedToNextWord();
+    } else {
+      setAnswerInputs([""]);
+      setInputStatuses(["idle"]);
+      setHasChecked(false);
+    }
   };
 
   const handleOrderChange = (newOrder: OrderMode) => {
