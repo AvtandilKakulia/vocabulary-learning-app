@@ -104,6 +104,25 @@ export default function FreeMode() {
     return "💔";
   };
 
+  const getProgressColor = (rate: number) => {
+    if (rate >= 85) return "text-green-500 dark:text-green-400";
+    if (rate >= 60) return "text-blue-500 dark:text-blue-400";
+    if (rate >= 40) return "text-amber-500 dark:text-amber-400";
+    return "text-orange-500 dark:text-orange-400";
+  };
+
+  const progressDasharray = useMemo(() => {
+    const circumference = 100;
+    const progress = Math.max(0, Math.min(successRate, 100));
+    const filled = (progress / 100) * circumference;
+    return `${filled} ${circumference}`;
+  }, [successRate]);
+
+  const progressColorClass = useMemo(
+    () => getProgressColor(successRate),
+    [successRate]
+  );
+
   const loadWords = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -658,9 +677,10 @@ export default function FreeMode() {
                           a 15.9155 15.9155 0 0 1 0 31.831
                           a 15.9155 15.9155 0 0 1 0 -31.831"
                         fill="none"
+                        stroke="currentColor"
                         strokeWidth="3"
-                        strokeDasharray={`${successRate}, 100`}
-                        className="text-blue-600 dark:text-blue-400"
+                        strokeDasharray={progressDasharray}
+                        className={progressColorClass}
                         strokeLinecap="round"
                       />
                     </svg>
