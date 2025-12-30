@@ -680,6 +680,7 @@ export default function FreeMode() {
                         stroke="currentColor"
                         strokeWidth="3"
                         strokeDasharray={progressDasharray}
+                        strokeDashoffset="25"
                         className={progressColorClass}
                         strokeLinecap="round"
                       />
