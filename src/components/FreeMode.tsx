@@ -660,10 +660,7 @@ export default function FreeMode() {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="w-20 h-20">
-                    <svg
-                      className="w-full h-full transform -rotate-90"
-                      viewBox="0 0 36 36"
-                    >
+                    <svg className="w-full h-full" viewBox="0 0 36 36">
                       <path
                         d="M18 2.0845
                           a 15.9155 15.9155 0 0 1 0 31.831
