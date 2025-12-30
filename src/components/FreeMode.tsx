@@ -116,7 +116,7 @@ export default function FreeMode() {
     const circumference = 2 * Math.PI * radius;
     const progress = Math.max(0, Math.min(successRate, 100));
     const filled = (progress / 100) * circumference;
-    return `${filled} ${circumference}`;
+    return `${filled} ${circumference - filled}`;
   }, [successRate]);
 
   const progressColorClass = useMemo(
@@ -678,9 +678,6 @@ export default function FreeMode() {
                         stroke="currentColor"
                         strokeWidth="3"
                         strokeDasharray={progressDasharray}
-                        strokeDashoffset={
-                          progressDasharray ? (2 * Math.PI * 15.9155) / 4 : 0
-                        }
                         className={progressColorClass}
                         strokeLinecap="round"
                       />
