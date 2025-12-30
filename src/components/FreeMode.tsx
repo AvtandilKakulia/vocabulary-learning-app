@@ -314,6 +314,7 @@ export default function FreeMode() {
   };
 
   const handleOrderChange = (newOrder: OrderMode) => {
+    if (newOrder === orderMode) return;
     setOrderMode(newOrder);
     setAnswerInputs([""]);
     setInputStatuses(["idle"]);
