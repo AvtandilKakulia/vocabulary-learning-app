@@ -11,6 +11,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { sanitizeDescription } from "../lib/sanitizeDescription";
 
 const STORAGE_KEY = "vocab_practice_session_state_v2";
+const directionChangeAfterCheckRef = useRef(false);
 
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
@@ -292,15 +293,11 @@ export default function FreeMode() {
   ]);
 
   const handleDirectionChange = (newDirection: Direction) => {
-    setDirection(newDirection);
-
     if (hasChecked) {
+      directionChangeAfterCheckRef.current = true;
       proceedToNextWord();
-    } else {
-      setAnswerInputs([""]);
-      setInputStatuses(["idle"]);
-      setHasChecked(false);
     }
+    setDirection(newDirection);
   };
 
   const handleOrderChange = (newOrder: OrderMode) => {
@@ -472,6 +469,12 @@ export default function FreeMode() {
       setAnswerInputs([""]);
       setInputStatuses(["idle"]);
       setHasChecked(false);
+      return;
+    }
+
+    // ⛔ Skip reset if direction change happened after checking
+    if (directionChangeAfterCheckRef.current) {
+      directionChangeAfterCheckRef.current = false;
       return;
     }
 
