@@ -70,6 +70,7 @@ export default function FreeMode() {
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusInput = useRef(false);
   const directionChangeAfterCheckRef = useRef(false);
+  const closeAndSaveButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
@@ -97,6 +98,9 @@ export default function FreeMode() {
   const [animatedRate, setAnimatedRate] = useState(successRate);
   const animatedRateRef = useRef(successRate);
 
+  const [animatedRate, setAnimatedRate] = useState(successRate);
+  const animatedRateRef = useRef(successRate);
+
   const getEmojiForRate = (rate: number) => {
     if (rate >= 90) return "🎉";
     if (rate >= 80) return "😄";
@@ -114,6 +118,8 @@ export default function FreeMode() {
     if (rate >= 40) return "text-amber-500 dark:text-amber-400";
     return "text-orange-500 dark:text-orange-400";
   };
+
+  const sessionCompleted = showFinishModal;
 
   useEffect(() => {
     let frame: number;
@@ -154,6 +160,16 @@ export default function FreeMode() {
     () => getProgressColor(successRate),
     [successRate]
   );
+
+  useEffect(() => {
+    if (!sessionCompleted) return;
+
+    const frame = requestAnimationFrame(() => {
+      closeAndSaveButtonRef.current?.focus();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [sessionCompleted]);
 
   const loadWords = useCallback(async () => {
     if (!user) return;
@@ -1023,7 +1039,7 @@ export default function FreeMode() {
         </div>
       )}
 
-      {showFinishModal && (
+      {sessionCompleted && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
           <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 p-8 w-full max-w-lg transition-all duration-300">
             <div className="flex justify-between items-start mb-6">
@@ -1060,6 +1076,7 @@ export default function FreeMode() {
 
             <div className="flex justify-end">
               <button
+                ref={closeAndSaveButtonRef}
                 onClick={handleFinishClose}
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
