@@ -11,7 +11,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { sanitizeDescription } from "../lib/sanitizeDescription";
 
 const STORAGE_KEY = "vocab_practice_session_state_v2";
-const directionChangeAfterCheckRef = useRef(false);
 
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
@@ -70,6 +69,7 @@ export default function FreeMode() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusInput = useRef(false);
+  const directionChangeAfterCheckRef = useRef(false);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
