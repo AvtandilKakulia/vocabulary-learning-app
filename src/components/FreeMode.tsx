@@ -93,6 +93,9 @@ export default function FreeMode() {
   const successRate =
     totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
 
+  const [animatedRate, setAnimatedRate] = useState(successRate);
+  const animatedRateRef = useRef(successRate);
+
   const getEmojiForRate = (rate: number) => {
     if (rate >= 90) return "🎉";
     if (rate >= 80) return "😄";
@@ -111,13 +114,40 @@ export default function FreeMode() {
     return "text-orange-500 dark:text-orange-400";
   };
 
+  useEffect(() => {
+    let frame: number;
+    const duration = 400;
+    const start = performance.now();
+    const startValue = animatedRateRef.current;
+    const targetValue = successRate;
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const animate = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = easeOutCubic(progress);
+      const value = startValue + (targetValue - startValue) * eased;
+      animatedRateRef.current = value;
+      setAnimatedRate(value);
+
+      if (progress < 1) {
+        frame = requestAnimationFrame(animate);
+      }
+    };
+
+    frame = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(frame);
+  }, [successRate]);
+
   const progressDasharray = useMemo(() => {
     const radius = 15.9155;
     const circumference = 2 * Math.PI * radius;
-    const progress = Math.max(0, Math.min(successRate, 100));
+    const progress = Math.max(0, Math.min(animatedRate, 100));
     const filled = (progress / 100) * circumference;
     return `${filled} ${circumference - filled}`;
-  }, [successRate]);
+  }, [animatedRate]);
 
   const progressColorClass = useMemo(
     () => getProgressColor(successRate),
