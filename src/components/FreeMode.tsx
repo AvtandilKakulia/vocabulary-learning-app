@@ -98,9 +98,6 @@ export default function FreeMode() {
   const [animatedRate, setAnimatedRate] = useState(successRate);
   const animatedRateRef = useRef(successRate);
 
-  const [animatedRate, setAnimatedRate] = useState(successRate);
-  const animatedRateRef = useRef(successRate);
-
   const getEmojiForRate = (rate: number) => {
     if (rate >= 90) return "🎉";
     if (rate >= 80) return "😄";
