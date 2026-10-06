@@ -68,14 +68,13 @@ export function useWords() {
     const term = debouncedSearchTerm.trim();
     try {
       if (term) {
-        const searchQuery = applySorting(
-          supabase.rpc("search_words", {
-            p_user_id: user.id,
-            p_term: term,
-            p_offset: page * pageSize,
-            p_limit: pageSize,
-          })
-        );
+        const searchQuery = supabase.rpc("search_words", {
+          p_user_id: user.id,
+          p_term: term,
+          p_offset: page * pageSize,
+          p_limit: pageSize,
+          p_sort: sortOption,
+        });
 
         const [searchResult, countResult] = await Promise.all([
           searchQuery,
@@ -114,7 +113,7 @@ export function useWords() {
     } finally {
       setLoading(false);
     }
-  }, [applySorting, debouncedSearchTerm, page, pageSize, user]);
+  }, [applySorting, debouncedSearchTerm, page, pageSize, sortOption, user]);
 
   useEffect(() => {
     const searchChanged = debouncedSearchTerm !== prevSearchTermRef.current;
