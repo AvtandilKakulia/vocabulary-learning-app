@@ -31,7 +31,7 @@ export default function WordManagement() {
     loadWords,
     deleteWord,
     bulkDeleteWords,
-    checkExistingEnglishWord,
+    checkExistingEnglishWords,
     addWord,
     updateWord,
   } = useWords();
@@ -47,8 +47,10 @@ export default function WordManagement() {
   const [deleting, setDeleting] = useState(false);
 
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-  const [duplicateWord, setDuplicateWord] = useState<Word | null>(null);
+  const [duplicateWords, setDuplicateWords] = useState<Word[]>([]);
   const [newWordData, setNewWordData] = useState<WordFormData | null>(null);
+  const [addingMeaning, setAddingMeaning] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [viewingWord, setViewingWord] = useState<Word | null>(null);
 
   /* ---------------------------------------------
@@ -80,68 +82,34 @@ export default function WordManagement() {
   /* ---------------------------------------------
    * Duplicate handlers
    * -------------------------------------------*/
-  const handleCopyDefinition = async () => {
-    if (!duplicateWord || !newWordData) return;
-
-    try {
-      const result = await addWord({
-        ...newWordData,
-        georgianDefs: [...duplicateWord.georgian_definitions],
-      });
-
-      if (result.duplicateWord) {
-        setDuplicateWord(result.duplicateWord);
-        setNewWordData({
-          ...newWordData,
-          georgianDefs: [...duplicateWord.georgian_definitions],
-        });
-        setShowDuplicateModal(true);
-        return;
-      }
-
-      await loadWords();
-      setShowAddModal(false);
-      setEditingWord(null);
-    } catch (error: any) {
-      alert("Error adding word: " + error.message);
-    } finally {
-      setShowDuplicateModal(false);
-      setDuplicateWord(null);
-      setNewWordData(null);
-    }
-  };
-
-  const handleIgnoreDuplicate = async () => {
-    if (!newWordData) return;
-
-    try {
-      const result = await addWord(newWordData);
-
-      if (result.duplicateWord) {
-        setDuplicateWord(result.duplicateWord);
-        setNewWordData(newWordData);
-        setShowDuplicateModal(true);
-        return;
-      }
-
-      await loadWords();
-      setShowAddModal(false);
-      setEditingWord(null);
-    } catch (error: any) {
-      alert("Error adding word: " + error.message);
-    } finally {
-      setShowDuplicateModal(false);
-      setDuplicateWord(null);
-      setNewWordData(null);
-    }
-  };
-
-  const handleCancelDuplicate = () => {
+  const closeDuplicateWarning = () => {
     setShowDuplicateModal(false);
-    setDuplicateWord(null);
+    setDuplicateWords([]);
     setNewWordData(null);
-    setShowAddModal(false);
-    setEditingWord(null);
+    setDuplicateError(null);
+  };
+
+  const handleAddAnotherMeaning = async () => {
+    if (!newWordData || addingMeaning) return;
+
+    setAddingMeaning(true);
+    setDuplicateError(null);
+    try {
+      await addWord(newWordData);
+      closeDuplicateWarning();
+      setShowAddModal(false);
+      setEditingWord(null);
+      await loadWords();
+    } catch (error: any) {
+      setDuplicateError("Error adding word: " + error.message);
+    } finally {
+      setAddingMeaning(false);
+    }
+  };
+
+  const handleEditExisting = (word: Word) => {
+    closeDuplicateWarning();
+    setEditingWord(word);
   };
 
   /* ---------------------------------------------
@@ -297,6 +265,7 @@ export default function WordManagement() {
       {showAddModal && (
         <WordModal
           word={editingWord}
+          hidden={showDuplicateModal}
           onClose={() => {
             setShowAddModal(false);
             setEditingWord(null);
@@ -306,14 +275,15 @@ export default function WordManagement() {
             setEditingWord(null);
             await loadWords();
           }}
-          onDuplicateDetected={(existingWord, wordData) => {
-            setDuplicateWord(existingWord);
+          onDuplicateDetected={(existingWords, wordData) => {
+            setDuplicateWords(existingWords);
             setNewWordData(wordData);
+            setDuplicateError(null);
             setShowDuplicateModal(true);
           }}
           addWord={addWord}
           updateWord={updateWord}
-          checkExistingEnglishWord={checkExistingEnglishWord}
+          checkExistingEnglishWords={checkExistingEnglishWords}
         />
       )}
 
@@ -347,12 +317,14 @@ export default function WordManagement() {
         />
       )}
 
-      {showDuplicateModal && duplicateWord && (
+      {showDuplicateModal && duplicateWords.length > 0 && (
         <DuplicateWordModal
-          existingWord={duplicateWord}
-          onMakeUnique={handleIgnoreDuplicate}
-          onCopy={handleCopyDefinition}
-          onCancel={handleCancelDuplicate}
+          existingWords={duplicateWords}
+          adding={addingMeaning}
+          error={duplicateError}
+          onAddAnotherMeaning={handleAddAnotherMeaning}
+          onEditExisting={handleEditExisting}
+          onCancel={closeDuplicateWarning}
         />
       )}
     </div>

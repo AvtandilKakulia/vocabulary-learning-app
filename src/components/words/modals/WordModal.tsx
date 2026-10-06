@@ -3,28 +3,30 @@ import { AlertCircle, ArrowRight, Bold, Palette, Plus, X } from "lucide-react";
 import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
-import { AddWordResult, WordFormData } from "../useWords";
+import { WordFormData } from "../useWords";
 import { partOfSpeechStyles } from "../partOfSpeechStyles";
 import ModalPortal from "./ModalPortal";
 
 interface WordModalProps {
   word: Word | null;
+  hidden?: boolean;
   onClose: () => void;
   onSave: () => void;
-  onDuplicateDetected: (existingWord: Word, wordData: WordFormData) => void;
-  addWord: (wordData: WordFormData) => Promise<AddWordResult>;
+  onDuplicateDetected: (existingWords: Word[], wordData: WordFormData) => void;
+  addWord: (wordData: WordFormData) => Promise<void>;
   updateWord: (wordId: string, wordData: WordFormData) => Promise<void>;
-  checkExistingEnglishWord: (englishWord: string) => Promise<Word | null>;
+  checkExistingEnglishWords: (englishWord: string) => Promise<Word[]>;
 }
 
 export default function WordModal({
   word,
+  hidden = false,
   onClose,
   onSave,
   onDuplicateDetected,
   addWord,
   updateWord,
-  checkExistingEnglishWord,
+  checkExistingEnglishWords,
 }: WordModalProps) {
   const [englishWord, setEnglishWord] = useState(word?.english_word || "");
   const [partOfSpeech, setPartOfSpeech] = useState(
@@ -174,18 +176,13 @@ export default function WordModal({
         await updateWord(word.id, wordData);
         onSave();
       } else {
-        const existingWord = await checkExistingEnglishWord(englishWord);
-        if (existingWord) {
-          onDuplicateDetected(existingWord, wordData);
+        const existingWords = await checkExistingEnglishWords(englishWord);
+        if (existingWords.length > 0) {
+          onDuplicateDetected(existingWords, wordData);
           return;
         }
 
-        const result = await addWord(wordData);
-        if (result.duplicateWord) {
-          onDuplicateDetected(result.duplicateWord, wordData);
-          return;
-        }
-
+        await addWord(wordData);
         onSave();
       }
     } catch (error: any) {
@@ -254,6 +251,9 @@ export default function WordModal({
       setPastParticiple("");
     }
   }, [partOfSpeech]);
+
+  // Keep the draft state mounted while the duplicate warning is displayed.
+  if (hidden) return null;
 
   return (
     <ModalPortal>
