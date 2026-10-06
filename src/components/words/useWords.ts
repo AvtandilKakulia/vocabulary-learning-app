@@ -4,15 +4,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { normalizeEnglishWord } from "../../lib/normalizeEnglishWord";
 
-const isUniqueConstraintError = (error: any) => {
-  if (!error) return false;
-  return (
-    error.code === "23505" ||
-    (typeof error.message === "string" &&
-      error.message.includes("words_user_word_unique"))
-  );
-};
-
 export interface WordFormData {
   englishWord: string;
   georgianDefs: string[];
@@ -21,10 +12,6 @@ export interface WordFormData {
   isIrregularVerb: boolean;
   pastSimple: string | null;
   pastParticiple: string | null;
-}
-
-export interface AddWordResult {
-  duplicateWord?: Word | null;
 }
 
 export const pageSizeOptions = [10, 25, 50, 100];
@@ -160,77 +147,44 @@ export function useWords() {
     [user]
   );
 
-  const checkExistingEnglishWord = useCallback(
-    async (englishWord: string) => {
-      if (!user) return null;
+  const checkExistingEnglishWords = useCallback(
+    async (englishWord: string): Promise<Word[]> => {
+      if (!user) return [];
 
       const { data: existingWords, error: checkError } = await supabase
         .from("words")
         .select("*")
         .eq("user_id", user.id)
-        .ilike("english_word", englishWord.trim());
+        .eq("english_word_norm", normalizeEnglishWord(englishWord))
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
 
       if (checkError) throw checkError;
-      return existingWords && existingWords.length > 0
-        ? existingWords[0]
-        : null;
-    },
-    [user]
-  );
-
-  const findExistingByNormalized = useCallback(
-    async (englishWord: string) => {
-      if (!user) return null;
-
-      const normalized = normalizeEnglishWord(englishWord);
-      const { data: existingWord } = await supabase
-        .from("words")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("english_word_norm", normalized)
-        .maybeSingle();
-
-      return existingWord || null;
+      return existingWords || [];
     },
     [user]
   );
 
   const addWord = useCallback(
-    async (wordData: WordFormData): Promise<AddWordResult> => {
-      if (!user) return {};
+    async (wordData: WordFormData): Promise<void> => {
+      if (!user) return;
 
-      try {
-        const { error } = await supabase.from("words").insert({
-          user_id: user.id,
-          english_word: wordData.englishWord,
-          part_of_speech: wordData.partOfSpeech || "unspecified",
-          is_irregular_verb: wordData.isIrregularVerb,
-          past_simple: wordData.pastSimple,
-          past_participle: wordData.pastParticiple,
-          georgian_definitions: wordData.georgianDefs.filter(
-            (d) => d.trim() !== ""
-          ),
-          description: wordData.description || null,
-        });
+      const { error } = await supabase.from("words").insert({
+        user_id: user.id,
+        english_word: wordData.englishWord,
+        part_of_speech: wordData.partOfSpeech || "unspecified",
+        is_irregular_verb: wordData.isIrregularVerb,
+        past_simple: wordData.pastSimple,
+        past_participle: wordData.pastParticiple,
+        georgian_definitions: wordData.georgianDefs.filter(
+          (d) => d.trim() !== ""
+        ),
+        description: wordData.description || null,
+      });
 
-        if (error) {
-          if (isUniqueConstraintError(error)) {
-            const existingWord = await findExistingByNormalized(
-              wordData.englishWord
-            );
-            if (existingWord) {
-              return { duplicateWord: existingWord };
-            }
-          }
-          throw error;
-        }
-
-        return {};
-      } catch (error) {
-        throw error;
-      }
+      if (error) throw error;
     },
-    [findExistingByNormalized, user]
+    [user]
   );
 
   const updateWord = useCallback(
@@ -274,7 +228,7 @@ export function useWords() {
     loadWords,
     deleteWord,
     bulkDeleteWords,
-    checkExistingEnglishWord,
+    checkExistingEnglishWords,
     addWord,
     updateWord,
   };
