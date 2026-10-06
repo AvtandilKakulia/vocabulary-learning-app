@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { supabase, Word, TestMistake } from '../lib/supabase';
+import React, { useState, useRef } from 'react';
+import { supabase, Word, TestHistory, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Check, X, RotateCcw } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
@@ -7,6 +7,15 @@ import { sanitizeDescription } from '../lib/sanitizeDescription';
 interface TestWord extends Word {
   userAnswer: string;
   isCorrect: boolean;
+}
+
+type HistorySaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type TestHistoryInsert = Omit<TestHistory, 'id' | 'created_at'>;
+
+interface TestSession {
+  userId: string;
+  result: TestHistoryInsert | null;
+  saveStatus: HistorySaveStatus;
 }
 
 export default function TestMode() {
@@ -22,6 +31,9 @@ export default function TestMode() {
   const [userAnswer, setUserAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>([]);
+  const [historySaveStatus, setHistorySaveStatus] = useState<HistorySaveStatus>('idle');
+  // Ref guards take effect immediately, before React can render disabled buttons.
+  const testSessionRef = useRef<TestSession | null>(null);
 
   function generateMultipleChoiceOptions(correctAnswer: string, allWords: Word[], direction: string) {
     const options = [correctAnswer.trim().toLowerCase()];
@@ -76,6 +88,8 @@ export default function TestMode() {
         isCorrect: false,
       }));
 
+      testSessionRef.current = { userId: user.id, result: null, saveStatus: 'idle' };
+      setHistorySaveStatus('idle');
       setTestWords(testData);
       setCurrentQuestion(0);
       setUserAnswer('');
@@ -101,7 +115,7 @@ export default function TestMode() {
   }
 
   function submitAnswer() {
-    if (!testWords[currentQuestion]) return;
+    if (!testWords[currentQuestion] || testSessionRef.current?.result) return;
 
     const currentWord = testWords[currentQuestion];
     const correctAnswer = direction === 'en-to-geo'
@@ -141,12 +155,65 @@ export default function TestMode() {
   }
 
   function finishTest(finalWords: TestWord[]) {
-    console.log('🏁 FINISHTEST() CALLED with', finalWords.length, 'words');
-    console.log('Setting stage to results');
+    const session = testSessionRef.current;
+    if (!session || session.result) return;
+
+    const mistakes: TestMistake[] = finalWords
+      .filter(word => word.isCorrect === false)
+      .map(word => ({
+        english_word: word.english_word,
+        user_answer: word.userAnswer,
+        correct_definitions: direction === 'en-to-geo'
+          ? [...word.georgian_definitions]
+          : [word.english_word],
+        question_prompt: direction === 'en-to-geo'
+          ? word.english_word
+          : word.georgian_definitions.join(', '),
+        description: word.description || null,
+      }));
+
+    // Capture the completed payload once, including the final answer and date.
+    // Retries use this same snapshot instead of rebuilding it from React state.
+    session.result = {
+      user_id: session.userId,
+      test_date: new Date().toISOString(),
+      test_direction: direction,
+      total_words: finalWords.length,
+      correct_count: finalWords.filter(word => word.isCorrect === true).length,
+      mistakes,
+    };
     setStage('results');
+    void saveTestResult();
+  }
+
+  async function saveTestResult() {
+    const session = testSessionRef.current;
+    if (!session?.result || session.saveStatus === 'saving' || session.saveStatus === 'saved') return;
+
+    session.saveStatus = 'saving';
+    setHistorySaveStatus('saving');
+    try {
+      if (!user || user.id !== session.userId) {
+        throw new Error('Sign in to the account that took this test to save its result.');
+      }
+
+      const { error } = await supabase.from('test_history').insert(session.result);
+      if (error) throw error;
+
+      session.saveStatus = 'saved';
+      setHistorySaveStatus('saved');
+    } catch (error) {
+      console.error('Error saving test result:', error);
+      session.saveStatus = 'error';
+      setHistorySaveStatus('error');
+    }
   }
 
   function resetTest() {
+    if (testSessionRef.current?.saveStatus === 'saving') return;
+
+    testSessionRef.current = null;
+    setHistorySaveStatus('idle');
     setStage('setup');
     setTestWords([]);
     setCurrentQuestion(0);
@@ -371,6 +438,22 @@ export default function TestMode() {
       <div className="max-w-3xl mx-auto space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">Test Results</h2>
 
+        <div className="text-sm">
+          <p role="status" aria-live="polite">
+            {historySaveStatus === 'saving' && 'Saving result...'}
+            {historySaveStatus === 'saved' && 'Result saved to History'}
+            {historySaveStatus === 'error' && 'Failed to save result'}
+          </p>
+          {historySaveStatus === 'error' && (
+            <button
+              onClick={() => void saveTestResult()}
+              className="mt-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Retry Save
+            </button>
+          )}
+        </div>
+
         <div className="bg-white rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
             <div className="text-6xl font-bold text-gray-900 mb-2">
@@ -423,7 +506,8 @@ export default function TestMode() {
 
           <button
             onClick={resetTest}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            disabled={historySaveStatus === 'saving'}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             <RotateCcw size={20} />
             Take Another Test

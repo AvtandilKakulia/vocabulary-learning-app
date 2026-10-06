@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, TestHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { sanitizeDescription } from '../lib/sanitizeDescription';
 import { Trash2, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 
 export default function History() {
@@ -436,8 +437,16 @@ export default function History() {
                             className="p-4 bg-red-50 border border-red-200 rounded-xl"
                           >
                             <div className="font-bold text-lg mb-2">
-                              {m.english_word}
+                              {m.question_prompt ?? m.english_word}
                             </div>
+                            {m.description?.trim() && (
+                              <div
+                                className="text-sm text-gray-600 mb-2 break-words"
+                                dangerouslySetInnerHTML={{
+                                  __html: sanitizeDescription(m.description),
+                                }}
+                              />
+                            )}
 
                             <div className="text-sm mb-1">
                               Your answer:{' '}
