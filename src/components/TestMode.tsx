@@ -166,6 +166,10 @@ export default function TestMode() {
         correct_definitions: direction === 'en-to-geo'
           ? [...word.georgian_definitions]
           : [word.english_word],
+        question_prompt: direction === 'en-to-geo'
+          ? word.english_word
+          : word.georgian_definitions.join(', '),
+        description: word.description || null,
       }));
 
     // Capture the completed payload once, including the final answer and date.

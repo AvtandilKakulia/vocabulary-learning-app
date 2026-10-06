@@ -35,4 +35,6 @@ export interface TestMistake {
   english_word: string;
   user_answer: string;
   correct_definitions: string[];
+  question_prompt?: string;
+  description?: string | null;
 }
