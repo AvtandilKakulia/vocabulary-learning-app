@@ -59,12 +59,15 @@ export default function History() {
   }
 
   async function deleteHistory(id: string) {
+    if (!user) return;
+
     setDeleting(true);
     try {
       const { error } = await supabase
         .from('test_history')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -83,14 +86,15 @@ export default function History() {
   }
 
   async function bulkDeleteHistory() {
-    if (selectedIds.size === 0) return;
+    if (!user || selectedIds.size === 0) return;
 
     setDeleting(true);
     try {
       const { error } = await supabase
         .from('test_history')
         .delete()
-        .in('id', Array.from(selectedIds));
+        .in('id', Array.from(selectedIds))
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
