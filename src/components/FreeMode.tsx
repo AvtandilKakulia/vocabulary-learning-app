@@ -411,6 +411,12 @@ export default function FreeMode() {
           correct_definitions:
             direction === "en-to-geo"
               ? currentWord.georgian_definitions
+              : isIrregularActive
+              ? [
+                  currentWord.english_word,
+                  currentWord.past_simple!,
+                  currentWord.past_participle!,
+                ]
               : [currentWord.english_word],
         },
       ]);
