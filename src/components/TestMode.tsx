@@ -11,21 +11,78 @@ interface TestWord extends Word {
 
 type HistorySaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type TestHistoryInsert = Omit<TestHistory, 'id' | 'created_at'>;
+type TestDirection = TestHistory['test_direction'];
+type InputType = 'multiple' | 'text';
 
 interface TestSession {
   userId: string;
+  vocabulary: Word[];
   result: TestHistoryInsert | null;
   saveStatus: HistorySaveStatus;
+}
+
+function normalizeAnswer(answer: string): string {
+  return answer.trim().toLowerCase();
+}
+
+function getAnswerLabel(word: Word, direction: TestDirection): string {
+  return direction === 'en-to-geo'
+    ? word.georgian_definitions.join(', ')
+    : word.english_word;
+}
+
+function isCorrectAnswer(word: Word, answer: string, direction: TestDirection, inputType: InputType): boolean {
+  const normalized = normalizeAnswer(answer);
+  if (direction === 'en-to-geo' && inputType === 'text') {
+    return word.georgian_definitions.some(definition => normalizeAnswer(definition) === normalized);
+  }
+
+  // Multiple Choice uses the full sense label; Georgian → English uses the word.
+  return normalized === normalizeAnswer(getAnswerLabel(word, direction));
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function generateMultipleChoiceOptions(currentWord: Word, vocabulary: Word[], direction: TestDirection): string[] {
+  const correctLabel = getAnswerLabel(currentWord, direction);
+  const correctKey = normalizeAnswer(correctLabel);
+  const acceptedDefinitions = new Set(currentWord.georgian_definitions.map(normalizeAnswer));
+  const distractors = new Map<string, string>();
+
+  for (const candidate of vocabulary) {
+    if (candidate.id === currentWord.id) continue;
+
+    const label = getAnswerLabel(candidate, direction);
+    const key = normalizeAnswer(label);
+    if (!key || key === correctKey || distractors.has(key)) continue;
+
+    // Another row's label must not offer an accepted definition as a wrong answer.
+    if (direction === 'en-to-geo' && (
+      acceptedDefinitions.has(key) ||
+      candidate.georgian_definitions.some(definition => acceptedDefinitions.has(normalizeAnswer(definition)))
+    )) continue;
+
+    distractors.set(key, label);
+  }
+
+  return shuffle([correctLabel, ...shuffle([...distractors.values()]).slice(0, 3)]);
 }
 
 export default function TestMode() {
   console.log('🚀 TestMode component mounted!'); // This should always show when component loads
   const { user } = useAuth();
   const [stage, setStage] = useState<'setup' | 'testing' | 'results'>('setup');
-  const [direction, setDirection] = useState<'en-to-geo' | 'geo-to-en'>('geo-to-en');
+  const [direction, setDirection] = useState<TestDirection>('geo-to-en');
   const [wordCount, setWordCount] = useState(10);
   const [customCount, setCustomCount] = useState('');
-  const [inputType, setInputType] = useState<'multiple' | 'text'>('multiple');
+  const [inputType, setInputType] = useState<InputType>('multiple');
   const [testWords, setTestWords] = useState<TestWord[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
@@ -34,27 +91,6 @@ export default function TestMode() {
   const [historySaveStatus, setHistorySaveStatus] = useState<HistorySaveStatus>('idle');
   // Ref guards take effect immediately, before React can render disabled buttons.
   const testSessionRef = useRef<TestSession | null>(null);
-
-  function generateMultipleChoiceOptions(correctAnswer: string, allWords: Word[], direction: string) {
-    const options = [correctAnswer.trim().toLowerCase()];
-
-    // Build pool of wrong answers
-    const wrongPool = allWords.flatMap(w =>
-      direction === 'en-to-geo'
-        ? (w.georgian_definitions || []).map(d => d.trim().toLowerCase())
-        : [w.english_word.trim().toLowerCase()]
-    );
-
-    const wrongOnly = wrongPool.filter(x => x !== correctAnswer.trim().toLowerCase());
-    const shuffledWrong = wrongOnly.sort(() => Math.random() - 0.5);
-
-    for (const wrong of shuffledWrong) {
-      if (options.length >= 4) break;
-      if (!options.includes(wrong)) options.push(wrong);
-    }
-
-    return options.sort(() => Math.random() - 0.5);
-  }
 
   async function startTest() {
     if (!user) return;
@@ -80,15 +116,18 @@ export default function TestMode() {
         return;
       }
 
-      // Random selection
-      const shuffled = [...allWords].sort(() => Math.random() - 0.5).slice(0, count);
-      const testData: TestWord[] = shuffled.map(word => ({
+      // Keep the full loaded vocabulary stable for every question in this session.
+      const vocabulary: Word[] = allWords.map(word => ({
+        ...word,
+        georgian_definitions: [...word.georgian_definitions],
+      }));
+      const testData: TestWord[] = shuffle(vocabulary).slice(0, count).map(word => ({
         ...word,
         userAnswer: '',
         isCorrect: false,
       }));
 
-      testSessionRef.current = { userId: user.id, result: null, saveStatus: 'idle' };
+      testSessionRef.current = { userId: user.id, vocabulary, result: null, saveStatus: 'idle' };
       setHistorySaveStatus('idle');
       setTestWords(testData);
       setCurrentQuestion(0);
@@ -96,12 +135,7 @@ export default function TestMode() {
 
       // Generate options for first question if multiple choice
       if (inputType === 'multiple') {
-        const firstWord = testData[0];
-        const correctAnswer = direction === 'en-to-geo'
-          ? (firstWord.georgian_definitions || []).join(', ')
-          : firstWord.english_word;
-
-        const options = generateMultipleChoiceOptions(correctAnswer, allWords, direction);
+        const options = generateMultipleChoiceOptions(testData[0], vocabulary, direction);
         setMultipleChoiceOptions(options);
       }
 
@@ -115,19 +149,17 @@ export default function TestMode() {
   }
 
   function submitAnswer() {
-    if (!testWords[currentQuestion] || testSessionRef.current?.result) return;
+    const session = testSessionRef.current;
+    if (!session || !testWords[currentQuestion] || session.result) return;
 
     const currentWord = testWords[currentQuestion];
-    const correctAnswer = direction === 'en-to-geo'
-      ? (currentWord.georgian_definitions || []).join(', ')
-      : currentWord.english_word;
 
     // Update the current word with user answer and correctness
     const updatedWords = [...testWords];
     updatedWords[currentQuestion] = {
       ...currentWord,
       userAnswer,
-      isCorrect: userAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase(),
+      isCorrect: isCorrectAnswer(currentWord, userAnswer, direction, inputType),
     };
     setTestWords(updatedWords);
 
@@ -143,12 +175,7 @@ export default function TestMode() {
       // Generate next multiple choice options
       if (inputType === 'multiple') {
         const nextWord = updatedWords[nextQuestion];
-        const nextCorrect = direction === 'en-to-geo'
-          ? (nextWord.georgian_definitions || []).join(', ')
-          : nextWord.english_word;
-
-        // Use original pool (all words) instead of testWords
-        const options = generateMultipleChoiceOptions(nextCorrect, updatedWords, direction);
+        const options = generateMultipleChoiceOptions(nextWord, session.vocabulary, direction);
         setMultipleChoiceOptions(options);
       }
     }
