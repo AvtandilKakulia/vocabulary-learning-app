@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { Check, ChevronRight, Plus, Shuffle, X } from "lucide-react";
-import { supabase, Word, TestMistake } from "../lib/supabase";
+import { supabase, Word, TestMistake, TestHistory } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { sanitizeDescription } from "../lib/sanitizeDescription";
 
@@ -15,6 +15,8 @@ const STORAGE_KEY = "vocab_practice_session_state_v2";
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
 type InputStatus = "idle" | "correct" | "incorrect";
+type SaveStatus = "idle" | "saving" | "saved" | "error" | "discarded";
+type PracticeResult = Omit<TestHistory, "id" | "created_at">;
 
 type StoredSession = {
   userId: string;
@@ -63,6 +65,12 @@ export default function FreeMode() {
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const completedResultRef = useRef<PracticeResult | null>(null);
+  const saveStatusRef = useRef<SaveStatus>("idle");
+  const sessionUserIdRef = useRef<string | null>(null);
+  const clearedCompletedSessionRef = useRef(false);
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const previousAllowReguess = useRef(allowReguess);
   const restoredHasCheckedRef = useRef(false);
@@ -193,6 +201,8 @@ export default function FreeMode() {
 
   useEffect(() => {
     if (!user) return;
+    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
+    sessionUserIdRef.current = user.id;
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -227,6 +237,7 @@ export default function FreeMode() {
 
   useEffect(() => {
     if (!sessionInitialized || !user || !words.length) return;
+    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
 
     const validIds = words.map((w) => w.id);
     let queueIds = wordQueue.filter((id) => validIds.includes(id));
@@ -265,6 +276,10 @@ export default function FreeMode() {
 
   useEffect(() => {
     if (!sessionInitialized || !user) return;
+    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
+    // Completion cleanup must not immediately persist an empty replacement session.
+    if (clearedCompletedSessionRef.current && totalAttempts === 0) return;
+    clearedCompletedSessionRef.current = false;
     const state: StoredSession = {
       userId: user.id,
       queueIds: wordQueue,
@@ -330,9 +345,14 @@ export default function FreeMode() {
   };
 
   const handleCheckAnswer = () => {
-    if (!currentWord) return;
+    if (!currentWord || showFinishModal) return;
     const trimmedInputs = answerInputs.map((a) => a.trim());
     if (trimmedInputs.every((a) => a.length === 0)) return;
+
+    if (totalAttempts === 0) sessionUserIdRef.current = user?.id ?? null;
+    completedResultRef.current = null;
+    saveStatusRef.current = "idle";
+    setSaveStatus("idle");
 
     let statuses: InputStatus[] = trimmedInputs.map(() => "incorrect");
     let correct = false;
@@ -383,10 +403,20 @@ export default function FreeMode() {
         {
           word_id: currentWord.id,
           english_word: currentWord.english_word,
+          question_prompt:
+            direction === "en-to-geo"
+              ? currentWord.english_word
+              : currentWord.georgian_definitions.join(", "),
           user_answer: trimmedInputs.filter((a) => a.length > 0).join(", "),
           correct_definitions:
             direction === "en-to-geo"
               ? currentWord.georgian_definitions
+              : isIrregularActive
+              ? [
+                  currentWord.english_word,
+                  currentWord.past_simple!,
+                  currentWord.past_participle!,
+                ]
               : [currentWord.english_word],
         },
       ]);
@@ -413,6 +443,8 @@ export default function FreeMode() {
   };
 
   const handleReset = () => {
+    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
+    sessionUserIdRef.current = user?.id ?? null;
     setCorrectCount(0);
     setTotalAttempts(0);
     setMistakes([]);
@@ -434,23 +466,55 @@ export default function FreeMode() {
   };
 
   const handleFinishClose = async () => {
-    if (!user) return;
-    const testDate = new Date();
+    if (!showFinishModal || showDiscardConfirm ||
+      saveStatusRef.current === "saving" || saveStatusRef.current === "saved" ||
+      saveStatusRef.current === "discarded") return;
 
+    // The ref protects even repeated clicks before React renders the disabled button.
+    saveStatusRef.current = "saving";
+    setSaveStatus("saving");
     try {
-      await supabase.from("test_history").insert({
-        user_id: user.id,
-        test_date: testDate.toISOString(),
-        test_direction: direction,
-        total_words: totalAttempts,
-        correct_count: correctCount,
-        mistakes: mistakes.map(({ word_id, ...rest }) => rest),
-      });
+      if (!completedResultRef.current) {
+        if (!sessionUserIdRef.current) throw new Error("No Practice account available.");
+        completedResultRef.current = {
+          user_id: sessionUserIdRef.current,
+          test_date: new Date().toISOString(),
+          test_direction: direction,
+          total_words: totalAttempts,
+          correct_count: correctCount,
+          mistakes: mistakes.map(({ word_id, ...rest }) => ({
+            ...rest,
+            correct_definitions: [...rest.correct_definitions],
+          })),
+        };
+      }
+
+      const result = completedResultRef.current;
+      if (!user || user.id !== result.user_id) {
+        throw new Error("Sign in to the account that completed this Practice to save its result.");
+      }
+      const { error } = await supabase.from("test_history").insert(result);
+      if (error) throw error;
     } catch (error) {
       console.error("Error saving history:", error);
+      saveStatusRef.current = "error";
+      setSaveStatus("error");
+      return;
     }
 
-    localStorage.removeItem(STORAGE_KEY);
+    saveStatusRef.current = "saved";
+    setSaveStatus("saved");
+    clearedCompletedSessionRef.current = true;
+    setShowFinishModal(false);
+    handleReset();
+  };
+
+  const handleDiscardResult = () => {
+    if (saveStatusRef.current !== "error" || !showDiscardConfirm) return;
+    saveStatusRef.current = "discarded";
+    setSaveStatus("discarded");
+    clearedCompletedSessionRef.current = true;
+    setShowDiscardConfirm(false);
     setShowFinishModal(false);
     handleReset();
   };
@@ -539,7 +603,7 @@ export default function FreeMode() {
     return `${day}/${month}/${year}`;
   };
 
-  if (loading) {
+  if (loading && !showFinishModal) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 flex items-center justify-center">
         <div className="text-center">
@@ -597,7 +661,7 @@ export default function FreeMode() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <fieldset disabled={sessionCompleted} className="max-w-4xl mx-auto px-4 py-8 w-full min-w-0">
         <div className="text-center mb-8">
           <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
             Vocabulary Practice
@@ -605,6 +669,11 @@ export default function FreeMode() {
           <p className="text-lg text-gray-600 dark:text-gray-400">
             Master new words with interactive practice sessions
           </p>
+          {saveStatus === "saved" && (
+            <p role="status" className="mt-4 text-green-700 dark:text-green-300">
+              Result saved to History
+            </p>
+          )}
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -905,7 +974,7 @@ export default function FreeMode() {
             </div>
           </div>
         )}
-      </div>
+      </fieldset>
 
       {showFinishConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
@@ -1073,13 +1142,51 @@ export default function FreeMode() {
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div role="status" className="mb-4 text-center text-gray-700 dark:text-gray-300">
+              {saveStatus === "saving" && "Saving result..."}
+              {saveStatus === "error" && "Failed to save result"}
+            </div>
+            <div className="flex justify-end gap-3">
+              {saveStatus === "error" && (
+                <button
+                  onClick={() => setShowDiscardConfirm(true)}
+                  disabled={showDiscardConfirm}
+                  className="px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold disabled:opacity-50"
+                >
+                  Close without saving
+                </button>
+              )}
               <button
                 ref={closeAndSaveButtonRef}
                 onClick={handleFinishClose}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                disabled={saveStatus === "saving" || showDiscardConfirm}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
-                Close & Save
+                {saveStatus === "saving" ? "Saving result..." : saveStatus === "error" ? "Retry Save" : "Close & Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="discard-practice-title" className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 w-full max-w-md">
+            <h3 id="discard-practice-title" className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">
+              This result has not been saved to History. Close without saving?
+            </h3>
+            <div className="flex justify-end gap-3">
+              <button
+                autoFocus
+                onClick={() => setShowDiscardConfirm(false)}
+                className="px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDiscardResult}
+                className="px-4 py-3 bg-red-600 text-white rounded-2xl font-semibold hover:bg-red-700"
+              >
+                Discard result
               </button>
             </div>
           </div>
