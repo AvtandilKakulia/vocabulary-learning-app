@@ -66,7 +66,6 @@ CREATE INDEX idx_words_user_id ON public.words (user_id);
 CREATE FUNCTION public.update_updated_at_column()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER
-SET search_path = ''
 AS $$
 BEGIN
   NEW.updated_at := pg_catalog.timezone('utc', pg_catalog.now());
@@ -117,27 +116,27 @@ ALTER TABLE public.words ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.test_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view own profile" ON public.profiles
-  FOR SELECT TO authenticated USING (auth.uid() = id);
+  FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can insert own profile" ON public.profiles
-  FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+  FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.profiles
-  FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+  FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "Users can view own words" ON public.words
   FOR SELECT TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own words" ON public.words
-  FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = user_id);
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = user_id);
 CREATE POLICY "Users can update own words" ON public.words
-  FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can delete own words" ON public.words
-  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+  FOR DELETE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can view own test history" ON public.test_history
-  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+  FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own test history" ON public.test_history
-  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can delete own test history" ON public.test_history
-  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+  FOR DELETE USING (auth.uid() = user_id);
 
 -- Override any broad Supabase default grants for these newly created objects.
 REVOKE ALL ON TABLE public.profiles, public.words, public.test_history FROM PUBLIC, anon, authenticated;

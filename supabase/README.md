@@ -6,13 +6,15 @@ Supabase-compatible database**. Supabase must already supply `auth.users`,
 Apply migrations as the trusted database owner (`postgres`), using the standard
 Supabase UTC database/session configuration.
 
-Apply every SQL file in this order before using the application:
+Migration filenames use 14-digit timestamp prefixes (`YYYYMMDDHHMMSS`) so normal
+Supabase migration ordering is deterministic. Apply every SQL file in this order
+before using the application:
 
 1. `20240619000000_initial_app_schema.sql`
-2. `20240620_word_uniqueness.sql`
-3. `20240621_search_words.sql`
+2. `20240620000000_word_uniqueness.sql`
+3. `20240621000000_search_words.sql`
 4. `20261006183000_allow_word_meanings.sql`
-5. `20261006_search_words_integrity_sorting.sql`
+5. `20261006190000_search_words_integrity_sorting.sql`
 6. `20261007234000_security_schema_reconciliation.sql`
 
 The baseline creates prerequisites only. Later migrations introduce normalization,
