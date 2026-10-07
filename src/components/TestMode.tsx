@@ -53,11 +53,17 @@ function shuffle<T>(items: T[]): T[] {
 function generateMultipleChoiceOptions(currentWord: Word, vocabulary: Word[], direction: TestDirection): string[] {
   const correctLabel = getAnswerLabel(currentWord, direction);
   const correctKey = normalizeAnswer(correctLabel);
+  const currentEnglish = normalizeAnswer(currentWord.english_word);
+  const hasContext = Boolean(currentWord.description?.trim());
   const acceptedDefinitions = new Set(currentWord.georgian_definitions.map(normalizeAnswer));
   const distractors = new Map<string, string>();
 
   for (const candidate of vocabulary) {
     if (candidate.id === currentWord.id) continue;
+
+    // Without question context, another sense of the same English word is ambiguous.
+    if (direction === 'en-to-geo' && !hasContext &&
+      normalizeAnswer(candidate.english_word) === currentEnglish) continue;
 
     const label = getAnswerLabel(candidate, direction);
     const key = normalizeAnswer(label);
