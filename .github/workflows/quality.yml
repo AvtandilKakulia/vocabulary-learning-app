@@ -15,6 +15,10 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      # action-setup copies .npmrc; isolate its pnpm installation from the app's
+      # dependencies instead of sharing the repository's absolute /tmp store.
+      npm_config_virtual_store_dir: node_modules/.pnpm
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
