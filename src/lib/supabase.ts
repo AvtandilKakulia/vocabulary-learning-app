@@ -1,8 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = "https://bimejdjsqusxzrdkmovn.supabase.co";
-const supabaseAnonKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpbWVqZGpzcXVzeHpyZGttb3ZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MTI2NTIsImV4cCI6MjA3OTE4ODY1Mn0.SvYknLOcQKQaKl2PJOvjmvH_EP26hdxudXB-uHAgmIg";
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Missing Supabase configuration. Set non-empty VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY " +
+    "in .env.local for development or in Vercel Environment Variables for Preview/Production, then restart or rebuild."
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
