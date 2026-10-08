@@ -1,0 +1,40 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    env:
+      # action-setup copies .npmrc; isolate its pnpm installation from the app's
+      # dependencies instead of sharing the repository's absolute /tmp store.
+      npm_config_virtual_store_dir: node_modules/.pnpm
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm exec tsc -b
+      - name: Lint
+        run: pnpm exec eslint .
+      - name: Regression tests
+        run: pnpm exec vitest run
+      - name: Build
+        run: pnpm exec vite build
