@@ -3,21 +3,23 @@ import { supabase, Word, TestHistory, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Check, X, RotateCcw } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
+import {
+  CompletedTestResult, matchesCompletedTest, persistPendingTest, readPendingTests, removePendingTest,
+} from '../lib/pendingTestResults';
 
 interface TestWord extends Word {
   userAnswer: string;
   isCorrect: boolean;
 }
 
-type HistorySaveStatus = 'idle' | 'saving' | 'saved' | 'error';
-type TestHistoryInsert = Omit<TestHistory, 'id' | 'created_at'>;
+type HistorySaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 type TestDirection = TestHistory['test_direction'];
 type InputType = 'multiple' | 'text';
 
 interface TestSession {
   userId: string;
   vocabulary: Word[];
-  result: TestHistoryInsert | null;
+  result: CompletedTestResult | null;
   saveStatus: HistorySaveStatus;
 }
 
@@ -82,9 +84,15 @@ function generateMultipleChoiceOptions(currentWord: Word, vocabulary: Word[], di
 }
 
 export default function TestMode() {
-  console.log('🚀 TestMode component mounted!'); // This should always show when component loads
   const { user } = useAuth();
-  const [stage, setStage] = useState<'setup' | 'testing' | 'results'>('setup');
+  // Account changes remount all session state before another user can see it.
+  return user ? <AccountTestMode key={user.id} userId={user.id} /> : null;
+}
+
+function AccountTestMode({ userId }: { userId: string }) {
+  const [recovery] = useState(() => readPendingTests(userId));
+  const restored = recovery.results[0] ?? null;
+  const [stage, setStage] = useState<'setup' | 'testing' | 'results'>(restored ? 'results' : 'setup');
   const [direction, setDirection] = useState<TestDirection>('geo-to-en');
   const [wordCount, setWordCount] = useState(10);
   const [customCount, setCustomCount] = useState('');
@@ -94,19 +102,22 @@ export default function TestMode() {
   const [userAnswer, setUserAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>([]);
-  const [historySaveStatus, setHistorySaveStatus] = useState<HistorySaveStatus>('idle');
+  const [historySaveStatus, setHistorySaveStatus] = useState<HistorySaveStatus>(restored ? 'pending' : 'idle');
+  const [storageWarning, setStorageWarning] = useState(recovery.warning);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   // Ref guards take effect immediately, before React can render disabled buttons.
-  const testSessionRef = useRef<TestSession | null>(null);
+  const testSessionRef = useRef<TestSession | null>(restored
+    ? { userId, vocabulary: [], result: restored, saveStatus: 'pending' } : null);
 
   async function startTest() {
-    if (!user) return;
+    if (testSessionRef.current?.result) return;
 
     setLoading(true);
     try {
       const { data: allWords, error } = await supabase
         .from('words')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       if (error) throw error;
 
@@ -133,7 +144,7 @@ export default function TestMode() {
         isCorrect: false,
       }));
 
-      testSessionRef.current = { userId: user.id, vocabulary, result: null, saveStatus: 'idle' };
+      testSessionRef.current = { userId, vocabulary, result: null, saveStatus: 'idle' };
       setHistorySaveStatus('idle');
       setTestWords(testData);
       setCurrentQuestion(0);
@@ -208,6 +219,7 @@ export default function TestMode() {
     // Capture the completed payload once, including the final answer and date.
     // Retries use this same snapshot instead of rebuilding it from React state.
     session.result = {
+      id: crypto.randomUUID(),
       user_id: session.userId,
       test_date: new Date().toISOString(),
       test_direction: direction,
@@ -221,20 +233,37 @@ export default function TestMode() {
 
   async function saveTestResult() {
     const session = testSessionRef.current;
-    if (!session?.result || session.saveStatus === 'saving' || session.saveStatus === 'saved') return;
+    if (!session?.result || session.saveStatus === 'saving' || session.saveStatus === 'saved' || showDiscardConfirm) return;
 
     session.saveStatus = 'saving';
     setHistorySaveStatus('saving');
+    // Persist synchronously BEFORE issuing the request, including its stable ID.
+    // A reload during an interrupted response must reuse the same payload and ID.
+    setStorageWarning(persistPendingTest(session.result) ? '' :
+      'This result could not be stored in your browser. Keep this tab open: leaving or refreshing may lose it. Retry saving to History.');
     try {
-      if (!user || user.id !== session.userId) {
+      if (userId !== session.userId) {
         throw new Error('Sign in to the account that took this test to save its result.');
       }
 
       const { error } = await supabase.from('test_history').insert(session.result);
-      if (error) throw error;
+      if (error) {
+        if (error.code !== '23505') throw error;
+        // A previous attempt may have committed before its response was lost.
+        // Do not update/overwrite History, or treat any arbitrary conflict as success.
+        const { data, error: lookupError } = await supabase.from('test_history')
+          .select('id,user_id,test_date,test_direction,total_words,correct_count,mistakes')
+          .eq('id', session.result.id).eq('user_id', session.userId);
+        if (lookupError) throw lookupError;
+        if (!Array.isArray(data) || data.length !== 1 || !matchesCompletedTest(data[0], session.result)) {
+          throw new Error('Could not confirm the existing History record. Your pending result has been kept.');
+        }
+      }
 
       session.saveStatus = 'saved';
       setHistorySaveStatus('saved');
+      setStorageWarning(removePendingTest(session.result) ? '' :
+        'Saved to History, but the browser copy could not be removed. It may appear again; retrying will not create another record.');
     } catch (error) {
       console.error('Error saving test result:', error);
       session.saveStatus = 'error';
@@ -243,11 +272,36 @@ export default function TestMode() {
   }
 
   function resetTest() {
-    if (testSessionRef.current?.saveStatus === 'saving') return;
+    const session = testSessionRef.current;
+    if (session?.saveStatus === 'saving') return;
+    if (session?.result && session.saveStatus !== 'saved') {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    startNextTest();
+  }
 
-    testSessionRef.current = null;
-    setHistorySaveStatus('idle');
-    setStage('setup');
+  function discardResult() {
+    const session = testSessionRef.current;
+    if (!showDiscardConfirm || !session?.result || session.saveStatus === 'saving') return;
+    if (!removePendingTest(session.result)) {
+      setStorageWarning('Could not remove the pending browser copy. The result has been kept; cancel and retry saving, or try discarding again.');
+      return;
+    }
+    startNextTest();
+  }
+
+  function startNextTest() {
+    const finishedId = testSessionRef.current?.result?.id;
+    // Other tabs may have completed more tests. Recover them without overwriting.
+    const pending = readPendingTests(userId);
+    const next = pending.results.find(result => result.id !== finishedId);
+    testSessionRef.current = next
+      ? { userId, vocabulary: [], result: next, saveStatus: 'pending' } : null;
+    setStorageWarning(pending.warning);
+    setHistorySaveStatus(next ? 'pending' : 'idle');
+    setStage(next ? 'results' : 'setup');
+    setShowDiscardConfirm(false);
     setTestWords([]);
     setCurrentQuestion(0);
     setUserAnswer('');
@@ -257,6 +311,7 @@ export default function TestMode() {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">Test Mode</h2>
+        {storageWarning && <p role="alert">{storageWarning}</p>}
 
         <div className="bg-white rounded-lg shadow-lg p-8 space-y-6">
           <div>
@@ -463,8 +518,9 @@ export default function TestMode() {
   if (stage === 'results') {
     console.log('🎯 RENDERING RESULTS STAGE');
     console.log('current stage:', stage);
-    const correctCount = testWords.filter(w => w.isCorrect).length;
-    const percentage = Math.round((correctCount / testWords.length) * 100);
+    const result = testSessionRef.current!.result!;
+    const correctCount = result.correct_count;
+    const percentage = Math.round((correctCount / result.total_words) * 100);
     console.log('correctCount:', correctCount, 'percentage:', percentage);
 
     return (
@@ -473,13 +529,16 @@ export default function TestMode() {
 
         <div className="text-sm">
           <p role="status" aria-live="polite">
+            {historySaveStatus === 'pending' && 'Recovered a completed test. Saving to History has not been confirmed. Retry Save to check and save it.'}
             {historySaveStatus === 'saving' && 'Saving result...'}
             {historySaveStatus === 'saved' && 'Result saved to History'}
             {historySaveStatus === 'error' && 'Failed to save result'}
           </p>
-          {historySaveStatus === 'error' && (
+          {storageWarning && <p role="alert" className="mt-2">{storageWarning}</p>}
+          {(historySaveStatus === 'error' || historySaveStatus === 'pending') && (
             <button
               onClick={() => void saveTestResult()}
+              disabled={showDiscardConfirm}
               className="mt-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
             >
               Retry Save
@@ -493,12 +552,29 @@ export default function TestMode() {
               {percentage}%
             </div>
             <div className="text-xl text-gray-600">
-              {correctCount} out of {testWords.length} correct
+              {correctCount} out of {result.total_words} correct
             </div>
+            <p className="text-sm text-gray-600 mt-2">
+              {result.test_direction === 'en-to-geo' ? 'English → Georgian' : 'Georgian → English'}
+              {' · '}{new Date(result.test_date).toLocaleString()}
+            </p>
           </div>
 
           <div className="space-y-4 mb-6">
             <h3 className="font-bold text-lg text-gray-900">Review:</h3>
+            {testWords.length === 0 && (
+              <>
+                <p>Recovered score and mistakes. Individual correct answers are not stored.</p>
+                {result.mistakes.map((mistake, index) => (
+                  <div key={index} className="p-4 rounded-lg border bg-red-50 border-red-200">
+                    <div className="font-medium">{mistake.question_prompt ?? mistake.english_word}</div>
+                    {mistake.description && <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(mistake.description) }} />}
+                    <div>Your answer: {mistake.user_answer || '(empty)'}</div>
+                    <div>Correct: {mistake.correct_definitions.join(', ')}</div>
+                  </div>
+                ))}
+              </>
+            )}
             {testWords.map((word, idx) => (
               <div
                 key={idx}
@@ -539,13 +615,24 @@ export default function TestMode() {
 
           <button
             onClick={resetTest}
-            disabled={historySaveStatus === 'saving'}
+            disabled={historySaveStatus === 'saving' || showDiscardConfirm}
             className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             <RotateCcw size={20} />
             Take Another Test
           </button>
         </div>
+        {showDiscardConfirm && (
+          <div role="alertdialog" aria-modal="true" aria-labelledby="discard-test-title"
+            className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md space-y-4">
+              <h3 id="discard-test-title" className="font-bold">Discard this completed test?</h3>
+              <p>Saving to History has not been confirmed. Discarding removes this browser's recovery copy and you cannot retry it here. If an earlier request reached the server, its History record will remain.</p>
+              <button autoFocus onClick={() => setShowDiscardConfirm(false)} className="px-4 py-2 border rounded">Cancel</button>
+              <button onClick={discardResult} disabled={historySaveStatus === 'saving'} className="px-4 py-2 bg-red-600 text-white rounded">Discard result</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
