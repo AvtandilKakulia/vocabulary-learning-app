@@ -288,6 +288,90 @@ describe('TestMode pending result recovery', () => {
     remove.mockRestore();
   });
 
+  it('allows confirmed discard of a never-persisted result while storage stays blocked', async () => {
+    const failure = { message: 'Offline' };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const save = query({ error: failure });
+    const { user } = await start([word()], { save });
+    const browserStorage = window.localStorage;
+    const blocked = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => { throw new Error('Blocked'); });
+    try {
+      await answerText('wrong');
+      await screen.findByText('Failed to save result');
+      const result = save.insert.mock.calls[0][0];
+      expect(browserStorage.getItem(pendingTestKey(result))).toBeNull();
+      expect(screen.getByRole('alert')).toHaveTextContent('leaving or refreshing may lose it');
+      await user.click(screen.getByRole('button', { name: 'Take Another Test' }));
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.getByText('0 out of 1 correct')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Retry Save' })).toBeEnabled();
+      await user.click(screen.getByRole('button', { name: 'Take Another Test' }));
+      await user.click(screen.getByRole('button', { name: 'Discard result' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start Test' })).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('Browser storage is unavailable');
+      await user.click(screen.getByRole('button', { name: 'Start Test' }));
+      await screen.findByText('Question 1 of 1');
+      expect(save.insert).toHaveBeenCalledOnce();
+      expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
+    } finally {
+      blocked.mockRestore();
+    }
+  });
+
+  it.each(['completion', 'restoration', 'successful retry write'] as const)(
+    'keeps a copy from %s when storage becomes blocked, even after another retry write fails', async (source) => {
+      const failure = { message: 'Offline' };
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const save = query({ error: failure });
+      let result: CompletedTestResult;
+      if (source === 'restoration') {
+        result = completed();
+        persistPendingTest(result);
+        supabaseMock.from.mockReturnValue(save);
+        render(<TestMode />);
+      } else {
+        await start([word()], { save });
+        const write = source === 'successful retry write'
+          ? vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota exceeded'); })
+          : null;
+        await answerText('wrong');
+        await screen.findByText('Failed to save result');
+        result = save.insert.mock.calls[0][0];
+        if (write) {
+          expect(localStorage.getItem(pendingTestKey(result))).toBeNull();
+          write.mockRestore();
+          await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
+          await screen.findByText('Failed to save result');
+        }
+      }
+      const browserStorage = window.localStorage;
+      const original = browserStorage.getItem(pendingTestKey(result));
+      expect(original).not.toBeNull();
+      const blocked = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => { throw new Error('Blocked'); });
+      try {
+        await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
+        await screen.findByText('Failed to save result');
+        expect(save.insert).toHaveBeenLastCalledWith(result);
+        await userEvent.click(screen.getByRole('button', { name: 'Take Another Test' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Discard result' }));
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('result has been kept');
+        expect(screen.queryByRole('button', { name: 'Start Test' })).not.toBeInTheDocument();
+        expect(browserStorage.getItem(pendingTestKey(result))).toBe(original);
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(screen.getByRole('button', { name: 'Retry Save' })).toBeEnabled();
+        expect(logged).toHaveBeenCalledWith('Error saving test result:', failure);
+      } finally {
+        blocked.mockRestore();
+      }
+      await userEvent.click(screen.getByRole('button', { name: 'Take Another Test' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Discard result' }));
+      expect(browserStorage.getItem(pendingTestKey(result))).toBeNull();
+      expect(screen.getByRole('button', { name: 'Start Test' })).toBeInTheDocument();
+    },
+  );
+
   it('retains other pending results and restores the next one after the current result is saved', async () => {
     const first = completed();
     const second = completed({ id: 'cf2c1807-58a2-43fa-952a-970da720bb9b', test_date: '2026-01-03T10:00:00Z',

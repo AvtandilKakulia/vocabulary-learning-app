@@ -21,6 +21,7 @@ interface TestSession {
   vocabulary: Word[];
   result: CompletedTestResult | null;
   saveStatus: HistorySaveStatus;
+  hasPersistedCopy: boolean;
 }
 
 function normalizeAnswer(answer: string): string {
@@ -107,7 +108,7 @@ function AccountTestMode({ userId }: { userId: string }) {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   // Ref guards take effect immediately, before React can render disabled buttons.
   const testSessionRef = useRef<TestSession | null>(restored
-    ? { userId, vocabulary: [], result: restored, saveStatus: 'pending' } : null);
+    ? { userId, vocabulary: [], result: restored, saveStatus: 'pending', hasPersistedCopy: true } : null);
 
   async function startTest() {
     if (testSessionRef.current?.result) return;
@@ -144,7 +145,7 @@ function AccountTestMode({ userId }: { userId: string }) {
         isCorrect: false,
       }));
 
-      testSessionRef.current = { userId, vocabulary, result: null, saveStatus: 'idle' };
+      testSessionRef.current = { userId, vocabulary, result: null, saveStatus: 'idle', hasPersistedCopy: false };
       setHistorySaveStatus('idle');
       setTestWords(testData);
       setCurrentQuestion(0);
@@ -239,7 +240,10 @@ function AccountTestMode({ userId }: { userId: string }) {
     setHistorySaveStatus('saving');
     // Persist synchronously BEFORE issuing the request, including its stable ID.
     // A reload during an interrupted response must reuse the same payload and ID.
-    setStorageWarning(persistPendingTest(session.result) ? '' :
+    const persisted = persistPendingTest(session.result);
+    // A failed retry write does not mean an earlier recovery copy disappeared.
+    session.hasPersistedCopy ||= persisted;
+    setStorageWarning(persisted ? '' :
       'This result could not be stored in your browser. Keep this tab open: leaving or refreshing may lose it. Retry saving to History.');
     try {
       if (userId !== session.userId) {
@@ -262,7 +266,9 @@ function AccountTestMode({ userId }: { userId: string }) {
 
       session.saveStatus = 'saved';
       setHistorySaveStatus('saved');
-      setStorageWarning(removePendingTest(session.result) ? '' :
+      const removed = removePendingTest(session.result);
+      if (removed) session.hasPersistedCopy = false;
+      setStorageWarning(removed ? '' :
         'Saved to History, but the browser copy could not be removed. It may appear again; retrying will not create another record.');
     } catch (error) {
       console.error('Error saving test result:', error);
@@ -284,7 +290,9 @@ function AccountTestMode({ userId }: { userId: string }) {
   function discardResult() {
     const session = testSessionRef.current;
     if (!showDiscardConfirm || !session?.result || session.saveStatus === 'saving') return;
-    if (!removePendingTest(session.result)) {
+    // A newly completed result whose every write failed exists only in memory.
+    // Restored or successfully persisted results still require confirmed removal.
+    if (session.hasPersistedCopy && !removePendingTest(session.result)) {
       setStorageWarning('Could not remove the pending browser copy. The result has been kept; cancel and retry saving, or try discarding again.');
       return;
     }
@@ -297,7 +305,7 @@ function AccountTestMode({ userId }: { userId: string }) {
     const pending = readPendingTests(userId);
     const next = pending.results.find(result => result.id !== finishedId);
     testSessionRef.current = next
-      ? { userId, vocabulary: [], result: next, saveStatus: 'pending' } : null;
+      ? { userId, vocabulary: [], result: next, saveStatus: 'pending', hasPersistedCopy: true } : null;
     setStorageWarning(pending.warning);
     setHistorySaveStatus(next ? 'pending' : 'idle');
     setStage(next ? 'results' : 'setup');
