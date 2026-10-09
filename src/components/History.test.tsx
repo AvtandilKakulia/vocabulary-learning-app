@@ -10,7 +10,7 @@ async function loadHistory(records: TestHistory[]) {
   const load = query({ data: records, error: null });
   supabaseMock.from.mockReturnValue(load);
   const view = render(<History />);
-  await screen.findByRole('button', { name: 'Clear All' });
+  await screen.findByRole('group', { name: 'History selection toolbar' });
   await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
   expect(supabaseMock.from).toHaveBeenCalledWith('test_history');
   expect(load.select).toHaveBeenCalledWith('*');
@@ -94,32 +94,35 @@ describe('History', () => {
     if (fails) {
       expect(alert).toHaveBeenCalledExactlyOnceWith('Error deleting records: Offline');
       expect(screen.getByRole('heading', { name: 'Delete 2 Records' })).toBeInTheDocument();
-      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
       expect(screen.getByText(new Date(records[0].test_date).toLocaleString())).toBeInTheDocument();
     } else {
       await waitFor(() => expect(screen.queryByRole('heading', { name: 'Delete 2 Records' })).not.toBeInTheDocument());
-      expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
+      expect(screen.queryByText(/^2 of \d+ visible records selected$/)).not.toBeInTheDocument();
       expect(screen.queryByText(new Date(records[0].test_date).toLocaleString())).not.toBeInTheDocument();
       expect(screen.getByText(new Date(records[2].test_date).toLocaleString())).toBeInTheDocument();
     }
   });
 
-  it('requires confirmation and scopes Clear All to the current user', async () => {
+  it('replaces Clear All with selection and mandatory owner-scoped bulk confirmation', async () => {
     const { user } = await loadHistory([historyRecord()]);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const deletion = query();
     supabaseMock.from.mockReturnValueOnce(deletion)
       .mockReturnValue(query({ data: [], error: null }));
-    await user.click(screen.getByRole('button', { name: 'Clear All' }));
+    expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Select All' }));
+    await user.click(screen.getByRole('button', { name: 'Delete Selected (1)' }));
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 1 Record');
     expect(deletion.delete).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Clear All' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(deletion.delete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Delete Selected (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 1 Record' }));
     await screen.findByText('No results found.');
-    expect(confirm).toHaveBeenCalledTimes(2);
     expect(deletion.delete).toHaveBeenCalledOnce();
     expect(deletion.eq.mock.calls).toEqual([['user_id', 'user-a']]);
-    expect(deletion.in).not.toHaveBeenCalled();
-    // Known limitation: Clear All ignores returned { error } (unlike single/bulk).
-    // Issue 8 intentionally covers its ownership contract without changing that behavior.
+    expect(deletion.in).toHaveBeenCalledExactlyOnceWith('id', ['history-1']);
   });
 });
 
@@ -137,34 +140,86 @@ async function finishReload() {
 }
 
 describe('History bulk selection safety', () => {
+  it('keeps the same toolbar mounted from initial loading through zero, partial and full selection', async () => {
+    const pending = deferred<QueryResult>();
+    const load = query(pending.promise);
+    supabaseMock.from.mockReturnValue(load);
+    render(<History />);
+    const toolbar = screen.getByRole('group', { name: 'History selection toolbar' });
+    const deletion = screen.getByRole('button', { name: 'Delete Selected (0)' });
+    expect(deletion).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeDisabled();
+    expect(toolbar).toHaveTextContent('0 of 0 visible records selected');
+    await act(async () => { pending.resolve({ data: variedRecords, error: null }); });
+    expect(screen.getByRole('group', { name: 'History selection toolbar' })).toBe(toolbar);
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBe(deletion);
+    expect(toolbar).toHaveTextContent('0 of 4 visible records selected');
+    await userEvent.click(rowAction(variedRecords[0], 'square'));
+    expect(toolbar).toHaveTextContent('1 of 4 visible records selected');
+    expect(screen.getByRole('button', { name: 'Delete Selected (1)' })).toBe(deletion);
+    await userEvent.click(screen.getByRole('button', { name: 'Select All' }));
+    expect(toolbar).toHaveTextContent('4 of 4 visible records selected');
+    expect(screen.getByRole('button', { name: 'Delete Selected (4)' })).toBe(deletion);
+    expect(within(toolbar).getAllByRole('button')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+    expect(load.delete).not.toHaveBeenCalled();
+  });
+
+  it.each(['empty History', 'no matching records'] as const)('keeps disabled toolbar actions and never deletes with %s', async state => {
+    const { user, load } = await loadHistory(state === 'empty History' ? [] : [variedRecords[1]]);
+    if (state === 'no matching records') await user.selectOptions(control(0), 'en-to-geo');
+    expect(screen.getByText('No results found.')).toBeInTheDocument();
+    const toolbar = screen.getByRole('group', { name: 'History selection toolbar' });
+    expect(toolbar).toHaveTextContent('0 of 0 visible records selected');
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeDisabled();
+    const deletion = screen.getByRole('button', { name: 'Delete Selected (0)' });
+    expect(deletion).toBeDisabled();
+    expect(within(toolbar).getAllByRole('button')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
+    fireEvent.click(deletion);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(load.delete).not.toHaveBeenCalled();
+    expect(load.in).not.toHaveBeenCalled();
+  });
+
   it('shows only the appropriate selection actions as selection changes, including keyboard activation', async () => {
     const { user, load } = await loadHistory(variedRecords);
-    expect(screen.queryByRole('button', { name: /^(Select All|Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
+    const toolbar = screen.getByRole('group', { name: 'History selection toolbar' });
+    const deleteButton = screen.getByRole('button', { name: 'Delete Selected (0)' });
+    expect(deleteButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /^(Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
     await user.click(rowAction(variedRecords[0], 'square'));
     const selectAll = screen.getByRole('button', { name: 'Select All' });
     expect(screen.getByRole('button', { name: 'Clear Selection' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Delete Selected (1)' })).toBe(deleteButton);
+    expect(deleteButton).toBeEnabled();
     selectAll.focus();
     await user.keyboard('{Enter}');
-    expect(screen.getByText('4 selected')).toBeInTheDocument();
+    expect(screen.getByText(/^4 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deselect All' })).toBeEnabled();
+    expect(screen.getByRole('group', { name: 'History selection toolbar' })).toBe(toolbar);
+    expect(screen.getByRole('button', { name: 'Delete Selected (4)' })).toBe(deleteButton);
     expect(screen.queryByRole('button', { name: 'Clear Selection' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Select All' })).not.toBeInTheDocument();
     // Deselect one row to return directly from full to partial selection.
     const selectedRow = screen.getByText(new Date(variedRecords[0].test_date).toLocaleString()).closest('.border-b')!;
     await user.click(selectedRow.querySelector('button')!);
-    expect(screen.getByText('3 selected')).toBeInTheDocument();
+    expect(screen.getByText(/^3 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Clear Selection' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Select All' }));
     screen.getByRole('button', { name: 'Deselect All' }).focus();
     await user.keyboard(' ');
-    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^(Select All|Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: 'History selection toolbar' })).toBe(toolbar);
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /^(Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
     await user.click(rowAction(variedRecords[0], 'square'));
     expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
     screen.getByRole('button', { name: 'Clear Selection' }).focus();
     await user.keyboard('{Enter}');
-    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
     expect(load.delete).not.toHaveBeenCalled();
   });
 
@@ -173,13 +228,14 @@ describe('History bulk selection safety', () => {
     await user.selectOptions(control(0), 'en-to-geo');
     await user.selectOptions(control(1), 'high');
     await user.click(rowAction(variedRecords[0], 'square'));
-    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByText(/^1 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deselect All' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Clear Selection' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Select All' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Deselect All' }));
-    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^(Select All|Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /^(Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
     expect(load.delete).not.toHaveBeenCalled();
   });
 
@@ -196,8 +252,8 @@ describe('History bulk selection safety', () => {
       });
       expect(load.delete).not.toHaveBeenCalled();
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
-      expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
+      expect(screen.queryByText(/^2 of \d+ visible records selected$/)).not.toBeInTheDocument();
       const deletion = query();
       supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
       await user.click(rowAction(variedRecords[3], 'square'));
@@ -211,15 +267,13 @@ describe('History bulk selection safety', () => {
   it('Select All selects exactly the filtered records and Deselect All clears them after sorting', async () => {
     const { user, load } = await loadHistory(variedRecords);
     await user.selectOptions(control(0), 'en-to-geo');
-    await user.click(rowAction(variedRecords[0], 'square'));
     await user.click(screen.getByRole('button', { name: 'Select All' }));
-    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
     await user.selectOptions(control(3), 'asc');
     await finishReload();
     await user.click(screen.getByRole('button', { name: 'Deselect All' }));
-    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
     expect(load.delete).not.toHaveBeenCalled();
-    await user.click(rowAction(variedRecords[0], 'square'));
     await user.click(screen.getByRole('button', { name: 'Select All' }));
     const deletion = query();
     supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [variedRecords[1], variedRecords[3]], error: null }));
@@ -240,7 +294,7 @@ describe('History bulk selection safety', () => {
     await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
     await user.selectOptions(control(index), value);
     await finishReload();
-    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deselect All' })).toBeInTheDocument();
     expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 2 Records');
     const deletion = query();
@@ -257,7 +311,7 @@ describe('History bulk selection safety', () => {
     supabaseMock.from.mockReturnValue(query({ data: [variedRecords[0], variedRecords[2]], error: null }));
     await user.selectOptions(control(2), 'score');
     await finishReload();
-    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByText(/^1 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Deselect All' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Select All' }));
     const deletion = query();
@@ -281,14 +335,14 @@ describe('History bulk selection safety', () => {
     const deletion = query();
     supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
     if (change === 'empty') {
-      expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
       const empty = screen.getByRole('button', { name: 'Delete 0 Records' });
       expect(empty).toBeDisabled();
       fireEvent.click(empty);
       expect(deletion.delete).not.toHaveBeenCalled();
       expect(deletion.in).not.toHaveBeenCalled();
     } else {
-      expect(screen.getByText('1 selected')).toBeInTheDocument();
+      expect(screen.getByText(/^1 of \d+ visible records selected$/)).toBeInTheDocument();
       expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 1 Record');
       await user.click(screen.getByRole('button', { name: 'Delete 1 Record' }));
       expect(deletion.in).toHaveBeenCalledExactlyOnceWith('id', ['en-medium']);
@@ -308,14 +362,14 @@ describe('History bulk selection safety', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(load.delete).not.toHaveBeenCalled();
     if (change === 'add') {
-      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
       const deletion = query();
       supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
       await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
       await user.click(screen.getByRole('button', { name: 'Delete 2 Records' }));
       expect(deletion.in).toHaveBeenCalledExactlyOnceWith('id', ['en-high', 'en-medium']);
     } else {
-      expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
     }
   });
 
@@ -335,7 +389,7 @@ describe('History bulk selection safety', () => {
     await user.click(screen.getByRole('button', { name: 'Delete 2 Records' }));
     expect(alert).toHaveBeenCalledExactlyOnceWith('Error deleting records: Offline');
     expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 2 Records');
-    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
     const confirm = screen.getByRole('button', { name: 'Delete 2 Records' });
     act(() => { fireEvent.click(confirm); fireEvent.click(confirm); });
     expect(retry.delete).toHaveBeenCalledOnce();
@@ -348,7 +402,7 @@ describe('History bulk selection safety', () => {
     await act(async () => { pending.resolve({ error: null }); });
     await finishReload();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
     expect(screen.queryByText(new Date(variedRecords[0].test_date).toLocaleString())).not.toBeInTheDocument();
     for (const record of remaining) expect(screen.getByText(new Date(record.test_date).toLocaleString())).toBeInTheDocument();
   });

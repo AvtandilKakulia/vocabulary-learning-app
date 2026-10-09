@@ -150,22 +150,6 @@ export default function History() {
     }
   }
 
-  async function clearAllHistory() {
-    if (!confirm('Are you sure you want to delete ALL history?')) return;
-    if (!user) return;
-
-    try {
-      await supabase
-        .from('test_history')
-        .delete()
-        .eq('user_id', user.id);
-
-      loadHistory();
-    } catch (error: any) {
-      alert('Error clearing history: ' + error.message);
-    }
-  }
-
   function getScoreEmoji(score: number) {
     if (score >= 90) return '🎉';
     if (score >= 80) return '😄';
@@ -233,30 +217,40 @@ export default function History() {
         </p>
       </div>
 
-      {/* DELETE ACTIONS */}
+      {/* SELECTION, STATS AND FILTERS */}
       <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-xl p-6">
-        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-          <div className="flex gap-3">
-            {eligibleIds.length > 0 && (
-              <button
-                onClick={confirmBulkDelete}
-                disabled={deleting || loading}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:scale-105 transition"
-              >
-                <Trash2 size={18} />
-                Delete Selected ({eligibleIds.length})
-              </button>
-            )}
-
-            {history.length > 0 && (
-              <button
-                onClick={clearAllHistory}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:scale-105 transition"
-              >
-                <Trash2 size={18} />
-                Clear All
-              </button>
-            )}
+        <div role="group" aria-label="History selection toolbar" className="mb-6 space-y-3">
+          <p aria-live="polite" className="min-h-12 text-sm font-semibold text-blue-700 dark:text-blue-300 sm:min-h-6">
+            {eligibleIds.length} of {visibleIds.size} visible records selected
+          </p>
+          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3">
+            <button
+              onClick={toggleSelectAll}
+              disabled={deleting || loading || visibleIds.size === 0}
+              className="min-h-16 min-w-0 break-words rounded-xl border px-3 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {allSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            {/* A non-interactive slot reserves space without a hidden focus target. */}
+            <div className="min-h-16 min-w-0">
+              {eligibleIds.length > 0 && !allSelected && (
+                <button
+                  onClick={() => changeSelection(new Set())}
+                  disabled={deleting || loading}
+                  className="h-full min-h-16 w-full break-words rounded-xl border px-3 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+            <button
+              onClick={confirmBulkDelete}
+              disabled={deleting || loading || eligibleIds.length === 0}
+              className="col-span-2 flex min-h-16 min-w-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1"
+            >
+              <Trash2 size={18} aria-hidden="true" className="shrink-0" />
+              <span>Delete Selected ({eligibleIds.length})</span>
+            </button>
           </div>
         </div>
 
@@ -379,36 +373,6 @@ export default function History() {
           </div>
         ) : (
           <div>
-            {/** SELECTION BANNER */}
-            {eligibleIds.length > 0 && (
-              <div className="p-4 bg-blue-50 border-b">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-blue-700">
-                    {eligibleIds.length} selected
-                  </span>
-
-                  <div className="flex gap-4">
-                    <button
-                      onClick={toggleSelectAll}
-                      disabled={deleting}
-                      className="text-sm text-blue-600"
-                    >
-                      {allSelected ? 'Deselect All' : 'Select All'}
-                    </button>
-                    {!allSelected && (
-                      <button
-                        onClick={() => changeSelection(new Set())}
-                        disabled={deleting}
-                        className="text-sm text-blue-600"
-                      >
-                        Clear Selection
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
             {filteredHistory.map(record => {
               const percent = Math.round(
                 (record.correct_count / record.total_words) * 100
