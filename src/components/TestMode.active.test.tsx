@@ -87,7 +87,7 @@ describe('TestMode active recovery', () => {
     expect(screen.getByText('Question 3 of 3')).toBeInTheDocument();
     expect(screen.getByText('ჩიტი')).toBeInTheDocument();
     await answer('bird');
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(view.save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id, total_words: 3, correct_count: correct ? 3 : 2 }));
     expect(localStorage.getItem(activeTestKey('user-a', id))).toBeNull();
     expect(localStorage.getItem(pendingTestKey({ user_id: 'user-a', id }))).toBeNull();
@@ -235,7 +235,7 @@ describe('TestMode active recovery', () => {
     expect(active()).toMatchObject({ direction: 'geo-to-en', inputType: 'text', customCount: '1' });
     expect(load.select).toHaveBeenCalledOnce();
     await answer('cat');
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ test_direction: 'geo-to-en', correct_count: 1 }));
   });
 
@@ -245,7 +245,7 @@ describe('TestMode active recovery', () => {
     const second: ActiveTestSession = { ...first, id: '523502e1-45e0-4b10-9237-252e9a08a017', draftAnswer: 'unfinished second' };
     persistActiveTest(second);
     await answer('cat');
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     await userEvent.click(screen.getByRole('button', { name: 'Take Another Test' }));
     expect(screen.getByPlaceholderText('Type your answer...')).toHaveValue('unfinished second');
     expect(active()).toEqual(second);
@@ -266,7 +266,7 @@ describe('active-to-completed TestMode handoff', () => {
     });
     const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('Blocked'); });
     await answer('cat');
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     await userEvent.click(screen.getByRole('button', { name: 'Take Another Test' }));
     await userEvent.click(screen.getByRole('button', { name: 'Discard result' }));
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
@@ -310,7 +310,7 @@ describe('active-to-completed TestMode handoff', () => {
     save.select.mockReturnValue(query({ data: [result], error: null }));
     const retry = screen.getByRole('button', { name: 'Retry Save' });
     act(() => { fireEvent.click(retry); fireEvent.click(retry); });
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert).toHaveBeenCalledTimes(2);
     expect(save.insert).toHaveBeenLastCalledWith(result);
     remount.unmount();
@@ -330,7 +330,7 @@ describe('active-to-completed TestMode handoff', () => {
       setItem.call(this, key, value);
     });
     await answer('cat');
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     const result = save.insert.mock.calls[0][0];
     expect(JSON.parse(localStorage.getItem(activeTestKey('user-a', original.id))!)).toEqual({ version: 1, phase: 'completed', result });
     view.unmount();
@@ -341,7 +341,7 @@ describe('active-to-completed TestMode handoff', () => {
     write.mockRestore();
     save.insert.mockResolvedValueOnce({ error: null });
     await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert).toHaveBeenLastCalledWith(result);
     expect(localStorage.getItem(activeTestKey('user-a', original.id))).toBeNull();
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
@@ -354,14 +354,14 @@ describe('active-to-completed TestMode handoff', () => {
     const original = active();
     const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota'); });
     await userEvent.click(screen.getByRole('button', { name: 'Finish Test' }));
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     expect(screen.getByRole('alert')).toHaveTextContent('leaving or refreshing may lose it');
     expect(view.save.insert).not.toHaveBeenCalled();
     expect(active()).toEqual(original);
     expect(logged).toHaveBeenCalledWith('Error saving test result:', expect.objectContaining({ message: expect.stringContaining('Could not preserve') }));
     write.mockRestore();
     await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(view.save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: original.id, correct_count: 1 }));
     expect(readTestRecovery('user-a').sessions).toEqual([]);
   });
@@ -373,7 +373,7 @@ describe('active-to-completed TestMode handoff', () => {
     const original = active();
     const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota'); });
     await userEvent.click(screen.getByRole('button', { name: 'Finish Test' }));
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     view.unmount();
     write.mockRestore();
     render(<TestMode />);
@@ -381,7 +381,7 @@ describe('active-to-completed TestMode handoff', () => {
     expect(view.save.insert).not.toHaveBeenCalled();
     expect(active()).toEqual(original);
     await userEvent.click(screen.getByRole('button', { name: 'Finish Test' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(view.save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: original.id }));
   });
 });

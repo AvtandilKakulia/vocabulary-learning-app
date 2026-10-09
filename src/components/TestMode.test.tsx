@@ -61,7 +61,7 @@ describe('TestMode answer evaluation and history snapshots', () => {
       word(), word({ id: 'other-sense', georgian_definitions: ['მოსავალი'] }),
     ], { direction });
     await answerText(answer);
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert).toHaveBeenCalledOnce();
     expect(save.insert).toHaveBeenCalledWith(expect.objectContaining({
       user_id: 'user-a', test_direction: direction, total_words: 1, correct_count: score,
@@ -76,7 +76,7 @@ describe('TestMode answer evaluation and history snapshots', () => {
     // TestMode retains its single-answer behavior even for an irregular word.
     expect(screen.getAllByRole('textbox')).toHaveLength(1);
     await answerText('wrong');
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert.mock.calls[0][0].mistakes).toEqual([{
       english_word: 'yield', user_answer: 'wrong', description: '<strong>Road sense</strong>',
       question_prompt: direction === 'en-to-geo' ? 'yield' : 'დათმობა, მოსავლიანობა',
@@ -108,7 +108,7 @@ describe('TestMode pending result recovery', () => {
     });
     const { user } = await start([word()], { save });
     await answerText('wrong');
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     const original = structuredClone(save.insert.mock.calls[0][0]);
     const stored = localStorage.getItem(pendingTestKey(original));
     expect(Object.keys(JSON.parse(stored!).result).sort()).toEqual([
@@ -116,7 +116,7 @@ describe('TestMode pending result recovery', () => {
     ]);
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
     await user.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert.mock.calls[1][0]).toEqual(original);
     expect(localStorage.getItem(pendingTestKey(original))).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Take Another Test' }));
@@ -129,7 +129,7 @@ describe('TestMode pending result recovery', () => {
     const save = query({ error: failure });
     const { user } = await start([word()], { save });
     await answerText('wrong');
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     const payload = save.insert.mock.calls[0][0];
     const stored = localStorage.getItem(pendingTestKey(payload));
     await user.click(screen.getByRole('button', { name: 'Take Another Test' }));
@@ -153,7 +153,7 @@ describe('TestMode pending result recovery', () => {
     const save = query({ error: failure });
     const { user, rerender } = await start([word()], { save, direction: 'geo-to-en' });
     await answerText('wrong');
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     const original = structuredClone(save.insert.mock.calls[0][0]);
     // App.tsx switches views by conditionally unmounting TestMode in this way.
     rerender(<div>Another view</div>);
@@ -166,7 +166,7 @@ describe('TestMode pending result recovery', () => {
     expect(supabaseMock.from).not.toHaveBeenCalled();
     save.insert.mockResolvedValueOnce({ error: null });
     await user.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert.mock.calls[1][0]).toEqual(original);
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
   });
@@ -263,14 +263,14 @@ describe('TestMode pending result recovery', () => {
     // Block the initial active snapshot too: this case has no durable copy at all.
     const { user } = await start([word()], { save });
     await answerText('wrong');
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     const original = structuredClone(save.insert.mock.calls[0][0]);
     expect(screen.getByRole('alert')).toHaveTextContent('leaving or refreshing may lose it');
     expect(screen.getByText('0 out of 1 correct')).toBeInTheDocument();
     write.mockRestore();
     save.insert.mockResolvedValueOnce({ error: null });
     await user.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert.mock.calls[1][0]).toEqual(original);
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
   });
@@ -298,7 +298,7 @@ describe('TestMode pending result recovery', () => {
     try {
       const { user } = await start([word()], { save });
       await answerText('wrong');
-      await screen.findByText('Failed to save result');
+      await screen.findByText(/^Failed to save result to History\./);
       const result = save.insert.mock.calls[0][0];
       expect(browserStorage.getItem(pendingTestKey(result))).toBeNull();
       expect(screen.getByRole('alert')).toHaveTextContent('leaving or refreshing may lose it');
@@ -337,13 +337,13 @@ describe('TestMode pending result recovery', () => {
           : null;
         await start([word()], { save });
         await answerText('wrong');
-        await screen.findByText('Failed to save result');
+        await screen.findByText(/^Failed to save result to History\./);
         result = save.insert.mock.calls[0][0];
         if (write) {
           expect(localStorage.getItem(pendingTestKey(result))).toBeNull();
           write.mockRestore();
           await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
-          await screen.findByText('Failed to save result');
+          await screen.findByText(/^Failed to save result to History\./);
         }
       }
       const browserStorage = window.localStorage;
@@ -352,7 +352,7 @@ describe('TestMode pending result recovery', () => {
       const blocked = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => { throw new Error('Blocked'); });
       try {
         await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
-        await screen.findByText('Failed to save result');
+        await screen.findByText(/^Failed to save result to History\./);
         expect(save.insert).toHaveBeenLastCalledWith(result);
         await userEvent.click(screen.getByRole('button', { name: 'Take Another Test' }));
         await userEvent.click(screen.getByRole('button', { name: 'Discard result' }));
@@ -383,7 +383,7 @@ describe('TestMode pending result recovery', () => {
     supabaseMock.from.mockReturnValue(save);
     render(<TestMode />);
     await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(localStorage.getItem(pendingTestKey(first))).toBeNull();
     expect(JSON.parse(localStorage.getItem(pendingTestKey(second))!).result).toEqual(second);
     await userEvent.click(screen.getByRole('button', { name: 'Take Another Test' }));
@@ -421,7 +421,7 @@ describe('TestMode idempotent History saving', () => {
     expect(save.insert).toHaveBeenCalledOnce(); // Restoration itself never retries.
     const retry = screen.getByRole('button', { name: 'Retry Save' });
     act(() => { fireEvent.click(retry); fireEvent.click(retry); });
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert).toHaveBeenCalledTimes(2);
     expect(save.select).toHaveBeenCalledOnce();
     expect(existing.eq.mock.calls).toEqual([['id', committed!.id], ['user_id', 'user-a']]);
@@ -447,7 +447,7 @@ describe('TestMode idempotent History saving', () => {
     supabaseMock.from.mockReturnValue(save);
     render(<TestMode />);
     await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     expect(logged).toHaveBeenCalledOnce();
     expect(logged).toHaveBeenCalledWith('Error saving test result:', expect.anything());
     expect(JSON.parse(localStorage.getItem(pendingTestKey(result))!).result).toEqual(result);
@@ -461,7 +461,7 @@ describe('TestMode idempotent History saving', () => {
     render(<TestMode />);
     const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('Blocked'); });
     await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(screen.getByRole('alert')).toHaveTextContent('browser copy could not be removed');
     expect(JSON.parse(localStorage.getItem(pendingTestKey(result))!).result).toEqual(result);
     expect(screen.getByRole('button', { name: 'Take Another Test' })).toBeEnabled();
@@ -486,7 +486,7 @@ describe('TestMode multiple choice', () => {
     expect(new Set(optionLabels())).toEqual(new Set(['ა', 'ბ', 'გ', 'დ']));
     await user.click(screen.getByRole('radio', { name: 'ბ' }));
     await user.click(screen.getByRole('button', { name: 'Finish Test' }));
-    await screen.findByText('Result saved to History');
+    await screen.findByText('Result saved to History successfully.');
     expect(save.insert).toHaveBeenCalledWith(expect.objectContaining({ correct_count: 2, mistakes: [] }));
   });
 
@@ -524,6 +524,121 @@ describe('TestMode multiple choice', () => {
 });
 
 describe('TestMode save lifecycle', () => {
+  it('announces saving and retains prominent success after confirmation, elapsed time and rerender', async () => {
+    const pending = deferred<QueryResult>();
+    const { save, rerender } = await start([word()], { save: query(pending.promise) });
+    await answerText('wrong');
+    const saving = screen.getByRole('status');
+    expect(saving).toHaveTextContent('Saving result to History...');
+    expect(saving).toHaveAttribute('aria-live', 'polite');
+    expect(saving).toHaveAttribute('aria-atomic', 'true');
+    expect(screen.queryByText('Result saved to History successfully.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Take Another Test' })).toBeDisabled();
+    await act(async () => { pending.resolve({ error: null }); });
+    const success = screen.getByRole('status');
+    expect(success).toHaveAccessibleName('Result saved to History successfully.');
+    // Theme smoke checks: explicit backgrounds and foregrounds for both palettes.
+    expect(success.className).toMatch(/\bbg-\S+/);
+    expect(success.className).toMatch(/\btext-\S+/);
+    expect(success.className).toMatch(/dark:bg-\S+/);
+    expect(success.className).toMatch(/dark:text-\S+/);
+    vi.useFakeTimers();
+    act(() => { vi.advanceTimersByTime(5 * 60 * 1000); });
+    rerender(<TestMode />);
+    expect(screen.getByRole('status')).toHaveTextContent('Result saved to History successfully.');
+    expect(screen.getByRole('heading', { name: 'Test Results' })).toBeInTheDocument();
+    expect(save.insert).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it('announces preserved-result failure, keeps discard confirmation, and replaces failure after retry', async () => {
+    const failure = { message: 'Offline' };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pending = deferred<QueryResult>();
+    const save = query();
+    save.insert.mockResolvedValueOnce({ error: failure }).mockReturnValueOnce(pending.promise);
+    const { user } = await start([word()], { save });
+    await answerText('wrong');
+    const failed = screen.getByRole('alert');
+    expect(failed).toHaveAccessibleName('Failed to save result to History. Your completed test has been preserved.');
+    expect(failed).toHaveAttribute('aria-live', 'assertive');
+    expect(failed).toHaveAttribute('aria-atomic', 'true');
+    expect(failed.className).toMatch(/dark:bg-\S+/);
+    expect(failed.className).toMatch(/dark:text-\S+/);
+    await user.click(screen.getByRole('button', { name: 'Take Another Test' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Discard this completed test?');
+    expect(screen.getByRole('button', { name: 'Retry Save' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Retry Save' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Saving result to History...');
+    await act(async () => { pending.resolve({ error: null }); });
+    expect(screen.getByRole('status')).toHaveTextContent('Result saved to History successfully.');
+    expect(screen.queryByText(/^Failed to save/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
+    expect(save.insert).toHaveBeenCalledTimes(2);
+    expect(save.insert.mock.calls[1][0]).toEqual(save.insert.mock.calls[0][0]);
+    expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
+  });
+
+  it('clearly limits recovery to this tab when browser persistence and History both fail', async () => {
+    const failure = { message: 'Offline' };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota'); });
+    await start([word()], { save: query({ error: failure }) });
+    await answerText('wrong');
+    const failed = screen.getByRole('alert');
+    expect(failed).toHaveAccessibleName('Failed to save result to History. Your completed test is kept in this tab only.');
+    expect(failed).toHaveTextContent('Keep this tab open: leaving or refreshing may lose it.');
+    expect(failed).not.toHaveTextContent('has been preserved');
+    expect(screen.getByRole('button', { name: 'Retry Save' })).toBeEnabled();
+    expect(screen.getByText('0 out of 1 correct')).toBeInTheDocument();
+    expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
+    write.mockRestore();
+  });
+
+  it('presents recovered results as pending without announcing success or automatically saving', () => {
+    persistPendingTest(completed());
+    render(<TestMode />);
+    const pending = screen.getByRole('status');
+    expect(pending).toHaveTextContent('Recovered a completed test. Saving to History has not been confirmed.');
+    expect(pending).toHaveAttribute('aria-live', 'polite');
+    expect(pending.className).toMatch(/dark:bg-\S+/);
+    expect(pending.className).toMatch(/dark:text-\S+/);
+    expect(screen.getByRole('button', { name: 'Retry Save' })).toBeEnabled();
+    expect(screen.queryByText('Result saved to History successfully.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
+  it('only announces idempotent success after the existing History payload is verified', async () => {
+    const result = completed();
+    persistPendingTest(result);
+    const confirmation = deferred<QueryResult>();
+    const save = query();
+    save.insert.mockResolvedValue({ error: { code: '23505', message: 'Duplicate ID' } });
+    save.select.mockReturnValue(query(confirmation.promise));
+    supabaseMock.from.mockReturnValue(save);
+    render(<TestMode />);
+    await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
+    expect(save.select).toHaveBeenCalledOnce();
+    expect(screen.getByRole('status')).toHaveTextContent('Saving result to History...');
+    expect(screen.queryByText('Result saved to History successfully.')).not.toBeInTheDocument();
+    await act(async () => { confirmation.resolve({ data: [result], error: null }); });
+    expect(screen.getByRole('status')).toHaveTextContent('Result saved to History successfully.');
+  });
+
+  it('does not emit render, vocabulary, score or Enter-key debug logs', async () => {
+    const debug = vi.spyOn(console, 'log');
+    await start([word()]);
+    const input = screen.getByPlaceholderText('Type your answer...');
+    fireEvent.change(input, { target: { value: 'wrong' } });
+    fireEvent.keyPress(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+    await screen.findByText('Result saved to History successfully.');
+    expect(debug).not.toHaveBeenCalled();
+  });
+
   it('shows a returned error and retries the exact completed payload/date only once', async () => {
     const failure = { message: 'Insert denied' };
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -533,7 +648,7 @@ describe('TestMode save lifecycle', () => {
       .mockReturnValueOnce(pending.promise);
     await start([word()], { save });
     await answerText('wrong');
-    await screen.findByText('Failed to save result');
+    await screen.findByText(/^Failed to save result to History\./);
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving test result:', failure);
     const captured = structuredClone(save.insert.mock.calls[0][0]);
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -544,7 +659,7 @@ describe('TestMode save lifecycle', () => {
     expect(save.insert.mock.calls[1][0]).toEqual(captured);
     expect(screen.getByRole('button', { name: 'Take Another Test' })).toBeDisabled();
     await act(async () => { pending.resolve({ error: null }); });
-    expect(screen.getByText('Result saved to History')).toBeInTheDocument();
+    expect(screen.getByText('Result saved to History successfully.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
     expect(save.insert).toHaveBeenCalledTimes(2);
   });

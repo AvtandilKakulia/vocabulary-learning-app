@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase, Word, TestHistory, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Check, X, RotateCcw } from 'lucide-react';
+import { Check, X, RotateCcw, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import {
   CompletedTestResult, matchesCompletedTest, persistPendingTest, removePendingTest,
@@ -510,16 +510,8 @@ function AccountTestMode({ userId }: { userId: string }) {
   }
 
   if (stage === 'testing') {
-    console.log('🔄 RENDERING TESTING STAGE');
-    console.log('current stage:', stage);
-    console.log('currentQuestion:', currentQuestion);
-    console.log('testWords.length:', testWords.length);
-
     const currentWord = testWords[currentQuestion];
     const progress = ((currentQuestion) / testWords.length) * 100;
-
-    console.log('currentWord:', currentWord?.english_word || currentWord?.georgian_definitions);
-    console.log('progress:', progress + '%');
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -576,7 +568,6 @@ function AccountTestMode({ userId }: { userId: string }) {
                 disabled={showRestartConfirm}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && userAnswer.trim()) {
-                    console.log('Enter key pressed - submitting answer');
                     submitAnswer();
                   }
                 }}
@@ -626,34 +617,55 @@ function AccountTestMode({ userId }: { userId: string }) {
   }
 
   if (stage === 'results') {
-    console.log('🎯 RENDERING RESULTS STAGE');
-    console.log('current stage:', stage);
-    const result = testSessionRef.current!.result!;
+    const session = testSessionRef.current!;
+    const result = session.result!;
     const correctCount = result.correct_count;
     const percentage = Math.round((correctCount / result.total_words) * 100);
-    console.log('correctCount:', correctCount, 'percentage:', percentage);
+    const isSaveError = historySaveStatus === 'error';
+    const isSaved = historySaveStatus === 'saved';
+    const isSaving = historySaveStatus === 'saving';
+    const hasRecoveryCopy = session.hasPersistedCopy || session.hasCompletedCheckpoint;
+    const StatusIcon = isSaveError ? AlertCircle : isSaved ? CheckCircle2 : isSaving ? Loader2 : Info;
+    const statusColors = isSaveError
+      ? 'border-red-300 bg-red-50 text-red-950 dark:border-red-700 dark:bg-red-950 dark:text-red-100'
+      : isSaved
+        ? 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'
+        : isSaving
+          ? 'border-blue-300 bg-blue-50 text-blue-950 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
+          : 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100';
 
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">Test Results</h2>
 
-        <div className="text-sm">
-          <p role="status" aria-live="polite">
-            {historySaveStatus === 'pending' && 'Recovered a completed test. Saving to History has not been confirmed. Retry Save to check and save it.'}
-            {historySaveStatus === 'saving' && 'Saving result...'}
-            {historySaveStatus === 'saved' && 'Result saved to History'}
-            {historySaveStatus === 'error' && 'Failed to save result'}
-          </p>
-          {storageWarning && <p role="alert" className="mt-2">{storageWarning}</p>}
-          {(historySaveStatus === 'error' || historySaveStatus === 'pending') && (
-            <button
-              onClick={() => void saveTestResult()}
-              disabled={showDiscardConfirm}
-              className="mt-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-            >
-              Retry Save
-            </button>
-          )}
+        <div role={isSaveError ? 'alert' : 'status'} aria-live={isSaveError ? 'assertive' : 'polite'}
+          aria-atomic="true" aria-labelledby="test-save-status"
+          className={`flex items-start gap-3 rounded-xl border p-4 shadow-sm sm:p-5 ${statusColors}`}>
+          <StatusIcon size={24} aria-hidden="true" focusable="false"
+            className={`mt-0.5 shrink-0 ${isSaving ? 'motion-safe:animate-spin' : ''}`} />
+          <div className="min-w-0 flex-1 break-words">
+            <p id="test-save-status" className="min-h-12 font-semibold leading-6">
+              {historySaveStatus === 'pending' && 'Recovered a completed test. Saving to History has not been confirmed. Retry Save to check and save it.'}
+              {isSaving && 'Saving result to History...'}
+              {isSaved && 'Result saved to History successfully.'}
+              {isSaveError && (hasRecoveryCopy
+                ? 'Failed to save result to History. Your completed test has been preserved.'
+                : 'Failed to save result to History. Your completed test is kept in this tab only.')}
+            </p>
+            {storageWarning && <p role={isSaveError ? undefined : 'alert'} className="mt-2 text-sm leading-6">{storageWarning}</p>}
+            {/* Reserve the action row so retry/success transitions do not jump. */}
+            <div className="mt-2 min-h-11">
+              {(isSaveError || historySaveStatus === 'pending') && (
+                <button
+                  onClick={() => void saveTestResult()}
+                  disabled={showDiscardConfirm}
+                  className="min-h-11 w-full rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-300 dark:text-blue-950 dark:hover:bg-blue-200 dark:focus-visible:outline-blue-300 sm:w-auto"
+                >
+                  Retry Save
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-8">
