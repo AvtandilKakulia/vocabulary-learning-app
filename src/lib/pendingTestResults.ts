@@ -15,7 +15,7 @@ function isMistake(value: unknown): value is TestMistake {
     (value.description == null || typeof value.description === 'string');
 }
 
-function isResult(value: unknown, userId: string): value is CompletedTestResult {
+export function isCompletedTestResult(value: unknown, userId: string): value is CompletedTestResult {
   return isObject(value) && typeof value.id === 'string' && uuid.test(value.id) &&
     value.user_id === userId && typeof value.test_date === 'string' &&
     Number.isFinite(Date.parse(value.test_date)) &&
@@ -36,7 +36,7 @@ export function pendingTestKey(result: Pick<CompletedTestResult, 'user_id' | 'id
 }
 
 // Whitelist payload fields; never replay arbitrary extra properties from storage.
-function snapshot(result: CompletedTestResult): CompletedTestResult {
+export function completedTestSnapshot(result: CompletedTestResult): CompletedTestResult {
   return {
     id: result.id, user_id: result.user_id, test_date: result.test_date,
     test_direction: result.test_direction, total_words: result.total_words,
@@ -60,9 +60,9 @@ export function readPendingTests(userId: string): { results: CompletedTestResult
       if (!key?.startsWith(accountPrefix(userId))) continue;
       try {
         const stored: unknown = JSON.parse(storage.getItem(key) ?? 'null');
-        if (!isObject(stored) || stored.version !== 1 || !isResult(stored.result, userId) ||
+        if (!isObject(stored) || stored.version !== 1 || !isCompletedTestResult(stored.result, userId) ||
           pendingTestKey(stored.result) !== key) throw new Error('Invalid pending result');
-        results.push(snapshot(stored.result));
+        results.push(completedTestSnapshot(stored.result));
       } catch {
         // Keep unreadable/newer-version entries intact rather than deleting user data.
         warning = 'Some pending test data could not be restored. Its browser copy has been left unchanged.';
@@ -78,7 +78,7 @@ export function readPendingTests(userId: string): { results: CompletedTestResult
 export function persistPendingTest(result: CompletedTestResult): boolean {
   try {
     // One key per result avoids overwriting completed tests from another tab.
-    window.localStorage.setItem(pendingTestKey(result), JSON.stringify({ version: 1, result: snapshot(result) }));
+    window.localStorage.setItem(pendingTestKey(result), JSON.stringify({ version: 1, result: completedTestSnapshot(result) }));
     return true;
   } catch {
     return false;
@@ -95,9 +95,9 @@ export function removePendingTest(result: CompletedTestResult): boolean {
 }
 
 export function matchesCompletedTest(value: unknown, expected: CompletedTestResult): boolean {
-  if (!isResult(value, expected.user_id)) return false;
+  if (!isCompletedTestResult(value, expected.user_id)) return false;
   // PostgreSQL may return an equivalent timestamp with a different timezone spelling.
   // JSONB object key order also differs, so compare a canonical field projection.
-  return JSON.stringify({ ...snapshot(value), test_date: new Date(value.test_date).toISOString() }) ===
-    JSON.stringify({ ...snapshot(expected), test_date: new Date(expected.test_date).toISOString() });
+  return JSON.stringify({ ...completedTestSnapshot(value), test_date: new Date(value.test_date).toISOString() }) ===
+    JSON.stringify({ ...completedTestSnapshot(expected), test_date: new Date(expected.test_date).toISOString() });
 }

@@ -259,8 +259,9 @@ describe('TestMode pending result recovery', () => {
     const failure = { message: 'Offline' };
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const save = query({ error: failure });
-    const { user } = await start([word()], { save });
     const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota exceeded'); });
+    // Block the initial active snapshot too: this case has no durable copy at all.
+    const { user } = await start([word()], { save });
     await answerText('wrong');
     await screen.findByText('Failed to save result');
     const original = structuredClone(save.insert.mock.calls[0][0]);
@@ -292,10 +293,10 @@ describe('TestMode pending result recovery', () => {
     const failure = { message: 'Offline' };
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const save = query({ error: failure });
-    const { user } = await start([word()], { save });
     const browserStorage = window.localStorage;
     const blocked = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => { throw new Error('Blocked'); });
     try {
+      const { user } = await start([word()], { save });
       await answerText('wrong');
       await screen.findByText('Failed to save result');
       const result = save.insert.mock.calls[0][0];
@@ -331,10 +332,10 @@ describe('TestMode pending result recovery', () => {
         supabaseMock.from.mockReturnValue(save);
         render(<TestMode />);
       } else {
-        await start([word()], { save });
         const write = source === 'successful retry write'
           ? vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota exceeded'); })
           : null;
+        await start([word()], { save });
         await answerText('wrong');
         await screen.findByText('Failed to save result');
         result = save.insert.mock.calls[0][0];

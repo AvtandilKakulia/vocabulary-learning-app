@@ -1,16 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase, Word, TestHistory, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Check, X, RotateCcw } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import {
-  CompletedTestResult, matchesCompletedTest, persistPendingTest, readPendingTests, removePendingTest,
+  CompletedTestResult, matchesCompletedTest, persistPendingTest, removePendingTest,
 } from '../lib/pendingTestResults';
-
-interface TestWord extends Word {
-  userAnswer: string;
-  isCorrect: boolean;
-}
+import {
+  ActiveTestSession, TestQuestion, checkpointCompletedTest, persistActiveTest, readTestRecovery, removeActiveTest,
+} from '../lib/activeTestSessions';
 
 type HistorySaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 type TestDirection = TestHistory['test_direction'];
@@ -18,7 +16,9 @@ type InputType = 'multiple' | 'text';
 
 interface TestSession {
   userId: string;
-  vocabulary: Word[];
+  active: ActiveTestSession | null;
+  hasActiveCopy: boolean;
+  hasCompletedCheckpoint: boolean;
   result: CompletedTestResult | null;
   saveStatus: HistorySaveStatus;
   hasPersistedCopy: boolean;
@@ -28,13 +28,13 @@ function normalizeAnswer(answer: string): string {
   return answer.trim().toLowerCase();
 }
 
-function getAnswerLabel(word: Word, direction: TestDirection): string {
+function getAnswerLabel(word: Pick<Word, 'english_word' | 'georgian_definitions'>, direction: TestDirection): string {
   return direction === 'en-to-geo'
     ? word.georgian_definitions.join(', ')
     : word.english_word;
 }
 
-function isCorrectAnswer(word: Word, answer: string, direction: TestDirection, inputType: InputType): boolean {
+function isCorrectAnswer(word: TestQuestion, answer: string, direction: TestDirection, inputType: InputType): boolean {
   const normalized = normalizeAnswer(answer);
   if (direction === 'en-to-geo' && inputType === 'text') {
     return word.georgian_definitions.some(definition => normalizeAnswer(definition) === normalized);
@@ -91,28 +91,58 @@ export default function TestMode() {
 }
 
 function AccountTestMode({ userId }: { userId: string }) {
-  const [recovery] = useState(() => readPendingTests(userId));
+  const [recovery] = useState(() => readTestRecovery(userId));
   const restored = recovery.results[0] ?? null;
-  const [stage, setStage] = useState<'setup' | 'testing' | 'results'>(restored ? 'results' : 'setup');
-  const [direction, setDirection] = useState<TestDirection>('geo-to-en');
-  const [wordCount, setWordCount] = useState(10);
-  const [customCount, setCustomCount] = useState('');
-  const [inputType, setInputType] = useState<InputType>('multiple');
-  const [testWords, setTestWords] = useState<TestWord[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [userAnswer, setUserAnswer] = useState('');
+  const active = restored ? null : recovery.sessions[0] ?? null;
+  const [stage, setStage] = useState<'setup' | 'testing' | 'results'>(restored ? 'results' : active ? 'testing' : 'setup');
+  const [direction, setDirection] = useState<TestDirection>(active?.direction ?? 'geo-to-en');
+  const [wordCount, setWordCount] = useState(active?.wordCount ?? 10);
+  const [customCount, setCustomCount] = useState(active?.customCount ?? '');
+  const [inputType, setInputType] = useState<InputType>(active?.inputType ?? 'multiple');
+  const [testWords, setTestWords] = useState<TestQuestion[]>(active?.questions ?? []);
+  const [currentQuestion, setCurrentQuestion] = useState(active?.currentQuestion ?? 0);
+  const [userAnswer, setUserAnswer] = useState(active?.draftAnswer ?? '');
   const [loading, setLoading] = useState(false);
-  const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>([]);
+  const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>(active?.questions[active.currentQuestion].options ?? []);
   const [historySaveStatus, setHistorySaveStatus] = useState<HistorySaveStatus>(restored ? 'pending' : 'idle');
   const [storageWarning, setStorageWarning] = useState(recovery.warning);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const mounted = useRef(true);
+  const starting = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   // Ref guards take effect immediately, before React can render disabled buttons.
   const testSessionRef = useRef<TestSession | null>(restored
-    ? { userId, vocabulary: [], result: restored, saveStatus: 'pending', hasPersistedCopy: true } : null);
+    ? { userId, active: null, result: restored, saveStatus: 'pending',
+      hasPersistedCopy: recovery.pendingCopyIds.has(restored.id), hasActiveCopy: recovery.activeCopyIds.has(restored.id),
+      hasCompletedCheckpoint: recovery.completedCopyIds.has(restored.id) }
+    : active ? { userId, active, result: null, saveStatus: 'idle', hasPersistedCopy: false, hasActiveCopy: true, hasCompletedCheckpoint: false } : null);
+
+  function saveActiveProgress(next: ActiveTestSession) {
+    const session = testSessionRef.current;
+    if (!session || session.result) return;
+    session.active = next;
+    const persisted = persistActiveTest(next);
+    session.hasActiveCopy ||= persisted;
+    setStorageWarning(persisted ? '' :
+      'Current progress could not be stored in your browser. Navigation or refresh may lose the current session or recent answers. Keep this tab open.');
+  }
+
+  function changeAnswer(answer: string) {
+    const session = testSessionRef.current;
+    if (!session?.active || session.result || showRestartConfirm || answer === session.active.draftAnswer) return;
+    setUserAnswer(answer);
+    // Write only on actual input/progress changes, never from render or mount effects.
+    saveActiveProgress({ ...session.active, draftAnswer: answer });
+  }
 
   async function startTest() {
-    if (testSessionRef.current?.result) return;
+    if (testSessionRef.current || starting.current) return;
 
+    starting.current = true;
     setLoading(true);
     try {
       const { data: allWords, error } = await supabase
@@ -120,6 +150,7 @@ function AccountTestMode({ userId }: { userId: string }) {
         .select('*')
         .eq('user_id', userId);
 
+      if (!mounted.current) return;
       if (error) throw error;
 
       if (!allWords || allWords.length === 0) {
@@ -134,50 +165,63 @@ function AccountTestMode({ userId }: { userId: string }) {
         return;
       }
 
-      // Keep the full loaded vocabulary stable for every question in this session.
+      // Use the loaded vocabulary to freeze options, then retain only selected questions.
       const vocabulary: Word[] = allWords.map(word => ({
         ...word,
         georgian_definitions: [...word.georgian_definitions],
       }));
-      const testData: TestWord[] = shuffle(vocabulary).slice(0, count).map(word => ({
-        ...word,
+      const testData: TestQuestion[] = shuffle(vocabulary).slice(0, count).map(word => ({
+        id: word.id, english_word: word.english_word,
+        georgian_definitions: [...word.georgian_definitions], description: word.description,
         userAnswer: '',
         isCorrect: false,
+        // Freeze options for all selected questions; recovery never needs the dictionary.
+        options: inputType === 'multiple' ? generateMultipleChoiceOptions(word, vocabulary, direction) : [],
       }));
 
-      testSessionRef.current = { userId, vocabulary, result: null, saveStatus: 'idle', hasPersistedCopy: false };
+      const next: ActiveTestSession = {
+        id: crypto.randomUUID(), userId, startedAt: new Date().toISOString(), direction, inputType,
+        wordCount, customCount, questions: testData, currentQuestion: 0, draftAnswer: '',
+      };
+      testSessionRef.current = { userId, active: next, result: null, saveStatus: 'idle', hasPersistedCopy: false, hasActiveCopy: false, hasCompletedCheckpoint: false };
+      // Persist even a zero-answer test before presenting its first question.
+      saveActiveProgress(next);
+      // Settings may have changed while the vocabulary request was in flight.
+      setDirection(next.direction);
+      setInputType(next.inputType);
+      setWordCount(next.wordCount);
+      setCustomCount(next.customCount);
       setHistorySaveStatus('idle');
       setTestWords(testData);
       setCurrentQuestion(0);
       setUserAnswer('');
 
-      // Generate options for first question if multiple choice
-      if (inputType === 'multiple') {
-        const options = generateMultipleChoiceOptions(testData[0], vocabulary, direction);
-        setMultipleChoiceOptions(options);
-      }
+      setMultipleChoiceOptions(testData[0].options);
 
       setStage('testing');
     } catch (err: any) {
       console.error('Error starting test:', err);
       alert('Error starting test: ' + err.message);
     } finally {
+      starting.current = false;
       setLoading(false);
     }
   }
 
   function submitAnswer() {
     const session = testSessionRef.current;
-    if (!session || !testWords[currentQuestion] || session.result) return;
+    if (!session?.active || !testWords[currentQuestion] || session.result || showRestartConfirm ||
+      session.active.currentQuestion !== currentQuestion) return;
 
-    const currentWord = testWords[currentQuestion];
+    const currentWord = session.active.questions[currentQuestion];
+    const answer = session.active.draftAnswer;
 
     // Update the current word with user answer and correctness
-    const updatedWords = [...testWords];
+    const updatedWords = [...session.active.questions];
     updatedWords[currentQuestion] = {
       ...currentWord,
-      userAnswer,
-      isCorrect: isCorrectAnswer(currentWord, userAnswer, direction, inputType),
+      userAnswer: answer,
+      isCorrect: isCorrectAnswer(currentWord, answer, session.active.direction, session.active.inputType),
     };
     setTestWords(updatedWords);
 
@@ -190,16 +234,12 @@ function AccountTestMode({ userId }: { userId: string }) {
       setCurrentQuestion(nextQuestion);
       setUserAnswer('');
 
-      // Generate next multiple choice options
-      if (inputType === 'multiple') {
-        const nextWord = updatedWords[nextQuestion];
-        const options = generateMultipleChoiceOptions(nextWord, session.vocabulary, direction);
-        setMultipleChoiceOptions(options);
-      }
+      setMultipleChoiceOptions(updatedWords[nextQuestion].options);
+      saveActiveProgress({ ...session.active, questions: updatedWords, currentQuestion: nextQuestion, draftAnswer: '' });
     }
   }
 
-  function finishTest(finalWords: TestWord[]) {
+  function finishTest(finalWords: TestQuestion[]) {
     const session = testSessionRef.current;
     if (!session || session.result) return;
 
@@ -220,7 +260,7 @@ function AccountTestMode({ userId }: { userId: string }) {
     // Capture the completed payload once, including the final answer and date.
     // Retries use this same snapshot instead of rebuilding it from React state.
     session.result = {
-      id: crypto.randomUUID(),
+      id: session.active!.id,
       user_id: session.userId,
       test_date: new Date().toISOString(),
       test_direction: direction,
@@ -243,9 +283,21 @@ function AccountTestMode({ userId }: { userId: string }) {
     const persisted = persistPendingTest(session.result);
     // A failed retry write does not mean an earlier recovery copy disappeared.
     session.hasPersistedCopy ||= persisted;
-    setStorageWarning(persisted ? '' :
+    if (!session.hasPersistedCopy && session.hasActiveCopy && checkpointCompletedTest(session.result)) {
+      session.hasCompletedCheckpoint = true;
+    }
+    // Keep the last active snapshot until a completed snapshot can replace it.
+    const recoverable = session.hasPersistedCopy || session.hasCompletedCheckpoint;
+    const activeRemoved = session.hasPersistedCopy ? clearActiveCopy(session) : !session.hasActiveCopy;
+    setStorageWarning(recoverable ? (activeRemoved || session.hasCompletedCheckpoint ? '' :
+      'The completed result is recoverable, but its earlier session copy could not be removed. Recovery will show the completed result.') :
       'This result could not be stored in your browser. Keep this tab open: leaving or refreshing may lose it. Retry saving to History.');
     try {
+      // Do not commit while storage can still resurrect an older active snapshot
+      // without the exact completed timestamp/payload needed to confirm that commit.
+      if (session.hasActiveCopy && !recoverable) {
+        throw new Error('Could not preserve the completed result. Keep this tab open and retry when browser storage is available.');
+      }
       if (userId !== session.userId) {
         throw new Error('Sign in to the account that took this test to save its result.');
       }
@@ -266,7 +318,9 @@ function AccountTestMode({ userId }: { userId: string }) {
 
       session.saveStatus = 'saved';
       setHistorySaveStatus('saved');
-      const removed = removePendingTest(session.result);
+      // If cleanup fails, retain the completed record as a durable guard against
+      // restoring an obsolete unfinished session on the next mount.
+      const removed = clearActiveCopy(session) && (!session.hasPersistedCopy || removePendingTest(session.result));
       if (removed) session.hasPersistedCopy = false;
       setStorageWarning(removed ? '' :
         'Saved to History, but the browser copy could not be removed. It may appear again; retrying will not create another record.');
@@ -275,6 +329,25 @@ function AccountTestMode({ userId }: { userId: string }) {
       session.saveStatus = 'error';
       setHistorySaveStatus('error');
     }
+  }
+
+  function clearActiveCopy(session: TestSession): boolean {
+    if (!session.hasActiveCopy) return true;
+    const id = session.result?.id ?? session.active?.id;
+    if (!id || !removeActiveTest(session.userId, id)) return false;
+    session.hasActiveCopy = false;
+    session.hasCompletedCheckpoint = false;
+    return true;
+  }
+
+  function restartTest() {
+    const session = testSessionRef.current;
+    if (!showRestartConfirm || !session?.active || session.result) return;
+    if (!clearActiveCopy(session)) {
+      setStorageWarning('Could not remove the saved active session. Progress has been kept; cancel or try again when browser storage is available.');
+      return;
+    }
+    startNextTest();
   }
 
   function resetTest() {
@@ -292,7 +365,7 @@ function AccountTestMode({ userId }: { userId: string }) {
     if (!showDiscardConfirm || !session?.result || session.saveStatus === 'saving') return;
     // A newly completed result whose every write failed exists only in memory.
     // Restored or successfully persisted results still require confirmed removal.
-    if (session.hasPersistedCopy && !removePendingTest(session.result)) {
+    if (!clearActiveCopy(session) || (session.hasPersistedCopy && !removePendingTest(session.result))) {
       setStorageWarning('Could not remove the pending browser copy. The result has been kept; cancel and retry saving, or try discarding again.');
       return;
     }
@@ -300,19 +373,31 @@ function AccountTestMode({ userId }: { userId: string }) {
   }
 
   function startNextTest() {
-    const finishedId = testSessionRef.current?.result?.id;
+    const finishedId = testSessionRef.current?.result?.id ?? testSessionRef.current?.active?.id;
     // Other tabs may have completed more tests. Recover them without overwriting.
-    const pending = readPendingTests(userId);
+    const pending = readTestRecovery(userId);
     const next = pending.results.find(result => result.id !== finishedId);
+    const nextActive = next ? null : pending.sessions.find(session => session.id !== finishedId) ?? null;
     testSessionRef.current = next
-      ? { userId, vocabulary: [], result: next, saveStatus: 'pending', hasPersistedCopy: true } : null;
+      ? { userId, active: null, result: next, saveStatus: 'pending', hasPersistedCopy: pending.pendingCopyIds.has(next.id),
+        hasActiveCopy: pending.activeCopyIds.has(next.id), hasCompletedCheckpoint: pending.completedCopyIds.has(next.id) }
+      : nextActive ? { userId, active: nextActive, result: null, saveStatus: 'idle', hasPersistedCopy: false,
+        hasActiveCopy: true, hasCompletedCheckpoint: false } : null;
     setStorageWarning(pending.warning);
     setHistorySaveStatus(next ? 'pending' : 'idle');
-    setStage(next ? 'results' : 'setup');
+    setStage(next ? 'results' : nextActive ? 'testing' : 'setup');
     setShowDiscardConfirm(false);
-    setTestWords([]);
-    setCurrentQuestion(0);
-    setUserAnswer('');
+    setShowRestartConfirm(false);
+    setTestWords(nextActive?.questions ?? []);
+    setCurrentQuestion(nextActive?.currentQuestion ?? 0);
+    setUserAnswer(nextActive?.draftAnswer ?? '');
+    setMultipleChoiceOptions(nextActive?.questions[nextActive.currentQuestion].options ?? []);
+    if (nextActive) {
+      setDirection(nextActive.direction);
+      setInputType(nextActive.inputType);
+      setWordCount(nextActive.wordCount);
+      setCustomCount(nextActive.customCount);
+    }
   }
 
   if (stage === 'setup') {
@@ -445,6 +530,21 @@ function AccountTestMode({ userId }: { userId: string }) {
           </div>
         </div>
 
+        {storageWarning && <p role="alert">{storageWarning}</p>}
+        <button onClick={() => setShowRestartConfirm(true)} disabled={showRestartConfirm}
+          className="px-4 py-2 border rounded-lg">Restart Test</button>
+        {showRestartConfirm && (
+          <div role="alertdialog" aria-modal="true" aria-labelledby="restart-test-title"
+            className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md space-y-4">
+              <h3 id="restart-test-title" className="font-bold">Abandon this unfinished test?</h3>
+              <p>Your current questions, answers and progress will be lost. Confirm to return to test setup.</p>
+              <button autoFocus onClick={() => setShowRestartConfirm(false)} className="px-4 py-2 border rounded">Cancel</button>
+              <button onClick={restartTest} className="px-4 py-2 bg-red-600 text-white rounded">Discard progress</button>
+            </div>
+          </div>
+        )}
+
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
@@ -472,7 +572,8 @@ function AccountTestMode({ userId }: { userId: string }) {
               <input
                 type="text"
                 value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
+                onChange={(e) => changeAnswer(e.target.value)}
+                disabled={showRestartConfirm}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && userAnswer.trim()) {
                     console.log('Enter key pressed - submitting answer');
@@ -492,7 +593,8 @@ function AccountTestMode({ userId }: { userId: string }) {
                       name="multipleChoice"
                       value={option}
                       checked={userAnswer === option}
-                      onChange={(e) => setUserAnswer(e.target.value)}
+                      onChange={(e) => changeAnswer(e.target.value)}
+                      disabled={showRestartConfirm}
                       className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="text-lg">{option}</span>
@@ -503,7 +605,7 @@ function AccountTestMode({ userId }: { userId: string }) {
 
             <button
               onClick={submitAnswer}
-              disabled={!userAnswer.trim()}
+              disabled={!userAnswer.trim() || showRestartConfirm}
               className={`w-full px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors ${
                 currentQuestion >= testWords.length - 1
                   ? 'bg-green-600 hover:bg-green-700 text-white'
