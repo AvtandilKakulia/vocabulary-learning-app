@@ -8,6 +8,81 @@ const fullWord = word({
   english_word: 'go', is_irregular_verb: true, past_simple: 'went', past_participle: 'gone',
 });
 
+describe('useWords read errors', () => {
+  it.each(['returned', 'rejected'] as const)('exposes %s read failures, blocks deletion, and clears the error on retry', async kind => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(failure.promise));
+    const { result } = renderHook(() => useWords());
+    await act(async () => {
+      if (kind === 'returned') failure.resolve({ error: { message: 'private database details' } });
+      else failure.reject(new Error('private database details'));
+    });
+    expect(result.current.readError).toBe('Unable to load your words. Please try again.');
+    expect(result.current.loading).toBe(false);
+    const calls = supabaseMock.from.mock.calls.length;
+    await expect(result.current.deleteWord('word-1')).rejects.toThrow('Reload your words');
+    await expect(result.current.bulkDeleteWords(['word-1'])).rejects.toThrow('Reload your words');
+    expect(supabaseMock.from).toHaveBeenCalledTimes(calls);
+    const retry = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(retry.promise));
+    act(() => { void result.current.loadWords(); });
+    expect(result.current.readError).toBeNull();
+    expect(result.current.loading).toBe(true);
+    await act(async () => retry.resolve({ data: [fullWord], count: 1, error: null }));
+    expect(result.current.readError).toBeNull();
+    expect(result.current.words).toEqual([fullWord]);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it.each([
+    ['search_words', 'returned'], ['search_words_count', 'returned'],
+    ['search_words', 'rejected'], ['search_words_count', 'rejected'],
+  ] as const)('never partially commits when %s fails with a %s error; retry retains query context', async (rpc, kind) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = await mountHook();
+    vi.useFakeTimers();
+    supabaseMock.rpc.mockImplementation(name => name === rpc
+      ? kind === 'returned' ? Promise.resolve({ error: { message: 'failed' } }) : Promise.reject(new Error('failed'))
+      : Promise.resolve({ data: name === 'search_words' ? [word({ id: 'uncommitted' })] : 99, error: null }));
+    act(() => result.current.setSearchTerm('go'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    await act(async () => { result.current.setPage(2); result.current.setPageSize(25); result.current.setSortOption('recent'); });
+    expect(result.current.readError).toBeTruthy();
+    expect(result.current.words).toEqual([fullWord]);
+    expect(result.current.totalCount).toBe(80);
+    supabaseMock.rpc.mockClear();
+    supabaseMock.rpc.mockImplementation(name => Promise.resolve({ data: name === 'search_words' ? [fullWord] : 61, error: null }));
+    await act(async () => { await result.current.loadWords(); });
+    expect(supabaseMock.rpc.mock.calls).toEqual([
+      ['search_words', { p_user_id: 'user-a', p_term: 'go', p_offset: 50, p_limit: 25, p_sort: 'recent' }],
+      ['search_words_count', { p_user_id: 'user-a', p_term: 'go' }],
+    ]);
+    expect(result.current).toMatchObject({ page: 2, pageSize: 25, sortOption: 'recent', searchTerm: 'go', totalCount: 61, readError: null });
+  });
+
+  it('keeps a newer failure when an obsolete success finishes, then recovers after repeated refreshes', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const old = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValueOnce(query({ error: { message: 'new failure' } }));
+    const { result } = renderHook(() => useWords());
+    await act(async () => { await result.current.loadWords(); });
+    await act(async () => old.resolve({ data: [fullWord], count: 99, error: null }));
+    expect(result.current.readError).toBeTruthy();
+    expect(result.current.totalCount).toBe(0);
+    const first = deferred<QueryResult>();
+    const second = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(first.promise)).mockReturnValueOnce(query(second.promise));
+    act(() => { void result.current.loadWords(); void result.current.loadWords(); });
+    await act(async () => first.resolve({ error: { message: 'stale retry' } }));
+    expect(result.current.loading).toBe(true);
+    expect(result.current.readError).toBeNull();
+    await act(async () => second.resolve({ data: [], count: 0, error: null }));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.readError).toBeNull();
+  });
+});
+
 describe('useWords read races', () => {
   it('refreshes the current sort after a mutation settles with an older refresh callback', async () => {
     const { result } = await mountHook();

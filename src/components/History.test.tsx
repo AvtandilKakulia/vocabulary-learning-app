@@ -139,6 +139,105 @@ async function finishReload() {
   await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 }
 
+describe('History read errors', () => {
+  it.each(['returned', 'rejected'] as const)('shows a %s error instead of empty results and retries with the current sort', async kind => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(failure.promise));
+    render(<History />);
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    await act(async () => {
+      if (kind === 'returned') failure.resolve({ error: { message: 'private details' } });
+      else failure.reject(new Error('private details'));
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load your history. Please try again.');
+    expect(screen.queryByText('No results found.')).not.toBeInTheDocument();
+    expect(screen.queryByText('private details')).not.toBeInTheDocument();
+    // Sort remains usable after failure; its failed read can also be retried.
+    supabaseMock.from.mockReturnValueOnce(query({ error: { message: 'still unavailable' } }));
+    fireEvent.change(control(3), { target: { value: 'asc' } });
+    await screen.findByRole('alert');
+    const pending = deferred<QueryResult>();
+    const retry = query(pending.promise);
+    supabaseMock.from.mockReturnValue(retry);
+    const button = screen.getByRole('button', { name: 'Retry' });
+    button.focus();
+    await userEvent.keyboard('{Enter}');
+    fireEvent.click(button);
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await act(async () => pending.resolve({ data: variedRecords, error: null }));
+    expect(control(3)).toHaveValue('asc');
+    expect(retry.eq).toHaveBeenCalledWith('user_id', 'user-a');
+    expect(screen.getByText('Total Tests')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Select All' }));
+    expect(screen.getByRole('button', { name: 'Delete Selected (4)' })).toBeEnabled();
+    expect(retry.delete).not.toHaveBeenCalled();
+  });
+
+  it.each(['single', 'bulk'] as const)('invalidates %s confirmation and stale records/statistics after a read failure', async kind => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const record = historyRecord();
+    const { user } = await loadHistory([record]);
+    if (kind === 'single') await user.click(rowAction(record, 'trash-2'));
+    else {
+      await user.click(screen.getByRole('button', { name: 'Select All' }));
+      await user.click(screen.getByRole('button', { name: 'Delete Selected (1)' }));
+    }
+    const confirm = screen.getByRole('button', { name: kind === 'single' ? 'Delete' : 'Delete 1 Record' });
+    const failedRead = query({ error: { message: 'read failed' } });
+    supabaseMock.from.mockReturnValue(failedRead);
+    await user.selectOptions(control(3), 'asc');
+    await screen.findByRole('alert');
+    expect(screen.queryByText(new Date(record.test_date).toLocaleString())).not.toBeInTheDocument();
+    expect(screen.queryByText('Total Tests')).not.toBeInTheDocument();
+    expect(screen.queryByText('Average Score')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Delete/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
+    fireEvent.click(confirm);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Selected (0)' }));
+    expect(failedRead.delete).not.toHaveBeenCalled();
+    supabaseMock.from.mockReturnValue(query({ data: [record], error: null }));
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText(new Date(record.test_date).toLocaleString());
+    expect(screen.getByText('0 of 1 visible records selected')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Delete/ })).not.toBeInTheDocument();
+  });
+
+  it('does not let an obsolete success clear the latest error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const old = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValueOnce(query({ error: { message: 'new error' } }));
+    render(<History />);
+    fireEvent.change(control(3), { target: { value: 'asc' } });
+    await screen.findByRole('alert');
+    await act(async () => old.resolve({ data: variedRecords, error: null }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('Total Tests')).not.toBeInTheDocument();
+  });
+
+  it('keeps the new account successful after an old failure, and ignores rejection after unmount', async () => {
+    const old = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise));
+    const { rerender, unmount } = render(<History />);
+    authMock.user = { id: 'user-b' };
+    const current = query({ data: [], error: null });
+    supabaseMock.from.mockReturnValueOnce(current);
+    rerender(<History />);
+    await screen.findByText('No results found.');
+    await act(async () => old.reject(new Error('old account')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(current.eq).toHaveBeenCalledWith('user_id', 'user-b');
+    const pending = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(pending.promise));
+    fireEvent.change(control(3), { target: { value: 'asc' } });
+    unmount();
+    await act(async () => pending.reject(new Error('unmounted')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('History read races', () => {
   it('does not restore a deleted record when an older sorting read finishes after the deletion refresh', async () => {
     const record = historyRecord();

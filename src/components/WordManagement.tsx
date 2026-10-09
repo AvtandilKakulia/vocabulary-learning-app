@@ -18,6 +18,7 @@ export default function WordManagement() {
   const {
     words,
     loading,
+    readError,
     searchTerm,
     setSearchTerm,
     debouncedSearchTerm,
@@ -35,6 +36,8 @@ export default function WordManagement() {
     addWord,
     updateWord,
   } = useWords();
+  // Wait for the pending search to settle instead of retrying its previous term.
+  const readPending = loading || searchTerm !== debouncedSearchTerm;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingWord, setEditingWord] = useState<Word | null>(null);
@@ -60,10 +63,17 @@ export default function WordManagement() {
     setSelectedIds(new Set());
   }, [page, pageSize, debouncedSearchTerm]);
 
+  useEffect(() => {
+    if (!readError) return;
+    setDeleteModalWord(null);
+    setShowBulkDeleteModal(false);
+  }, [readError]);
+
   /* ---------------------------------------------
    * Selection helpers
    * -------------------------------------------*/
   const toggleSelectAll = () => {
+    if (readPending || readError) return;
     if (selectedIds.size === words.length) {
       setSelectedIds(new Set());
     } else {
@@ -72,6 +82,7 @@ export default function WordManagement() {
   };
 
   const toggleSelect = (id: string) => {
+    if (readPending || readError) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -120,6 +131,7 @@ export default function WordManagement() {
    * Delete handlers
    * -------------------------------------------*/
   const handleDeleteWord = async (id: string) => {
+    if (readPending || readError || !words.some(word => word.id === id)) return;
     setDeleting(true);
     try {
       await deleteWord(id);
@@ -138,11 +150,13 @@ export default function WordManagement() {
   };
 
   const handleBulkDeleteWords = async () => {
-    if (selectedIds.size === 0) return;
+    if (readPending || readError) return;
+    const ids = words.filter(word => selectedIds.has(word.id)).map(word => word.id);
+    if (ids.length === 0) return;
 
     setDeleting(true);
     try {
-      await bulkDeleteWords(Array.from(selectedIds));
+      await bulkDeleteWords(ids);
       setSelectedIds(new Set());
       setShowBulkDeleteModal(false);
       await loadWords();
@@ -158,7 +172,7 @@ export default function WordManagement() {
    * -------------------------------------------*/
   const totalPages = Math.ceil(totalCount / pageSize);
   const allSelected = words.length > 0 && selectedIds.size === words.length;
-  const someSelected = selectedIds.size > 0;
+  const someSelected = !readPending && !readError && words.some(word => selectedIds.has(word.id));
   const selectionRatio = words.length
     ? Math.min((selectedIds.size / words.length) * 100, 100)
     : 0;
@@ -211,7 +225,7 @@ export default function WordManagement() {
               <p className="text-xs uppercase tracking-widest text-indigo-100/80 mb-1">
                 Total words
               </p>
-              <p className="text-3xl font-extrabold">{totalCount}</p>
+              <p className="text-3xl font-extrabold">{readPending || readError ? '—' : totalCount}</p>
               <p className="text-xs text-indigo-100/70 mt-2">
                 Synced to your account
               </p>
@@ -251,7 +265,9 @@ export default function WordManagement() {
 
       <WordTable
         words={words}
-        loading={loading}
+        loading={readPending}
+        readError={readError}
+        onRetry={() => { if (!readPending) void loadWords(); }}
         allSelected={allSelected}
         selectedIds={selectedIds}
         onToggleSelectAll={toggleSelectAll}
@@ -264,7 +280,7 @@ export default function WordManagement() {
         onView={setViewingWord}
       />
 
-      <Pagination page={page} totalPages={totalPages} setPage={setPage} />
+      {!readPending && !readError && <Pagination page={page} totalPages={totalPages} setPage={setPage} />}
 
       {showAddModal && (
         <WordModal
@@ -303,7 +319,7 @@ export default function WordManagement() {
         />
       )}
 
-      {deleteModalWord && (
+      {!readPending && !readError && deleteModalWord && (
         <DeleteWordModal
           word={deleteModalWord}
           deleting={deleting}
@@ -312,7 +328,7 @@ export default function WordManagement() {
         />
       )}
 
-      {showBulkDeleteModal && (
+      {!readPending && !readError && showBulkDeleteModal && (
         <BulkDeleteModal
           count={selectedIds.size}
           deleting={deleting}
