@@ -1,17 +1,22 @@
 import { beforeEach, vi } from 'vitest';
+import type { ReactNode } from 'react';
 
 const { supabaseMock, authMock } = vi.hoisted(() => ({
-  supabaseMock: { from: vi.fn(), rpc: vi.fn() },
-  authMock: { user: { id: 'user-a' } as { id: string } | null },
+  supabaseMock: { from: vi.fn(), rpc: vi.fn(), auth: { updateUser: vi.fn() } },
+  authMock: { user: { id: 'user-a' } as { id: string; email?: string } | null },
 }));
 
 export { supabaseMock, authMock };
 
 vi.mock('@/lib/supabase', () => ({ supabase: supabaseMock }));
-vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => authMock }));
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => authMock,
+  AuthProvider: ({ children }: { children: ReactNode }) => children,
+}));
 
 beforeEach(() => {
   authMock.user = { id: 'user-a' };
+  supabaseMock.auth.updateUser.mockReset();
   supabaseMock.from.mockReset().mockImplementation((table) => {
     throw new Error(`Unexpected Supabase table: ${table}`);
   });
@@ -36,6 +41,8 @@ export function query(result: QueryResult | Promise<QueryResult> = { error: null
     range: vi.fn().mockReturnThis(),
     insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
+    upsert: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
     then: <T, U>(resolve?: (value: QueryResult) => T, reject?: (reason: unknown) => U) =>
       Promise.resolve(result).then(resolve, reject),

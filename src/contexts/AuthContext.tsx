@@ -27,18 +27,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    let authEventReceived = false;
+    const isInitialCurrent = () => isMounted && !authEventReceived;
 
     const loadInitialSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
+        if (!isInitialCurrent()) return;
         if (error) throw error;
-        if (!isMounted) return;
         setUser(data.session?.user ?? null);
       } catch (error) {
+        if (!isInitialCurrent()) return;
         console.error('Failed to load session', error);
-        if (isMounted) setUser(null);
+        setUser(null);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isInitialCurrent()) setLoading(false);
       }
     };
 
@@ -46,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
+      authEventReceived = true;
       setUser(session?.user ?? null);
       setLoading(false);
     });

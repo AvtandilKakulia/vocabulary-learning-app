@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLatestRequest } from '../hooks/useLatestRequest';
 import { X, Save, AlertTriangle } from 'lucide-react';
 
 interface UserProfileProps {
@@ -16,38 +17,44 @@ export default function UserProfile({ onClose, onProfileUpdated }: UserProfilePr
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const userId = user?.id;
+  const userEmail = user?.email;
+  const beginRead = useLatestRequest(JSON.stringify([userId, userEmail]));
 
   useEffect(() => {
-    loadProfile();
-  }, [user]);
-
-  async function loadProfile() {
-    if (!user) return;
-
-    setLoading(true);
-    try {
-      // Get current email from auth user
-      setEmail(user.email || '');
-
-      // Get display name from profiles table
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-        throw error;
-      }
-
-      setDisplayName(data?.display_name || '');
-    } catch (err: any) {
-      console.error('Error loading profile:', err);
-      setError('Failed to load profile');
-    } finally {
+    const isCurrent = beginRead();
+    if (!isCurrent) return;
+    setDisplayName('');
+    setEmail(userEmail || '');
+    setError('');
+    if (!userId) {
       setLoading(false);
+      return;
     }
-  }
+    const loadProfile = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (!isCurrent()) return;
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw error;
+        }
+        setDisplayName(data?.display_name || '');
+      } catch (err: any) {
+        if (!isCurrent()) return;
+        console.error('Error loading profile:', err);
+        setError('Failed to load profile');
+      } finally {
+        if (isCurrent()) setLoading(false);
+      }
+    };
+    void loadProfile();
+  }, [beginRead, userId, userEmail]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();

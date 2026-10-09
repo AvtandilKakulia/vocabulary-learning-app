@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { supabase, Word } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { normalizeEnglishWord } from "../../lib/normalizeEnglishWord";
+import { useLatestRequest } from "../../hooks/useLatestRequest";
 
 export interface WordFormData {
   englishWord: string;
@@ -29,6 +30,13 @@ export function useWords() {
   const [totalCount, setTotalCount] = useState(0);
   const [sortOption, setSortOption] = useState<SortOption>("alpha-asc");
   const prevSearchTermRef = useRef(debouncedSearchTerm);
+  const userId = user?.id;
+  const beginRead = useLatestRequest(JSON.stringify([userId, debouncedSearchTerm, page, pageSize, sortOption]));
+
+  useEffect(() => {
+    setWords([]);
+    setTotalCount(0);
+  }, [userId]);
 
   const applySorting = useCallback(
     <T>(query: T) => {
@@ -48,15 +56,20 @@ export function useWords() {
     [sortOption]
   );
 
-  const loadWords = useCallback(async () => {
-    if (!user) return;
+  const loadWordsForContext = useCallback(async () => {
+    const isCurrent = beginRead();
+    if (!isCurrent) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     const term = debouncedSearchTerm.trim();
     try {
       if (term) {
         const searchQuery = supabase.rpc("search_words", {
-          p_user_id: user.id,
+          p_user_id: userId,
           p_term: term,
           p_offset: page * pageSize,
           p_limit: pageSize,
@@ -66,11 +79,12 @@ export function useWords() {
         const [searchResult, countResult] = await Promise.all([
           searchQuery,
           supabase.rpc("search_words_count", {
-            p_user_id: user.id,
+            p_user_id: userId,
             p_term: term,
           }),
         ]);
 
+        if (!isCurrent()) return;
         if (searchResult.error) throw searchResult.error;
         if (countResult.error) throw countResult.error;
 
@@ -82,7 +96,7 @@ export function useWords() {
         let query = supabase
           .from("words")
           .select("*", { count: "exact" })
-          .eq("user_id", user.id);
+          .eq("user_id", userId);
 
         query = applySorting(query).range(
           page * pageSize,
@@ -91,16 +105,27 @@ export function useWords() {
 
         const { data, error, count } = await query;
 
+        if (!isCurrent()) return;
         if (error) throw error;
         setWords(data || []);
         setTotalCount(count || 0);
       }
     } catch (error: any) {
-      console.error("Error loading words:", error);
+      if (isCurrent()) console.error("Error loading words:", error);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [applySorting, debouncedSearchTerm, page, pageSize, sortOption, user]);
+  }, [applySorting, beginRead, debouncedSearchTerm, page, pageSize, sortOption, userId]);
+
+  // A save/delete can finish after sorting or paging changed. Refresh the latest
+  // query for that owner instead of reusing the mutation handler's old closure.
+  const latestRead = useRef({ userId, load: loadWordsForContext });
+  useLayoutEffect(() => {
+    latestRead.current = { userId, load: loadWordsForContext };
+  }, [userId, loadWordsForContext]);
+  const loadWords = useCallback(async () => {
+    if (latestRead.current.userId === userId) await latestRead.current.load();
+  }, [userId]);
 
   useEffect(() => {
     const searchChanged = debouncedSearchTerm !== prevSearchTermRef.current;
@@ -114,8 +139,8 @@ export function useWords() {
       }
     }
 
-    loadWords();
-  }, [page, pageSize, debouncedSearchTerm, loadWords]);
+    void loadWordsForContext();
+  }, [page, pageSize, debouncedSearchTerm, loadWordsForContext]);
 
   const deleteWord = useCallback(
     async (id: string) => {

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { deferred, query, supabaseMock, type QueryResult } from '@/test/mocks';
+import { authMock, deferred, query, supabaseMock, type QueryResult } from '@/test/mocks';
 import { historyRecord } from '@/test/fixtures';
 import type { TestHistory } from '@/lib/supabase';
 import History from './History';
@@ -138,6 +138,89 @@ const control = (index: number) => screen.getAllByRole('combobox')[index];
 async function finishReload() {
   await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 }
+
+describe('History read races', () => {
+  it('does not restore a deleted record when an older sorting read finishes after the deletion refresh', async () => {
+    const record = historyRecord();
+    const { user } = await loadHistory([record]);
+    await user.click(rowAction(record, 'trash-2'));
+    const old = deferred<QueryResult>();
+    const fresh = deferred<QueryResult>();
+    const deletion = query();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise))
+      .mockReturnValueOnce(deletion).mockReturnValueOnce(query(fresh.promise));
+    await user.selectOptions(control(3), 'asc');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(deletion.eq.mock.calls).toEqual([['id', record.id], ['user_id', 'user-a']]);
+    await act(async () => fresh.resolve({ data: [], error: null }));
+    await act(async () => old.resolve({ data: [record], error: null }));
+    expect(screen.getByText('No results found.')).toBeInTheDocument();
+    expect(screen.getByText('0 of 0 visible records selected')).toBeInTheDocument();
+    expect(screen.queryByText(new Date(record.test_date).toLocaleString())).not.toBeInTheDocument();
+  });
+
+  it('keeps loading until the newest sorting read completes', async () => {
+    const old = deferred<QueryResult>();
+    const current = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValueOnce(query(current.promise));
+    render(<History />);
+    fireEvent.change(control(3), { target: { value: 'asc' } });
+    await act(async () => old.resolve({ data: [historyRecord()], error: null }));
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeDisabled();
+    await act(async () => current.resolve({ data: [], error: null }));
+    expect(screen.getByText('No results found.')).toBeInTheDocument();
+  });
+
+  it.each(['returned', 'rejected'] as const)('ignores stale %s errors', async kind => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const old = deferred<QueryResult>();
+    const current = historyRecord();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValue(query({ data: [current], error: null }));
+    render(<History />);
+    fireEvent.change(control(2), { target: { value: 'score' } });
+    await finishReload();
+    await act(async () => {
+      if (kind === 'returned') old.resolve({ error: { message: 'Old failure' } });
+      else old.reject(new Error('Old failure'));
+    });
+    expect(screen.getByText(new Date(current.test_date).toLocaleString())).toBeInTheDocument();
+    expect(logged).not.toHaveBeenCalled();
+  });
+
+  it('reloads for the new account and rejects the previous account response', async () => {
+    const a = deferred<QueryResult>();
+    const b = deferred<QueryResult>();
+    const bQuery = query(b.promise);
+    supabaseMock.from.mockReturnValueOnce(query(a.promise)).mockReturnValueOnce(bQuery);
+    const { rerender } = render(<History />);
+    authMock.user = { id: 'user-b' };
+    rerender(<History />);
+    expect(bQuery.eq).toHaveBeenCalledWith('user_id', 'user-b');
+    const current = historyRecord({ id: 'b', user_id: 'user-b', test_date: '2026-02-01T10:00:00Z' });
+    await act(async () => b.resolve({ data: [current], error: null }));
+    await act(async () => a.resolve({ data: [historyRecord()], error: null }));
+    expect(screen.getByText(new Date(current.test_date).toLocaleString())).toBeInTheDocument();
+    expect(screen.queryByText(new Date(historyRecord().test_date).toLocaleString())).not.toBeInTheDocument();
+    authMock.user = null;
+    rerender(<History />);
+    expect(screen.getByText('No results found.')).toBeInTheDocument();
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignores a pending %s after unmount', async completion => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pending = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(pending.promise));
+    const { unmount } = render(<History />);
+    unmount();
+    await act(async () => {
+      if (completion === 'resolve') pending.resolve({ data: [historyRecord()], error: null });
+      else pending.reject(new Error('Unmounted'));
+    });
+    expect(screen.queryByRole('group', { name: 'History selection toolbar' })).not.toBeInTheDocument();
+    expect(logged).not.toHaveBeenCalled();
+  });
+});
 
 describe('History bulk selection safety', () => {
   it('keeps the same toolbar mounted from initial loading through zero, partial and full selection', async () => {
