@@ -1,10 +1,17 @@
 // --- CODE BLOCK START ---
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, TestHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import { Trash2, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
+
+interface BulkConfirmation {
+  ids: string[];
+  userId: string;
+  direction: string;
+  score: string;
+}
 
 export default function History() {
   const { user } = useAuth();
@@ -17,7 +24,9 @@ export default function History() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
-  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkConfirmation, setBulkConfirmation] = useState<BulkConfirmation | null>(null);
+  const bulkConfirmationRef = useRef<BulkConfirmation | null>(null);
+  const bulkDeletingRef = useRef(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -45,21 +54,37 @@ export default function History() {
   }
 
   function toggleSelect(id: string) {
-    const newSelected = new Set(selectedIds);
+    if (bulkDeletingRef.current || !visibleIds.has(id)) return;
+    const newSelected = new Set(eligibleIds);
     if (newSelected.has(id)) {
       newSelected.delete(id);
     } else {
       newSelected.add(id);
     }
-    setSelectedIds(newSelected);
+    changeSelection(newSelected);
   }
 
   function toggleSelectAll() {
-    if (selectedIds.size === filteredHistory.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredHistory.map(h => h.id)));
-    }
+    changeSelection(allSelected ? new Set() : new Set(visibleIds));
+  }
+
+  function closeBulkConfirmation() {
+    // Invalidate immediately, including a queued click before React rerenders.
+    bulkConfirmationRef.current = null;
+    setBulkConfirmation(null);
+  }
+
+  function changeSelection(ids: Set<string>) {
+    if (bulkDeletingRef.current) return;
+    closeBulkConfirmation();
+    setSelectedIds(ids);
+  }
+
+  function confirmBulkDelete() {
+    if (!user || loading || deleting || bulkDeletingRef.current || eligibleIds.length === 0) return;
+    const confirmation = { ids: [...eligibleIds], userId: user.id, direction: filterDirection, score: filterScore };
+    bulkConfirmationRef.current = confirmation;
+    setBulkConfirmation(confirmation);
   }
 
   async function deleteHistory(id: string) {
@@ -90,24 +115,37 @@ export default function History() {
   }
 
   async function bulkDeleteHistory() {
-    if (!user || selectedIds.size === 0) return;
+    const confirmation = bulkConfirmationRef.current;
+    if (!user || !confirmation || loading || deleting || bulkDeletingRef.current) return;
+    if (confirmation.userId !== user.id || confirmation.direction !== filterDirection || confirmation.score !== filterScore) {
+      closeBulkConfirmation();
+      return;
+    }
+    // Never expand the confirmed scope. Recheck selection AND visibility at send time.
+    const ids = confirmation.ids.filter(id => selectedIds.has(id) && visibleIds.has(id));
+    if (ids.length === 0) {
+      closeBulkConfirmation();
+      return;
+    }
 
+    bulkDeletingRef.current = true;
     setDeleting(true);
     try {
       const { error } = await supabase
         .from('test_history')
         .delete()
-        .in('id', Array.from(selectedIds))
+        .in('id', ids)
         .eq('user_id', user.id);
 
       if (error) throw error;
 
       setSelectedIds(new Set());
-      setShowBulkDeleteModal(false);
+      closeBulkConfirmation();
       loadHistory();
     } catch (error: any) {
       alert('Error deleting records: ' + error.message);
     } finally {
+      bulkDeletingRef.current = false;
       setDeleting(false);
     }
   }
@@ -177,9 +215,11 @@ export default function History() {
         )
       : 0;
 
-  const allSelected =
-    filteredHistory.length > 0 &&
-    selectedIds.size === filteredHistory.length;
+  const visibleIds = new Set(filteredHistory.map(record => record.id));
+  // Hidden/deleted stale state is never counted or made actionable.
+  const eligibleIds = [...selectedIds].filter(id => visibleIds.has(id));
+  const allSelected = filteredHistory.length > 0 && filteredHistory.every(record => selectedIds.has(record.id));
+  const confirmedIds = bulkConfirmation?.ids.filter(id => selectedIds.has(id) && visibleIds.has(id)) ?? [];
 
   return (
     <div className="space-y-8">
@@ -197,13 +237,14 @@ export default function History() {
       <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-xl p-6">
         <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
           <div className="flex gap-3">
-            {selectedIds.size > 0 && (
+            {eligibleIds.length > 0 && (
               <button
-                onClick={() => setShowBulkDeleteModal(true)}
+                onClick={confirmBulkDelete}
+                disabled={deleting || loading}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:scale-105 transition"
               >
                 <Trash2 size={18} />
-                Delete Selected ({selectedIds.size})
+                Delete Selected ({eligibleIds.length})
               </button>
             )}
 
@@ -257,9 +298,12 @@ export default function History() {
             <label className="block text-sm font-semibold mb-2">Direction</label>
             <select
               value={filterDirection}
-              onChange={(e) =>
-                setFilterDirection(e.target.value as any)
-              }
+              disabled={deleting}
+              onChange={(e) => {
+                if (bulkDeletingRef.current) return;
+                changeSelection(new Set());
+                setFilterDirection(e.target.value as any);
+              }}
               className="w-full px-4 py-3 rounded-xl border"
             >
               <option value="all">All</option>
@@ -274,9 +318,12 @@ export default function History() {
             </label>
             <select
               value={filterScore}
-              onChange={(e) =>
-                setFilterScore(e.target.value as any)
-              }
+              disabled={deleting}
+              onChange={(e) => {
+                if (bulkDeletingRef.current) return;
+                changeSelection(new Set());
+                setFilterScore(e.target.value as any);
+              }}
               className="w-full px-4 py-3 rounded-xl border"
             >
               <option value="all">All</option>
@@ -292,6 +339,7 @@ export default function History() {
             </label>
             <select
               value={sortBy}
+              disabled={deleting}
               onChange={(e) =>
                 setSortBy(e.target.value as any)
               }
@@ -308,6 +356,7 @@ export default function History() {
             </label>
             <select
               value={sortOrder}
+              disabled={deleting}
               onChange={(e) =>
                 setSortOrder(e.target.value as any)
               }
@@ -331,22 +380,24 @@ export default function History() {
         ) : (
           <div>
             {/** SELECTION BANNER */}
-            {selectedIds.size > 0 && (
+            {eligibleIds.length > 0 && (
               <div className="p-4 bg-blue-50 border-b">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-blue-700">
-                    {selectedIds.size} selected
+                    {eligibleIds.length} selected
                   </span>
 
                   <div className="flex gap-4">
                     <button
                       onClick={toggleSelectAll}
+                      disabled={deleting}
                       className="text-sm text-blue-600"
                     >
                       {allSelected ? 'Deselect All' : 'Select All'}
                     </button>
                     <button
-                      onClick={() => setSelectedIds(new Set())}
+                      onClick={() => changeSelection(new Set())}
+                      disabled={deleting}
                       className="text-sm text-blue-600"
                     >
                       Clear Selection
@@ -375,6 +426,7 @@ export default function History() {
                     <div className="flex items-start gap-4 flex-1">
                       <button
                         onClick={() => toggleSelect(record.id)}
+                        disabled={deleting}
                         className="p-1"
                       >
                         {selectedIds.has(record.id) ? (
@@ -525,8 +577,9 @@ export default function History() {
       )}
 
       {/* BULK DELETE MODAL */}
-      {showBulkDeleteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+      {bulkConfirmation && (
+        <div role="alertdialog" aria-modal="true" aria-labelledby="bulk-delete-title"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
           <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
             <div className="text-center mb-6">
               <div className="w-20 h-20 mx-auto bg-red-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg">
@@ -537,8 +590,8 @@ export default function History() {
                 </svg>
               </div>
 
-              <h3 className="text-2xl font-bold text-red-600 mb-2">
-                Delete {selectedIds.size} Record{selectedIds.size > 1 ? 's' : ''}
+              <h3 id="bulk-delete-title" className="text-2xl font-bold text-red-600 mb-2">
+                Delete {confirmedIds.length} Record{confirmedIds.length !== 1 ? 's' : ''}
               </h3>
 
               <p className="text-gray-600">
@@ -549,15 +602,15 @@ export default function History() {
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
               <p className="text-sm text-red-700">
                 You are about to delete{' '}
-                <strong>{selectedIds.size}</strong> test record
-                {selectedIds.size > 1 ? 's' : ''}.  
+                <strong>{confirmedIds.length}</strong> test record
+                {confirmedIds.length !== 1 ? 's' : ''}.
                 This action cannot be undone.
               </p>
             </div>
 
             <div className="flex gap-4">
               <button
-                onClick={() => setShowBulkDeleteModal(false)}
+                onClick={closeBulkConfirmation}
                 disabled={deleting}
                 className="flex-1 px-6 py-3 border rounded-xl"
               >
@@ -566,12 +619,12 @@ export default function History() {
 
               <button
                 onClick={bulkDeleteHistory}
-                disabled={deleting}
+                disabled={deleting || loading || confirmedIds.length === 0}
                 className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl"
               >
                 {deleting
                   ? 'Deleting...'
-                  : `Delete ${selectedIds.size} Record${selectedIds.size > 1 ? 's' : ''}`}
+                  : `Delete ${confirmedIds.length} Record${confirmedIds.length !== 1 ? 's' : ''}`}
               </button>
             </div>
           </div>
