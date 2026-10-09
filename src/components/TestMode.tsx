@@ -1,37 +1,40 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase, Word, TestHistory, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Check, X, RotateCcw } from 'lucide-react';
+import { Check, X, RotateCcw, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
+import {
+  CompletedTestResult, matchesCompletedTest, persistPendingTest, removePendingTest,
+} from '../lib/pendingTestResults';
+import {
+  ActiveTestSession, TestQuestion, checkpointCompletedTest, persistActiveTest, readTestRecovery, removeActiveTest,
+} from '../lib/activeTestSessions';
 
-interface TestWord extends Word {
-  userAnswer: string;
-  isCorrect: boolean;
-}
-
-type HistorySaveStatus = 'idle' | 'saving' | 'saved' | 'error';
-type TestHistoryInsert = Omit<TestHistory, 'id' | 'created_at'>;
+type HistorySaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 type TestDirection = TestHistory['test_direction'];
 type InputType = 'multiple' | 'text';
 
 interface TestSession {
   userId: string;
-  vocabulary: Word[];
-  result: TestHistoryInsert | null;
+  active: ActiveTestSession | null;
+  hasActiveCopy: boolean;
+  hasCompletedCheckpoint: boolean;
+  result: CompletedTestResult | null;
   saveStatus: HistorySaveStatus;
+  hasPersistedCopy: boolean;
 }
 
 function normalizeAnswer(answer: string): string {
   return answer.trim().toLowerCase();
 }
 
-function getAnswerLabel(word: Word, direction: TestDirection): string {
+function getAnswerLabel(word: Pick<Word, 'english_word' | 'georgian_definitions'>, direction: TestDirection): string {
   return direction === 'en-to-geo'
     ? word.georgian_definitions.join(', ')
     : word.english_word;
 }
 
-function isCorrectAnswer(word: Word, answer: string, direction: TestDirection, inputType: InputType): boolean {
+function isCorrectAnswer(word: TestQuestion, answer: string, direction: TestDirection, inputType: InputType): boolean {
   const normalized = normalizeAnswer(answer);
   if (direction === 'en-to-geo' && inputType === 'text') {
     return word.georgian_definitions.some(definition => normalizeAnswer(definition) === normalized);
@@ -82,32 +85,72 @@ function generateMultipleChoiceOptions(currentWord: Word, vocabulary: Word[], di
 }
 
 export default function TestMode() {
-  console.log('🚀 TestMode component mounted!'); // This should always show when component loads
   const { user } = useAuth();
-  const [stage, setStage] = useState<'setup' | 'testing' | 'results'>('setup');
-  const [direction, setDirection] = useState<TestDirection>('geo-to-en');
-  const [wordCount, setWordCount] = useState(10);
-  const [customCount, setCustomCount] = useState('');
-  const [inputType, setInputType] = useState<InputType>('multiple');
-  const [testWords, setTestWords] = useState<TestWord[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [userAnswer, setUserAnswer] = useState('');
+  // Account changes remount all session state before another user can see it.
+  return user ? <AccountTestMode key={user.id} userId={user.id} /> : null;
+}
+
+function AccountTestMode({ userId }: { userId: string }) {
+  const [recovery] = useState(() => readTestRecovery(userId));
+  const restored = recovery.results[0] ?? null;
+  const active = restored ? null : recovery.sessions[0] ?? null;
+  const [stage, setStage] = useState<'setup' | 'testing' | 'results'>(restored ? 'results' : active ? 'testing' : 'setup');
+  const [direction, setDirection] = useState<TestDirection>(active?.direction ?? 'geo-to-en');
+  const [wordCount, setWordCount] = useState(active?.wordCount ?? 10);
+  const [customCount, setCustomCount] = useState(active?.customCount ?? '');
+  const [inputType, setInputType] = useState<InputType>(active?.inputType ?? 'multiple');
+  const [testWords, setTestWords] = useState<TestQuestion[]>(active?.questions ?? []);
+  const [currentQuestion, setCurrentQuestion] = useState(active?.currentQuestion ?? 0);
+  const [userAnswer, setUserAnswer] = useState(active?.draftAnswer ?? '');
   const [loading, setLoading] = useState(false);
-  const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>([]);
-  const [historySaveStatus, setHistorySaveStatus] = useState<HistorySaveStatus>('idle');
+  const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>(active?.questions[active.currentQuestion].options ?? []);
+  const [historySaveStatus, setHistorySaveStatus] = useState<HistorySaveStatus>(restored ? 'pending' : 'idle');
+  const [storageWarning, setStorageWarning] = useState(recovery.warning);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const mounted = useRef(true);
+  const starting = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   // Ref guards take effect immediately, before React can render disabled buttons.
-  const testSessionRef = useRef<TestSession | null>(null);
+  const testSessionRef = useRef<TestSession | null>(restored
+    ? { userId, active: null, result: restored, saveStatus: 'pending',
+      hasPersistedCopy: recovery.pendingCopyIds.has(restored.id), hasActiveCopy: recovery.activeCopyIds.has(restored.id),
+      hasCompletedCheckpoint: recovery.completedCopyIds.has(restored.id) }
+    : active ? { userId, active, result: null, saveStatus: 'idle', hasPersistedCopy: false, hasActiveCopy: true, hasCompletedCheckpoint: false } : null);
+
+  function saveActiveProgress(next: ActiveTestSession) {
+    const session = testSessionRef.current;
+    if (!session || session.result) return;
+    session.active = next;
+    const persisted = persistActiveTest(next);
+    session.hasActiveCopy ||= persisted;
+    setStorageWarning(persisted ? '' :
+      'Current progress could not be stored in your browser. Navigation or refresh may lose the current session or recent answers. Keep this tab open.');
+  }
+
+  function changeAnswer(answer: string) {
+    const session = testSessionRef.current;
+    if (!session?.active || session.result || showRestartConfirm || answer === session.active.draftAnswer) return;
+    setUserAnswer(answer);
+    // Write only on actual input/progress changes, never from render or mount effects.
+    saveActiveProgress({ ...session.active, draftAnswer: answer });
+  }
 
   async function startTest() {
-    if (!user) return;
+    if (testSessionRef.current || starting.current) return;
 
+    starting.current = true;
     setLoading(true);
     try {
       const { data: allWords, error } = await supabase
         .from('words')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
+      if (!mounted.current) return;
       if (error) throw error;
 
       if (!allWords || allWords.length === 0) {
@@ -122,50 +165,63 @@ export default function TestMode() {
         return;
       }
 
-      // Keep the full loaded vocabulary stable for every question in this session.
+      // Use the loaded vocabulary to freeze options, then retain only selected questions.
       const vocabulary: Word[] = allWords.map(word => ({
         ...word,
         georgian_definitions: [...word.georgian_definitions],
       }));
-      const testData: TestWord[] = shuffle(vocabulary).slice(0, count).map(word => ({
-        ...word,
+      const testData: TestQuestion[] = shuffle(vocabulary).slice(0, count).map(word => ({
+        id: word.id, english_word: word.english_word,
+        georgian_definitions: [...word.georgian_definitions], description: word.description,
         userAnswer: '',
         isCorrect: false,
+        // Freeze options for all selected questions; recovery never needs the dictionary.
+        options: inputType === 'multiple' ? generateMultipleChoiceOptions(word, vocabulary, direction) : [],
       }));
 
-      testSessionRef.current = { userId: user.id, vocabulary, result: null, saveStatus: 'idle' };
+      const next: ActiveTestSession = {
+        id: crypto.randomUUID(), userId, startedAt: new Date().toISOString(), direction, inputType,
+        wordCount, customCount, questions: testData, currentQuestion: 0, draftAnswer: '',
+      };
+      testSessionRef.current = { userId, active: next, result: null, saveStatus: 'idle', hasPersistedCopy: false, hasActiveCopy: false, hasCompletedCheckpoint: false };
+      // Persist even a zero-answer test before presenting its first question.
+      saveActiveProgress(next);
+      // Settings may have changed while the vocabulary request was in flight.
+      setDirection(next.direction);
+      setInputType(next.inputType);
+      setWordCount(next.wordCount);
+      setCustomCount(next.customCount);
       setHistorySaveStatus('idle');
       setTestWords(testData);
       setCurrentQuestion(0);
       setUserAnswer('');
 
-      // Generate options for first question if multiple choice
-      if (inputType === 'multiple') {
-        const options = generateMultipleChoiceOptions(testData[0], vocabulary, direction);
-        setMultipleChoiceOptions(options);
-      }
+      setMultipleChoiceOptions(testData[0].options);
 
       setStage('testing');
     } catch (err: any) {
       console.error('Error starting test:', err);
       alert('Error starting test: ' + err.message);
     } finally {
+      starting.current = false;
       setLoading(false);
     }
   }
 
   function submitAnswer() {
     const session = testSessionRef.current;
-    if (!session || !testWords[currentQuestion] || session.result) return;
+    if (!session?.active || !testWords[currentQuestion] || session.result || showRestartConfirm ||
+      session.active.currentQuestion !== currentQuestion) return;
 
-    const currentWord = testWords[currentQuestion];
+    const currentWord = session.active.questions[currentQuestion];
+    const answer = session.active.draftAnswer;
 
     // Update the current word with user answer and correctness
-    const updatedWords = [...testWords];
+    const updatedWords = [...session.active.questions];
     updatedWords[currentQuestion] = {
       ...currentWord,
-      userAnswer,
-      isCorrect: isCorrectAnswer(currentWord, userAnswer, direction, inputType),
+      userAnswer: answer,
+      isCorrect: isCorrectAnswer(currentWord, answer, session.active.direction, session.active.inputType),
     };
     setTestWords(updatedWords);
 
@@ -178,16 +234,12 @@ export default function TestMode() {
       setCurrentQuestion(nextQuestion);
       setUserAnswer('');
 
-      // Generate next multiple choice options
-      if (inputType === 'multiple') {
-        const nextWord = updatedWords[nextQuestion];
-        const options = generateMultipleChoiceOptions(nextWord, session.vocabulary, direction);
-        setMultipleChoiceOptions(options);
-      }
+      setMultipleChoiceOptions(updatedWords[nextQuestion].options);
+      saveActiveProgress({ ...session.active, questions: updatedWords, currentQuestion: nextQuestion, draftAnswer: '' });
     }
   }
 
-  function finishTest(finalWords: TestWord[]) {
+  function finishTest(finalWords: TestQuestion[]) {
     const session = testSessionRef.current;
     if (!session || session.result) return;
 
@@ -208,6 +260,7 @@ export default function TestMode() {
     // Capture the completed payload once, including the final answer and date.
     // Retries use this same snapshot instead of rebuilding it from React state.
     session.result = {
+      id: session.active!.id,
       user_id: session.userId,
       test_date: new Date().toISOString(),
       test_direction: direction,
@@ -221,20 +274,56 @@ export default function TestMode() {
 
   async function saveTestResult() {
     const session = testSessionRef.current;
-    if (!session?.result || session.saveStatus === 'saving' || session.saveStatus === 'saved') return;
+    if (!session?.result || session.saveStatus === 'saving' || session.saveStatus === 'saved' || showDiscardConfirm) return;
 
     session.saveStatus = 'saving';
     setHistorySaveStatus('saving');
+    // Persist synchronously BEFORE issuing the request, including its stable ID.
+    // A reload during an interrupted response must reuse the same payload and ID.
+    const persisted = persistPendingTest(session.result);
+    // A failed retry write does not mean an earlier recovery copy disappeared.
+    session.hasPersistedCopy ||= persisted;
+    if (!session.hasPersistedCopy && session.hasActiveCopy && checkpointCompletedTest(session.result)) {
+      session.hasCompletedCheckpoint = true;
+    }
+    // Keep the last active snapshot until a completed snapshot can replace it.
+    const recoverable = session.hasPersistedCopy || session.hasCompletedCheckpoint;
+    const activeRemoved = session.hasPersistedCopy ? clearActiveCopy(session) : !session.hasActiveCopy;
+    setStorageWarning(recoverable ? (activeRemoved || session.hasCompletedCheckpoint ? '' :
+      'The completed result is recoverable, but its earlier session copy could not be removed. Recovery will show the completed result.') :
+      'This result could not be stored in your browser. Keep this tab open: leaving or refreshing may lose it. Retry saving to History.');
     try {
-      if (!user || user.id !== session.userId) {
+      // Do not commit while storage can still resurrect an older active snapshot
+      // without the exact completed timestamp/payload needed to confirm that commit.
+      if (session.hasActiveCopy && !recoverable) {
+        throw new Error('Could not preserve the completed result. Keep this tab open and retry when browser storage is available.');
+      }
+      if (userId !== session.userId) {
         throw new Error('Sign in to the account that took this test to save its result.');
       }
 
       const { error } = await supabase.from('test_history').insert(session.result);
-      if (error) throw error;
+      if (error) {
+        if (error.code !== '23505') throw error;
+        // A previous attempt may have committed before its response was lost.
+        // Do not update/overwrite History, or treat any arbitrary conflict as success.
+        const { data, error: lookupError } = await supabase.from('test_history')
+          .select('id,user_id,test_date,test_direction,total_words,correct_count,mistakes')
+          .eq('id', session.result.id).eq('user_id', session.userId);
+        if (lookupError) throw lookupError;
+        if (!Array.isArray(data) || data.length !== 1 || !matchesCompletedTest(data[0], session.result)) {
+          throw new Error('Could not confirm the existing History record. Your pending result has been kept.');
+        }
+      }
 
       session.saveStatus = 'saved';
       setHistorySaveStatus('saved');
+      // If cleanup fails, retain the completed record as a durable guard against
+      // restoring an obsolete unfinished session on the next mount.
+      const removed = clearActiveCopy(session) && (!session.hasPersistedCopy || removePendingTest(session.result));
+      if (removed) session.hasPersistedCopy = false;
+      setStorageWarning(removed ? '' :
+        'Saved to History, but the browser copy could not be removed. It may appear again; retrying will not create another record.');
     } catch (error) {
       console.error('Error saving test result:', error);
       session.saveStatus = 'error';
@@ -242,21 +331,80 @@ export default function TestMode() {
     }
   }
 
-  function resetTest() {
-    if (testSessionRef.current?.saveStatus === 'saving') return;
+  function clearActiveCopy(session: TestSession): boolean {
+    if (!session.hasActiveCopy) return true;
+    const id = session.result?.id ?? session.active?.id;
+    if (!id || !removeActiveTest(session.userId, id)) return false;
+    session.hasActiveCopy = false;
+    session.hasCompletedCheckpoint = false;
+    return true;
+  }
 
-    testSessionRef.current = null;
-    setHistorySaveStatus('idle');
-    setStage('setup');
-    setTestWords([]);
-    setCurrentQuestion(0);
-    setUserAnswer('');
+  function restartTest() {
+    const session = testSessionRef.current;
+    if (!showRestartConfirm || !session?.active || session.result) return;
+    if (!clearActiveCopy(session)) {
+      setStorageWarning('Could not remove the saved active session. Progress has been kept; cancel or try again when browser storage is available.');
+      return;
+    }
+    startNextTest();
+  }
+
+  function resetTest() {
+    const session = testSessionRef.current;
+    if (session?.saveStatus === 'saving') return;
+    if (session?.result && session.saveStatus !== 'saved') {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    startNextTest();
+  }
+
+  function discardResult() {
+    const session = testSessionRef.current;
+    if (!showDiscardConfirm || !session?.result || session.saveStatus === 'saving') return;
+    // A newly completed result whose every write failed exists only in memory.
+    // Restored or successfully persisted results still require confirmed removal.
+    if (!clearActiveCopy(session) || (session.hasPersistedCopy && !removePendingTest(session.result))) {
+      setStorageWarning('Could not remove the pending browser copy. The result has been kept; cancel and retry saving, or try discarding again.');
+      return;
+    }
+    startNextTest();
+  }
+
+  function startNextTest() {
+    const finishedId = testSessionRef.current?.result?.id ?? testSessionRef.current?.active?.id;
+    // Other tabs may have completed more tests. Recover them without overwriting.
+    const pending = readTestRecovery(userId);
+    const next = pending.results.find(result => result.id !== finishedId);
+    const nextActive = next ? null : pending.sessions.find(session => session.id !== finishedId) ?? null;
+    testSessionRef.current = next
+      ? { userId, active: null, result: next, saveStatus: 'pending', hasPersistedCopy: pending.pendingCopyIds.has(next.id),
+        hasActiveCopy: pending.activeCopyIds.has(next.id), hasCompletedCheckpoint: pending.completedCopyIds.has(next.id) }
+      : nextActive ? { userId, active: nextActive, result: null, saveStatus: 'idle', hasPersistedCopy: false,
+        hasActiveCopy: true, hasCompletedCheckpoint: false } : null;
+    setStorageWarning(pending.warning);
+    setHistorySaveStatus(next ? 'pending' : 'idle');
+    setStage(next ? 'results' : nextActive ? 'testing' : 'setup');
+    setShowDiscardConfirm(false);
+    setShowRestartConfirm(false);
+    setTestWords(nextActive?.questions ?? []);
+    setCurrentQuestion(nextActive?.currentQuestion ?? 0);
+    setUserAnswer(nextActive?.draftAnswer ?? '');
+    setMultipleChoiceOptions(nextActive?.questions[nextActive.currentQuestion].options ?? []);
+    if (nextActive) {
+      setDirection(nextActive.direction);
+      setInputType(nextActive.inputType);
+      setWordCount(nextActive.wordCount);
+      setCustomCount(nextActive.customCount);
+    }
   }
 
   if (stage === 'setup') {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">Test Mode</h2>
+        {storageWarning && <p role="alert">{storageWarning}</p>}
 
         <div className="bg-white rounded-lg shadow-lg p-8 space-y-6">
           <div>
@@ -362,16 +510,8 @@ export default function TestMode() {
   }
 
   if (stage === 'testing') {
-    console.log('🔄 RENDERING TESTING STAGE');
-    console.log('current stage:', stage);
-    console.log('currentQuestion:', currentQuestion);
-    console.log('testWords.length:', testWords.length);
-
     const currentWord = testWords[currentQuestion];
     const progress = ((currentQuestion) / testWords.length) * 100;
-
-    console.log('currentWord:', currentWord?.english_word || currentWord?.georgian_definitions);
-    console.log('progress:', progress + '%');
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -381,6 +521,21 @@ export default function TestMode() {
             Question {currentQuestion + 1} of {testWords.length}
           </div>
         </div>
+
+        {storageWarning && <p role="alert">{storageWarning}</p>}
+        <button onClick={() => setShowRestartConfirm(true)} disabled={showRestartConfirm}
+          className="px-4 py-2 border rounded-lg">Restart Test</button>
+        {showRestartConfirm && (
+          <div role="alertdialog" aria-modal="true" aria-labelledby="restart-test-title"
+            className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md space-y-4">
+              <h3 id="restart-test-title" className="font-bold">Abandon this unfinished test?</h3>
+              <p>Your current questions, answers and progress will be lost. Confirm to return to test setup.</p>
+              <button autoFocus onClick={() => setShowRestartConfirm(false)} className="px-4 py-2 border rounded">Cancel</button>
+              <button onClick={restartTest} className="px-4 py-2 bg-red-600 text-white rounded">Discard progress</button>
+            </div>
+          </div>
+        )}
 
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
@@ -409,10 +564,10 @@ export default function TestMode() {
               <input
                 type="text"
                 value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
+                onChange={(e) => changeAnswer(e.target.value)}
+                disabled={showRestartConfirm}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && userAnswer.trim()) {
-                    console.log('Enter key pressed - submitting answer');
                     submitAnswer();
                   }
                 }}
@@ -429,7 +584,8 @@ export default function TestMode() {
                       name="multipleChoice"
                       value={option}
                       checked={userAnswer === option}
-                      onChange={(e) => setUserAnswer(e.target.value)}
+                      onChange={(e) => changeAnswer(e.target.value)}
+                      disabled={showRestartConfirm}
                       className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="text-lg">{option}</span>
@@ -440,7 +596,7 @@ export default function TestMode() {
 
             <button
               onClick={submitAnswer}
-              disabled={!userAnswer.trim()}
+              disabled={!userAnswer.trim() || showRestartConfirm}
               className={`w-full px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors ${
                 currentQuestion >= testWords.length - 1
                   ? 'bg-green-600 hover:bg-green-700 text-white'
@@ -461,30 +617,55 @@ export default function TestMode() {
   }
 
   if (stage === 'results') {
-    console.log('🎯 RENDERING RESULTS STAGE');
-    console.log('current stage:', stage);
-    const correctCount = testWords.filter(w => w.isCorrect).length;
-    const percentage = Math.round((correctCount / testWords.length) * 100);
-    console.log('correctCount:', correctCount, 'percentage:', percentage);
+    const session = testSessionRef.current!;
+    const result = session.result!;
+    const correctCount = result.correct_count;
+    const percentage = Math.round((correctCount / result.total_words) * 100);
+    const isSaveError = historySaveStatus === 'error';
+    const isSaved = historySaveStatus === 'saved';
+    const isSaving = historySaveStatus === 'saving';
+    const hasRecoveryCopy = session.hasPersistedCopy || session.hasCompletedCheckpoint;
+    const StatusIcon = isSaveError ? AlertCircle : isSaved ? CheckCircle2 : isSaving ? Loader2 : Info;
+    const statusColors = isSaveError
+      ? 'border-red-300 bg-red-50 text-red-950 dark:border-red-700 dark:bg-red-950 dark:text-red-100'
+      : isSaved
+        ? 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'
+        : isSaving
+          ? 'border-blue-300 bg-blue-50 text-blue-950 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
+          : 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100';
 
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">Test Results</h2>
 
-        <div className="text-sm">
-          <p role="status" aria-live="polite">
-            {historySaveStatus === 'saving' && 'Saving result...'}
-            {historySaveStatus === 'saved' && 'Result saved to History'}
-            {historySaveStatus === 'error' && 'Failed to save result'}
-          </p>
-          {historySaveStatus === 'error' && (
-            <button
-              onClick={() => void saveTestResult()}
-              className="mt-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-            >
-              Retry Save
-            </button>
-          )}
+        <div role={isSaveError ? 'alert' : 'status'} aria-live={isSaveError ? 'assertive' : 'polite'}
+          aria-atomic="true" aria-labelledby="test-save-status"
+          className={`flex items-start gap-3 rounded-xl border p-4 shadow-sm sm:p-5 ${statusColors}`}>
+          <StatusIcon size={24} aria-hidden="true" focusable="false"
+            className={`mt-0.5 shrink-0 ${isSaving ? 'motion-safe:animate-spin' : ''}`} />
+          <div className="min-w-0 flex-1 break-words">
+            <p id="test-save-status" className="min-h-12 font-semibold leading-6">
+              {historySaveStatus === 'pending' && 'Recovered a completed test. Saving to History has not been confirmed. Retry Save to check and save it.'}
+              {isSaving && 'Saving result to History...'}
+              {isSaved && 'Result saved to History successfully.'}
+              {isSaveError && (hasRecoveryCopy
+                ? 'Failed to save result to History. Your completed test has been preserved.'
+                : 'Failed to save result to History. Your completed test is kept in this tab only.')}
+            </p>
+            {storageWarning && <p role={isSaveError ? undefined : 'alert'} className="mt-2 text-sm leading-6">{storageWarning}</p>}
+            {/* Reserve the action row so retry/success transitions do not jump. */}
+            <div className="mt-2 min-h-11">
+              {(isSaveError || historySaveStatus === 'pending') && (
+                <button
+                  onClick={() => void saveTestResult()}
+                  disabled={showDiscardConfirm}
+                  className="min-h-11 w-full rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-300 dark:text-blue-950 dark:hover:bg-blue-200 dark:focus-visible:outline-blue-300 sm:w-auto"
+                >
+                  Retry Save
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-8">
@@ -493,12 +674,29 @@ export default function TestMode() {
               {percentage}%
             </div>
             <div className="text-xl text-gray-600">
-              {correctCount} out of {testWords.length} correct
+              {correctCount} out of {result.total_words} correct
             </div>
+            <p className="text-sm text-gray-600 mt-2">
+              {result.test_direction === 'en-to-geo' ? 'English → Georgian' : 'Georgian → English'}
+              {' · '}{new Date(result.test_date).toLocaleString()}
+            </p>
           </div>
 
           <div className="space-y-4 mb-6">
             <h3 className="font-bold text-lg text-gray-900">Review:</h3>
+            {testWords.length === 0 && (
+              <>
+                <p>Recovered score and mistakes. Individual correct answers are not stored.</p>
+                {result.mistakes.map((mistake, index) => (
+                  <div key={index} className="p-4 rounded-lg border bg-red-50 border-red-200">
+                    <div className="font-medium">{mistake.question_prompt ?? mistake.english_word}</div>
+                    {mistake.description && <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(mistake.description) }} />}
+                    <div>Your answer: {mistake.user_answer || '(empty)'}</div>
+                    <div>Correct: {mistake.correct_definitions.join(', ')}</div>
+                  </div>
+                ))}
+              </>
+            )}
             {testWords.map((word, idx) => (
               <div
                 key={idx}
@@ -539,13 +737,24 @@ export default function TestMode() {
 
           <button
             onClick={resetTest}
-            disabled={historySaveStatus === 'saving'}
+            disabled={historySaveStatus === 'saving' || showDiscardConfirm}
             className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             <RotateCcw size={20} />
             Take Another Test
           </button>
         </div>
+        {showDiscardConfirm && (
+          <div role="alertdialog" aria-modal="true" aria-labelledby="discard-test-title"
+            className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md space-y-4">
+              <h3 id="discard-test-title" className="font-bold">Discard this completed test?</h3>
+              <p>Saving to History has not been confirmed. Discarding removes this browser's recovery copy and you cannot retry it here. If an earlier request reached the server, its History record will remain.</p>
+              <button autoFocus onClick={() => setShowDiscardConfirm(false)} className="px-4 py-2 border rounded">Cancel</button>
+              <button onClick={discardResult} disabled={historySaveStatus === 'saving'} className="px-4 py-2 bg-red-600 text-white rounded">Discard result</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
