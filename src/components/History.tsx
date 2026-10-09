@@ -395,13 +395,15 @@ export default function History() {
                     >
                       {allSelected ? 'Deselect All' : 'Select All'}
                     </button>
-                    <button
-                      onClick={() => changeSelection(new Set())}
-                      disabled={deleting}
-                      className="text-sm text-blue-600"
-                    >
-                      Clear Selection
-                    </button>
+                    {!allSelected && (
+                      <button
+                        onClick={() => changeSelection(new Set())}
+                        disabled={deleting}
+                        className="text-sm text-blue-600"
+                      >
+                        Clear Selection
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

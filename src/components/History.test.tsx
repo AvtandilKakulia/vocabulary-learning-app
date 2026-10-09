@@ -137,6 +137,52 @@ async function finishReload() {
 }
 
 describe('History bulk selection safety', () => {
+  it('shows only the appropriate selection actions as selection changes, including keyboard activation', async () => {
+    const { user, load } = await loadHistory(variedRecords);
+    expect(screen.queryByRole('button', { name: /^(Select All|Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
+    await user.click(rowAction(variedRecords[0], 'square'));
+    const selectAll = screen.getByRole('button', { name: 'Select All' });
+    expect(screen.getByRole('button', { name: 'Clear Selection' })).toBeEnabled();
+    selectAll.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByText('4 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deselect All' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Clear Selection' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Select All' })).not.toBeInTheDocument();
+    // Deselect one row to return directly from full to partial selection.
+    const selectedRow = screen.getByText(new Date(variedRecords[0].test_date).toLocaleString()).closest('.border-b')!;
+    await user.click(selectedRow.querySelector('button')!);
+    expect(screen.getByText('3 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Clear Selection' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Select All' }));
+    screen.getByRole('button', { name: 'Deselect All' }).focus();
+    await user.keyboard(' ');
+    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Select All|Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
+    await user.click(rowAction(variedRecords[0], 'square'));
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeEnabled();
+    screen.getByRole('button', { name: 'Clear Selection' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+    expect(load.delete).not.toHaveBeenCalled();
+  });
+
+  it('shows only Deselect All when filters leave one visible record selected', async () => {
+    const { user, load } = await loadHistory(variedRecords);
+    await user.selectOptions(control(0), 'en-to-geo');
+    await user.selectOptions(control(1), 'high');
+    await user.click(rowAction(variedRecords[0], 'square'));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deselect All' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Clear Selection' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Select All' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Deselect All' }));
+    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Select All|Deselect All|Clear Selection)$/ })).not.toBeInTheDocument();
+    expect(load.delete).not.toHaveBeenCalled();
+  });
+
   it.each([[0, 'geo-to-en'], [1, 'high']] as const)(
     'clears selection and invalidates a queued confirmation when filter %i changes', async (index, value) => {
       const { user, load } = await loadHistory(variedRecords);
