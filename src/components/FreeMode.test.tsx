@@ -8,6 +8,95 @@ import FreeMode from './FreeMode';
 
 const storageKey = 'vocab_practice_session_state_v2';
 
+describe('Practice vocabulary read races', () => {
+  function orderingRace() {
+    // Restoration changes the initial random request to database order while it is pending.
+    localStorage.setItem(storageKey, JSON.stringify({
+      userId: 'user-a', queueIds: ['new'], orderMode: 'db-order', direction: 'en-to-geo',
+      totalAttempts: 1, correctCount: 1, mistakes: [], attemptedWordIds: ['completed'],
+    }));
+    const old = deferred<QueryResult>();
+    const current = deferred<QueryResult>();
+    const oldQuery = query(old.promise);
+    const newQuery = query(current.promise);
+    supabaseMock.from.mockReturnValueOnce(oldQuery).mockReturnValueOnce(newQuery);
+    const view = render(<FreeMode />);
+    expect(oldQuery.order).not.toHaveBeenCalled();
+    expect(newQuery.order).toHaveBeenCalledWith('created_at', { ascending: true });
+    return { old, current, ...view };
+  }
+
+  it('keeps the latest ordering and restored progress when the old request finishes last', async () => {
+    const { old, current } = orderingRace();
+    await act(async () => current.resolve({ data: [word({ id: 'new', english_word: 'current vocabulary' })], error: null }));
+    expect(screen.getByText('current vocabulary')).toBeInTheDocument();
+    await act(async () => old.resolve({ data: [word({ english_word: 'obsolete vocabulary' })], error: null }));
+    expect(screen.getByText('current vocabulary')).toBeInTheDocument();
+    expect(screen.queryByText('obsolete vocabulary')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({
+      orderMode: 'db-order', queueIds: ['new'], correctCount: 1, totalAttempts: 1,
+      attemptedWordIds: ['completed'],
+    });
+  });
+
+  it('keeps loading while the current ordering request is pending', async () => {
+    const { old, current } = orderingRace();
+    await act(async () => old.resolve({ data: [word()], error: null }));
+    expect(screen.getByText('Loading your words...')).toBeInTheDocument();
+    await act(async () => current.resolve({ data: [word({ id: 'new' })], error: null }));
+    expect(screen.queryByText('Loading your words...')).not.toBeInTheDocument();
+    expect(screen.getByText('yield')).toBeInTheDocument();
+  });
+
+  it.each(['returned', 'rejected'] as const)('ignores stale %s errors without damaging progress', async kind => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { old, current } = orderingRace();
+    await act(async () => current.resolve({ data: [word({ id: 'new' })], error: null }));
+    const stored = localStorage.getItem(storageKey);
+    await act(async () => {
+      if (kind === 'returned') old.resolve({ error: { message: 'Old failure' } });
+      else old.reject(new Error('Old failure'));
+    });
+    expect(screen.getByText('yield')).toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBe(stored);
+    expect(logged).not.toHaveBeenCalled();
+  });
+
+  it('does not apply a previous account response after switching users', async () => {
+    const a = deferred<QueryResult>();
+    const b = deferred<QueryResult>();
+    const bQuery = query(b.promise);
+    supabaseMock.from.mockReturnValueOnce(query(a.promise)).mockReturnValueOnce(bQuery);
+    const { rerender } = render(<FreeMode />);
+    authMock.user = { id: 'user-b' };
+    rerender(<FreeMode />);
+    expect(bQuery.eq).toHaveBeenCalledWith('user_id', 'user-b');
+    await act(async () => b.resolve({ data: [word({ id: 'b', user_id: 'user-b', english_word: 'B vocabulary' })], error: null }));
+    await act(async () => a.resolve({ data: [word({ english_word: 'A vocabulary' })], error: null }));
+    expect(screen.getByText('B vocabulary')).toBeInTheDocument();
+    expect(screen.queryByText('A vocabulary')).not.toBeInTheDocument();
+    authMock.user = null;
+    rerender(<FreeMode />);
+    expect(screen.queryByText('B vocabulary')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading your words...')).not.toBeInTheDocument();
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignores a pending %s after unmount', async completion => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pending = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(pending.promise));
+    const { unmount } = render(<FreeMode />);
+    unmount();
+    const stored = localStorage.getItem(storageKey);
+    await act(async () => {
+      if (completion === 'resolve') pending.resolve({ data: [word()], error: null });
+      else pending.reject(new Error('Unmounted'));
+    });
+    expect(localStorage.getItem(storageKey)).toBe(stored);
+    expect(logged).not.toHaveBeenCalled();
+  });
+});
+
 beforeEach(() => {
   // Progress animation/focus frames are unrelated to persistence and can otherwise
   // schedule updates outside interactions. Keep these stubs local to Practice tests.

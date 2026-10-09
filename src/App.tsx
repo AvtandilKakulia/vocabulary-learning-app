@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLatestRequest } from './hooks/useLatestRequest';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import AuthPage from './components/AuthPage';
@@ -20,24 +21,31 @@ function AppContent() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState<{ userId: string; name: string | null } | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const userId = user?.id;
+  const beginProfileRead = useLatestRequest(JSON.stringify([userId]));
+  const displayName = profileName?.userId === userId ? profileName?.name : null;
 
-  // Load user display name
-  useEffect(() => {
-    async function loadDisplayName() {
-      if (!user) return;
-
+  const loadDisplayName = useCallback(async () => {
+    const isCurrent = beginProfileRead();
+    if (!isCurrent || !userId) return;
+    try {
       const { data } = await supabase
         .from('profiles')
         .select('display_name')
-        .eq('id', user.id)
+        .eq('id', userId)
         .maybeSingle();
-
-      setDisplayName(data?.display_name || null);
+      if (isCurrent()) setProfileName({ userId, name: data?.display_name || null });
+    } catch (error) {
+      if (isCurrent()) console.error('Error loading display name:', error);
     }
-    loadDisplayName();
-  }, [user]);
+  }, [beginProfileRead, userId]);
+
+  useEffect(() => {
+    setProfileName(null);
+    void loadDisplayName();
+  }, [loadDisplayName]);
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -68,15 +76,7 @@ function AppContent() {
   };
 
   const handleProfileUpdated = () => {
-    // Reload display name after profile update
-    supabase
-      .from('profiles')
-      .select('display_name')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setDisplayName(data?.display_name || null);
-      });
+    void loadDisplayName();
   };
 
   const handleAccountDeleted = async () => {

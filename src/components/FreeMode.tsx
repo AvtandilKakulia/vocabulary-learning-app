@@ -1,5 +1,4 @@
 import React, {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -8,6 +7,7 @@ import React, {
 import { Check, ChevronRight, Plus, Shuffle, X } from "lucide-react";
 import { supabase, Word, TestMistake, TestHistory } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import { useLatestRequest } from "../hooks/useLatestRequest";
 import { sanitizeDescription } from "../lib/sanitizeDescription";
 
 const STORAGE_KEY = "vocab_practice_session_state_v2";
@@ -176,28 +176,40 @@ export default function FreeMode() {
     return () => cancelAnimationFrame(frame);
   }, [sessionCompleted]);
 
-  const loadWords = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      let query = supabase.from("words").select("*").eq("user_id", user.id);
-      if (orderMode === "db-order") {
-        query = query.order("created_at", { ascending: true });
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      const fetched = data || [];
-      setWords(orderMode === "random" ? shuffleArray(fetched) : fetched);
-    } catch (error) {
-      console.error("Error loading words:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [orderMode, user]);
+  const userId = user?.id;
+  const beginWordRead = useLatestRequest(JSON.stringify([userId, orderMode]));
 
   useEffect(() => {
-    loadWords();
-  }, [loadWords]);
+    setWords([]);
+  }, [userId]);
+
+  useEffect(() => {
+    const isCurrent = beginWordRead();
+    if (!isCurrent) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    const loadWords = async () => {
+      setLoading(true);
+      try {
+        let query = supabase.from("words").select("*").eq("user_id", userId);
+        if (orderMode === "db-order") {
+          query = query.order("created_at", { ascending: true });
+        }
+        const { data, error } = await query;
+        if (!isCurrent()) return;
+        if (error) throw error;
+        const fetched = data || [];
+        setWords(orderMode === "random" ? shuffleArray(fetched) : fetched);
+      } catch (error) {
+        if (isCurrent()) console.error("Error loading words:", error);
+      } finally {
+        if (isCurrent()) setLoading(false);
+      }
+    };
+    void loadWords();
+  }, [beginWordRead, orderMode, userId]);
 
   useEffect(() => {
     if (!user) return;

@@ -1,8 +1,9 @@
 // --- CODE BLOCK START ---
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase, TestHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLatestRequest } from '../hooks/useLatestRequest';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import { Trash2, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 
@@ -28,30 +29,52 @@ export default function History() {
   const bulkConfirmationRef = useRef<BulkConfirmation | null>(null);
   const bulkDeletingRef = useRef(false);
   const [deleting, setDeleting] = useState(false);
+  const userId = user?.id;
+  const beginRead = useLatestRequest(JSON.stringify([userId, sortBy, sortOrder]));
 
   useEffect(() => {
-    loadHistory();
-  }, [sortBy, sortOrder]);
+    setHistory([]);
+  }, [userId]);
 
-  async function loadHistory() {
-    if (!user) return;
+  const loadHistoryForContext = useCallback(async () => {
+    const isCurrent = beginRead();
+    if (!isCurrent) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('test_history')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('test_date', { ascending: false });
 
+      if (!isCurrent()) return;
       if (error) throw error;
       setHistory(data || []);
     } catch (error: any) {
-      console.error('Error loading history:', error);
+      if (isCurrent()) console.error('Error loading history:', error);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }
+  }, [beginRead, userId]);
+
+  // Deletion may settle after the read context changes; refresh its owner's
+  // current view, without allowing an old account's callback to start a read.
+  const latestRead = useRef({ userId, load: loadHistoryForContext });
+  useLayoutEffect(() => {
+    latestRead.current = { userId, load: loadHistoryForContext };
+  }, [userId, loadHistoryForContext]);
+  const loadHistory = useCallback(async () => {
+    if (latestRead.current.userId === userId) await latestRead.current.load();
+  }, [userId]);
+
+  useEffect(() => {
+    void loadHistoryForContext();
+  }, [loadHistoryForContext]);
 
   function toggleSelect(id: string) {
     if (bulkDeletingRef.current || !visibleIds.has(id)) return;
