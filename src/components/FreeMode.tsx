@@ -1,38 +1,25 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { Check, ChevronRight, Plus, Shuffle, X } from "lucide-react";
-import { supabase, Word, TestMistake, TestHistory } from "../lib/supabase";
+import { supabase, Word } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { useLatestRequest } from "../hooks/useLatestRequest";
 import { sanitizeDescription } from "../lib/sanitizeDescription";
-
-const STORAGE_KEY = "vocab_practice_session_state_v2";
+import type { User } from '@supabase/supabase-js';
+import { readPracticeSession, persistPracticeSession, removePracticeSession,
+  type StoredPracticeSession, type PracticeResult, type PracticeMistake } from '../lib/practiceSessions';
 
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
 type InputStatus = "idle" | "correct" | "incorrect";
 type SaveStatus = "idle" | "saving" | "saved" | "error" | "discarded";
-type PracticeResult = Omit<TestHistory, "id" | "created_at">;
-
-type StoredSession = {
-  userId: string;
-  queueIds: string[];
-  direction: Direction;
-  orderMode: OrderMode;
-  allowReguess: boolean;
-  correctCount: number;
-  totalAttempts: number;
-  mistakes: MistakeWithId[];
-  attemptedWordIds?: string[];
-  hasChecked?: boolean;
-};
-
-type MistakeWithId = TestMistake & { word_id?: string };
+type MistakeWithId = PracticeMistake;
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -49,6 +36,17 @@ function normalize(text: string) {
 
 export default function FreeMode() {
   const { user } = useAuth();
+  return user ? <AccountPractice key={user.id} user={user} /> : null;
+}
+
+function AccountPractice({ user }: { user: User }) {
+  const mountedRef = useRef(false);
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const storageWritableRef = useRef(true);
+  const [storageWarning, setStorageWarning] = useState('');
   const [words, setWords] = useState<Word[]>([]);
   const [wordQueue, setWordQueue] = useState<string[]>([]);
   const [direction, setDirection] = useState<Direction>("en-to-geo");
@@ -218,40 +216,40 @@ export default function FreeMode() {
   }, [loadWords]);
 
   useEffect(() => {
-    if (!user) return;
     if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
-    sessionUserIdRef.current = user.id;
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed: StoredSession = JSON.parse(saved);
-        if (parsed.userId === user.id) {
-          setDirection(parsed.direction ?? "en-to-geo");
-          setOrderMode(parsed.orderMode ?? "random");
-          setAllowReguess(parsed.allowReguess ?? false);
-          setCorrectCount(parsed.correctCount ?? 0);
-          setTotalAttempts(parsed.totalAttempts ?? 0);
-          setMistakes(parsed.mistakes ?? []);
-          const restoredQueue = parsed.queueIds ?? [];
-          setAttemptedWordIds(parsed.attemptedWordIds ?? []);
+    sessionUserIdRef.current = userId;
+    const recovery = readPracticeSession(userId);
+    storageWritableRef.current = recovery.writable;
+    setStorageWarning(recovery.warning);
+    const parsed = recovery.session;
+    if (parsed) {
+      setDirection(parsed.direction);
+      setOrderMode(parsed.orderMode);
+      setAllowReguess(parsed.allowReguess);
+      setCorrectCount(parsed.correctCount);
+      setTotalAttempts(parsed.totalAttempts);
+      setMistakes(parsed.mistakes);
+      const restoredQueue = parsed.queueIds;
+      setAttemptedWordIds(parsed.attemptedWordIds ?? []);
 
-          const savedHasChecked = parsed.hasChecked ?? false;
-          if (savedHasChecked && restoredQueue.length > 0) {
-            setWordQueue(restoredQueue.slice(1));
-            setHasChecked(false);
-            restoredHasCheckedRef.current = false;
-          } else {
-            setWordQueue(restoredQueue);
-            setHasChecked(savedHasChecked);
-            restoredHasCheckedRef.current = false;
-          }
-        }
-      } catch (err) {
-        console.error("Error loading saved session", err);
+      const savedHasChecked = parsed.hasChecked ?? false;
+      if (savedHasChecked && restoredQueue.length > 0 && !parsed.completed && !parsed.completedResult) {
+        setWordQueue(restoredQueue.slice(1));
+        setHasChecked(false);
+      } else {
+        setWordQueue(restoredQueue);
+        setHasChecked(savedHasChecked);
+      }
+      restoredHasCheckedRef.current = false;
+      if (parsed.completed || parsed.completedResult) setShowFinishModal(true);
+      if (parsed.completedResult) {
+        completedResultRef.current = parsed.completedResult;
+        saveStatusRef.current = 'error';
+        setSaveStatus('error');
       }
     }
     setSessionInitialized(true);
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     if (!sessionInitialized || !user || !words.length) return;
@@ -298,7 +296,7 @@ export default function FreeMode() {
     // Completion cleanup must not immediately persist an empty replacement session.
     if (clearedCompletedSessionRef.current && totalAttempts === 0) return;
     clearedCompletedSessionRef.current = false;
-    const state: StoredSession = {
+    const state: StoredPracticeSession = {
       userId: user.id,
       queueIds: wordQueue,
       direction,
@@ -309,8 +307,11 @@ export default function FreeMode() {
       mistakes,
       attemptedWordIds,
       hasChecked,
+      completed: showFinishModal,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (storageWritableRef.current && persistPracticeSession(state) === null) {
+      setStorageWarning('Browser storage is unavailable. Practice progress cannot be saved locally.');
+    }
   }, [
     allowReguess,
     correctCount,
@@ -323,6 +324,7 @@ export default function FreeMode() {
     wordQueue,
     sessionInitialized,
     hasChecked,
+    showFinishModal,
   ]);
 
   useEffect(() => {
@@ -360,7 +362,7 @@ export default function FreeMode() {
     setWordQueue([]);
     setWords([]);
     setAttemptedWordIds([]);
-    localStorage.removeItem(STORAGE_KEY);
+    if (storageWritableRef.current) removePracticeSession(user.id);
   };
 
   const handleCheckAnswer = () => {
@@ -480,7 +482,7 @@ export default function FreeMode() {
     } else {
       setWordQueue([]);
     }
-    localStorage.removeItem(STORAGE_KEY);
+    if (storageWritableRef.current) removePracticeSession(user.id);
     setShowResetModal(false);
   };
 
@@ -492,6 +494,7 @@ export default function FreeMode() {
     // The ref protects even repeated clicks before React renders the disabled button.
     saveStatusRef.current = "saving";
     setSaveStatus("saving");
+    let savedCopy: string | null = null;
     try {
       if (!completedResultRef.current) {
         if (!sessionUserIdRef.current) throw new Error("No Practice account available.");
@@ -512,12 +515,23 @@ export default function FreeMode() {
       if (!user || user.id !== result.user_id) {
         throw new Error("Sign in to the account that completed this Practice to save its result.");
       }
+      if (storageWritableRef.current) savedCopy = persistPracticeSession({
+        userId: user.id, queueIds: wordQueue, direction, orderMode, allowReguess,
+        correctCount, totalAttempts, mistakes, attemptedWordIds, hasChecked,
+        completed: true, completedResult: result,
+      });
       const { error } = await supabase.from("test_history").insert(result);
       if (error) throw error;
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error("Error saving history:", error);
       saveStatusRef.current = "error";
       setSaveStatus("error");
+      return;
+    }
+
+    if (!mountedRef.current) {
+      if (savedCopy !== null) removePracticeSession(user.id, savedCopy);
       return;
     }
 
@@ -691,6 +705,7 @@ export default function FreeMode() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
+      {storageWarning && <p role="alert" className="p-4 text-amber-800 dark:text-amber-200">{storageWarning}</p>}
       {vocabularyError}
       <fieldset disabled={sessionCompleted} className="max-w-4xl mx-auto px-4 py-8 w-full min-w-0">
         <div className="text-center mb-8">
