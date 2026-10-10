@@ -5,8 +5,157 @@ import { authMock, deferred, query, supabaseMock, type QueryResult } from '@/tes
 import { word } from '@/test/fixtures';
 import type { TestHistory, Word } from '@/lib/supabase';
 import FreeMode from './FreeMode';
+import { StrictMode } from 'react';
+import { legacyPracticeKey, practiceSessionKey } from '@/lib/practiceSessions';
 
-const storageKey = 'vocab_practice_session_state_v2';
+const storageKey = practiceSessionKey('user-a');
+
+describe('Practice account storage isolation', () => {
+  const bKey = practiceSessionKey('user-b');
+  const progress = (userId = 'user-a') => ({
+    userId, queueIds: ['remaining'], direction: 'geo-to-en', orderMode: 'db-order',
+    allowReguess: false, totalAttempts: 3, correctCount: 2,
+    mistakes: [{ word_id: 'done', english_word: 'done', user_answer: 'wrong', correct_definitions: ['done'] }],
+    attemptedWordIds: ['done'], hasChecked: false,
+  });
+
+  it('keeps two accounts independent through progress, reset, ordering, sign-out and return', async () => {
+    const aWords = [word({ id: 'a1', english_word: 'A first', georgian_definitions: ['A meaning'] }),
+      word({ id: 'a2', english_word: 'A second', georgian_definitions: ['A next'] })];
+    const bWords = [word({ id: 'b1', user_id: 'user-b', english_word: 'B first' }),
+      word({ id: 'b2', user_id: 'user-b', english_word: 'B second' })];
+    supabaseMock.from.mockImplementation(() => query({ data: authMock.user?.id === 'user-a' ? aWords : bWords, error: null }));
+    const { rerender } = render(<FreeMode />);
+    const user = userEvent.setup();
+    await screen.findByRole('textbox');
+    await user.click(screen.getByRole('button', { name: 'In database order' }));
+    await user.click(screen.getByRole('button', { name: 'Georgian → English' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'private A wrong answer' } });
+    await user.click(screen.getByRole('button', { name: 'Check Answer' }));
+    await user.click(screen.getByText('Allow re-guessing wrong answers').parentElement!.querySelector('button')!);
+    await user.click(screen.getByRole('button', { name: 'Next Word' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'A unfinished input' } });
+    const aCopy = localStorage.getItem(storageKey);
+    expect(JSON.parse(aCopy!)).toMatchObject({ queueIds: ['a2', 'a1'], direction: 'geo-to-en', orderMode: 'db-order', allowReguess: true,
+      totalAttempts: 1, correctCount: 0, attemptedWordIds: ['a1'], hasChecked: false,
+      mistakes: [expect.objectContaining({ user_answer: 'private A wrong answer' })] });
+
+    authMock.user = { id: 'user-b' };
+    rerender(<FreeMode />);
+    expect(await screen.findByRole('textbox')).toHaveValue('');
+    expect(screen.queryByText('A next')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('A unfinished input')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ userId: 'user-b', direction: 'en-to-geo',
+      orderMode: 'random', allowReguess: false, totalAttempts: 0, correctCount: 0, mistakes: [], attemptedWordIds: [], hasChecked: false });
+    await user.click(screen.getByRole('button', { name: 'In database order' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'wrong B' } });
+    await user.click(screen.getByRole('button', { name: 'Check Answer' }));
+    await user.click(screen.getByRole('button', { name: 'Reset Progress' }));
+    await user.click(screen.getAllByRole('button', { name: 'Reset Progress' }).at(-1)!);
+    expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ totalAttempts: 0, mistakes: [] });
+    expect(localStorage.getItem(storageKey)).toBe(aCopy);
+    await user.click(screen.getByRole('button', { name: 'Random' }));
+    expect(localStorage.getItem(storageKey)).toBe(aCopy);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'დათმობა' } });
+    await user.click(screen.getByRole('button', { name: 'Check Answer' }));
+    await user.click(screen.getByRole('button', { name: 'Next Word' }));
+    const bCopy = localStorage.getItem(bKey);
+    expect(JSON.parse(bCopy!)).toMatchObject({ totalAttempts: 1, correctCount: 1, orderMode: 'random' });
+    authMock.user = null;
+    rerender(<FreeMode />);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBe(aCopy);
+    expect(localStorage.getItem(bKey)).toBe(bCopy);
+    authMock.user = { id: 'user-a' };
+    rerender(<FreeMode />);
+    await screen.findByText('A next');
+    expect(localStorage.getItem(storageKey)).toBe(aCopy);
+    authMock.user = { id: 'user-b' };
+    rerender(<FreeMode />);
+    await screen.findByRole('textbox');
+    expect(localStorage.getItem(bKey)).toBe(bCopy);
+  });
+
+  it('leaves A legacy progress intact for B, then migrates A safely across StrictMode and remounts', async () => {
+    const legacy = JSON.stringify(progress());
+    localStorage.setItem(legacyPracticeKey, legacy);
+    authMock.user = { id: 'user-b' };
+    supabaseMock.from.mockImplementation(() => query({ data: [word({ id: 'remaining', user_id: authMock.user!.id })], error: null }));
+    const view = render(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findByRole('textbox');
+    expect(localStorage.getItem(legacyPracticeKey)).toBe(legacy);
+    expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ totalAttempts: 0, mistakes: [] });
+    const writes = vi.spyOn(Storage.prototype, 'setItem');
+    authMock.user = { id: 'user-a' };
+    view.rerender(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findByRole('textbox');
+    expect(localStorage.getItem(legacyPracticeKey)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject(progress());
+    expect(writes.mock.calls.filter(([key]) => key === storageKey).every(([, raw]) => JSON.parse(raw).totalAttempts === 3)).toBe(true);
+    const copy = localStorage.getItem(storageKey);
+    view.unmount();
+    render(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findByRole('textbox');
+    expect(localStorage.getItem(storageKey)).toBe(copy);
+  });
+
+  it('preserves checked-answer restoration by advancing only the checked word', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({ ...progress(), queueIds: ['checked', 'remaining'], attemptedWordIds: ['done', 'checked'], hasChecked: true }));
+    supabaseMock.from.mockReturnValue(query({ data: [word({ id: 'checked' }), word({ id: 'remaining' })], error: null }));
+    render(<FreeMode />);
+    expect(await screen.findByRole('textbox')).toHaveValue('');
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ ...progress(), queueIds: ['remaining'], attemptedWordIds: ['done', 'checked'] });
+  });
+
+  it('does not autosave over legacy progress when migration writes fail', async () => {
+    const legacy = JSON.stringify(progress());
+    localStorage.setItem(legacyPracticeKey, legacy);
+    const writes = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+    supabaseMock.from.mockReturnValue(query({ data: [word({ id: 'remaining' })], error: null }));
+    render(<StrictMode><FreeMode /></StrictMode>);
+    expect(await screen.findByRole('textbox')).toHaveValue('');
+    expect(screen.getByRole('alert')).toHaveTextContent('original browser copy has been kept');
+    expect(localStorage.getItem(legacyPracticeKey)).toBe(legacy);
+    expect(writes.mock.calls.every(([, raw]) => JSON.parse(raw).totalAttempts === 3)).toBe(true);
+  });
+
+  it('preserves incompatible scoped data instead of replacing it with initial progress', async () => {
+    const raw = JSON.stringify({ ...progress('user-b'), mistakes: [] });
+    localStorage.setItem(storageKey, raw);
+    supabaseMock.from.mockReturnValue(query({ data: [word()], error: null }));
+    render(<FreeMode />);
+    await screen.findByRole('textbox');
+    expect(screen.getByRole('alert')).toHaveTextContent('kept unchanged');
+    expect(localStorage.getItem(storageKey)).toBe(raw);
+  });
+
+  it.each(['success', 'failure'] as const)('isolates an old account save %s after switching accounts', async outcome => {
+    const pending = deferred<QueryResult>();
+    const save = query(pending.promise);
+    const { user, rerender } = await completePractice({ save });
+    await user.click(screen.getByRole('button', { name: 'Close & Save' }));
+    const aCopy = localStorage.getItem(storageKey);
+    authMock.user = { id: 'user-b' };
+    const bWord = word({ id: 'b', user_id: 'user-b', english_word: 'B private word' });
+    supabaseMock.from.mockReturnValue(query({ data: [bWord], error: null }));
+    rerender(<FreeMode />);
+    await screen.findByText('B private word');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'B input' } });
+    const bCopy = localStorage.getItem(bKey);
+    await act(async () => {
+      if (outcome === 'success') pending.resolve({ error: null });
+      else pending.reject(new Error('old save failed'));
+    });
+    expect(screen.getByRole('textbox')).toHaveValue('B input');
+    expect(screen.queryByText('Result saved to History')).not.toBeInTheDocument();
+    expect(screen.queryByText('Failed to save result')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
+    expect(localStorage.getItem(bKey)).toBe(bCopy);
+    expect(localStorage.getItem(storageKey)).toBe(outcome === 'success' ? null : aCopy);
+    expect(save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ user_id: 'user-a' }));
+  });
+});
 
 describe('Practice vocabulary read errors', () => {
   it('preserves a completed unsaved result through a vocabulary failure and read retry', async () => {
@@ -22,14 +171,14 @@ describe('Practice vocabulary read errors', () => {
     authMock.user = { id: 'user-b' };
     rerender(<FreeMode />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load your vocabulary');
-    expect(screen.getByRole('heading', { name: 'Practice Summary' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry Save' })).toBeEnabled();
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
     expect(localStorage.getItem(storageKey)).toBe(stored);
     const recovered = query({ data: [current], error: null });
     supabaseMock.from.mockImplementation(table => table === 'words' ? recovered : save);
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.queryByText('Unable to load your vocabulary. Please try again.')).not.toBeInTheDocument());
-    expect(screen.getByRole('heading', { name: 'Practice Summary' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
     expect(localStorage.getItem(storageKey)).toBe(stored);
     expect(save.insert).toHaveBeenCalledOnce();
     authMock.user = { id: 'user-a' };
@@ -267,7 +416,7 @@ describe('FreeMode save lifecycle', () => {
     await user.click(screen.getByRole('button', { name: 'Close & Save' }));
     await screen.findByText('Failed to save result');
     expect(screen.getByRole('heading', { name: 'Practice Summary' })).toBeInTheDocument();
-    expect(localStorage.getItem(storageKey)).toBe(stored);
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject(JSON.parse(stored!));
     expect(screen.getByRole('button', { name: 'Retry Save' })).toBeEnabled();
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving history:', error);
     const captured = structuredClone(save.insert.mock.calls[0][0]);
@@ -291,6 +440,8 @@ describe('FreeMode save lifecycle', () => {
   });
 
   it('clears a completed result only after confirmed success and prevents overlapping inserts', async () => {
+    const otherKey = practiceSessionKey('user-b');
+    localStorage.setItem(otherKey, 'another account recovery copy');
     const pending = deferred<QueryResult>();
     const save = query(pending.promise);
     await completePractice({ save, answers: ['დათმობა'] });
@@ -301,10 +452,11 @@ describe('FreeMode save lifecycle', () => {
     expect(save.insert).toHaveBeenCalledWith(expect.objectContaining({ correct_count: 1, mistakes: [] }));
     expect(button).toBeDisabled();
     expect(screen.getByRole('heading', { name: 'Practice Summary' })).toBeInTheDocument();
-    expect(localStorage.getItem(storageKey)).toBe(stored);
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ ...JSON.parse(stored!), completedResult: save.insert.mock.calls[0][0] });
     await act(async () => { pending.resolve({ error: null }); });
     await screen.findByText('Result saved to History');
     expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(localStorage.getItem(otherKey)).toBe('another account recovery copy');
     expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
     fireEvent.click(button);
     expect(save.insert).toHaveBeenCalledOnce();
@@ -322,13 +474,11 @@ describe('FreeMode save lifecycle', () => {
     authMock.user = { id: 'user-b' };
     rerender(<FreeMode />);
     await waitFor(() => expect(load.eq).toHaveBeenCalledWith('user_id', 'user-b'));
-    await user.click(screen.getByRole('button', { name: 'Retry Save' }));
+    expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
     expect(save.insert).toHaveBeenCalledOnce();
-    expect(logged).toHaveBeenCalledTimes(2);
-    expect(logged).toHaveBeenLastCalledWith('Error saving history:',
-      expect.objectContaining({ message: expect.stringContaining('account that completed') }));
+    expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving history:', failure);
     expect(localStorage.getItem(storageKey)).toBe(stored);
-    expect(screen.getByRole('heading', { name: 'Practice Summary' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
     authMock.user = { id: 'user-a' };
     save.insert.mockResolvedValueOnce({ error: null });
     rerender(<FreeMode />);
@@ -338,6 +488,8 @@ describe('FreeMode save lifecycle', () => {
   });
 
   it('offers discard only after failure; cancel retains the result and confirmation clears it', async () => {
+    const otherKey = practiceSessionKey('user-b');
+    localStorage.setItem(otherKey, 'another account recovery copy');
     const failure = { message: 'Offline' };
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const save = query({ error: failure });
@@ -355,6 +507,7 @@ describe('FreeMode save lifecycle', () => {
     await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Discard result' }));
     expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
     expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(localStorage.getItem(otherKey)).toBe('another account recovery copy');
     expect(save.insert).toHaveBeenCalledOnce();
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving history:', failure);
   });
