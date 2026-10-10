@@ -23,6 +23,8 @@ export function useWords() {
   const { user } = useAuth();
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState<string | null>(null);
+  const readReadyRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
   const [page, setPage] = useState(0);
@@ -59,6 +61,8 @@ export function useWords() {
   const loadWordsForContext = useCallback(async () => {
     const isCurrent = beginRead();
     if (!isCurrent) return;
+    readReadyRef.current = false;
+    setReadError(null);
     if (!userId) {
       setLoading(false);
       return;
@@ -92,6 +96,7 @@ export function useWords() {
         setTotalCount(
           typeof countResult.data === "number" ? countResult.data : 0
         );
+        readReadyRef.current = true;
       } else {
         let query = supabase
           .from("words")
@@ -109,9 +114,12 @@ export function useWords() {
         if (error) throw error;
         setWords(data || []);
         setTotalCount(count || 0);
+        readReadyRef.current = true;
       }
     } catch (error: any) {
-      if (isCurrent()) console.error("Error loading words:", error);
+      if (!isCurrent()) return;
+      console.error("Error loading words:", error);
+      setReadError("Unable to load your words. Please try again.");
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -145,6 +153,7 @@ export function useWords() {
   const deleteWord = useCallback(
     async (id: string) => {
       if (!user) return;
+      if (!readReadyRef.current) throw new Error("Reload your words before deleting.");
 
       const { error } = await supabase
         .from("words")
@@ -160,6 +169,7 @@ export function useWords() {
   const bulkDeleteWords = useCallback(
     async (ids: string[]) => {
       if (!user || ids.length === 0) return;
+      if (!readReadyRef.current) throw new Error("Reload your words before deleting.");
 
       const { error } = await supabase
         .from("words")
@@ -240,6 +250,7 @@ export function useWords() {
   return {
     words,
     loading,
+    readError,
     searchTerm,
     setSearchTerm,
     debouncedSearchTerm,

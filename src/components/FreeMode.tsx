@@ -1,4 +1,5 @@
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -58,6 +59,7 @@ export default function FreeMode() {
   const [hasChecked, setHasChecked] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [mistakes, setMistakes] = useState<MistakeWithId[]>([]);
@@ -183,33 +185,37 @@ export default function FreeMode() {
     setWords([]);
   }, [userId]);
 
-  useEffect(() => {
+  const loadWords = useCallback(async () => {
     const isCurrent = beginWordRead();
     if (!isCurrent) return;
+    setReadError(null);
     if (!userId) {
       setLoading(false);
       return;
     }
-    const loadWords = async () => {
-      setLoading(true);
-      try {
-        let query = supabase.from("words").select("*").eq("user_id", userId);
-        if (orderMode === "db-order") {
-          query = query.order("created_at", { ascending: true });
-        }
-        const { data, error } = await query;
-        if (!isCurrent()) return;
-        if (error) throw error;
-        const fetched = data || [];
-        setWords(orderMode === "random" ? shuffleArray(fetched) : fetched);
-      } catch (error) {
-        if (isCurrent()) console.error("Error loading words:", error);
-      } finally {
-        if (isCurrent()) setLoading(false);
+    setLoading(true);
+    try {
+      let query = supabase.from("words").select("*").eq("user_id", userId);
+      if (orderMode === "db-order") {
+        query = query.order("created_at", { ascending: true });
       }
-    };
-    void loadWords();
+      const { data, error } = await query;
+      if (!isCurrent()) return;
+      if (error) throw error;
+      const fetched = data || [];
+      setWords(orderMode === "random" ? shuffleArray(fetched) : fetched);
+    } catch (error) {
+      if (!isCurrent()) return;
+      console.error("Error loading words:", error);
+      setReadError("Unable to load your vocabulary. Please try again.");
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
   }, [beginWordRead, orderMode, userId]);
+
+  useEffect(() => {
+    void loadWords();
+  }, [loadWords]);
 
   useEffect(() => {
     if (!user) return;
@@ -320,12 +326,13 @@ export default function FreeMode() {
   ]);
 
   useEffect(() => {
-    if (!sessionInitialized || loading) return;
+    if (!sessionInitialized || loading || readError) return;
     if (wordQueue.length === 0 && words.length > 0 && totalAttempts > 0) {
       setShowFinishModal(true);
     }
   }, [
     loading,
+    readError,
     sessionInitialized,
     totalAttempts,
     wordQueue.length,
@@ -615,6 +622,17 @@ export default function FreeMode() {
     return `${day}/${month}/${year}`;
   };
 
+  const vocabularyError = readError && (
+    <div role="alert" className="p-8 text-center text-red-700 dark:text-red-300">
+      <p>{readError}</p>
+      <button type="button" onClick={() => { void loadWords(); }} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
+        Retry
+      </button>
+    </div>
+  );
+
+  if (readError && !showFinishModal) return vocabularyError;
+
   if (loading && !showFinishModal) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 flex items-center justify-center">
@@ -673,6 +691,7 @@ export default function FreeMode() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
+      {vocabularyError}
       <fieldset disabled={sessionCompleted} className="max-w-4xl mx-auto px-4 py-8 w-full min-w-0">
         <div className="text-center mb-8">
           <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">

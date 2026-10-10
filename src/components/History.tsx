@@ -18,6 +18,8 @@ export default function History() {
   const { user } = useAuth();
   const [history, setHistory] = useState<TestHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState<string | null>(null);
+  const readFailedRef = useRef(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterDirection, setFilterDirection] = useState<'all' | 'en-to-geo' | 'geo-to-en'>('all');
   const [filterScore, setFilterScore] = useState<'all' | 'high' | 'medium' | 'low'>('all');
@@ -39,6 +41,7 @@ export default function History() {
   const loadHistoryForContext = useCallback(async () => {
     const isCurrent = beginRead();
     if (!isCurrent) return;
+    setReadError(null);
     if (!userId) {
       setLoading(false);
       return;
@@ -54,9 +57,18 @@ export default function History() {
 
       if (!isCurrent()) return;
       if (error) throw error;
+      readFailedRef.current = false;
       setHistory(data || []);
     } catch (error: any) {
-      if (isCurrent()) console.error('Error loading history:', error);
+      if (!isCurrent()) return;
+      console.error('Error loading history:', error);
+      readFailedRef.current = true;
+      setReadError('Unable to load your history. Please try again.');
+      setHistory([]);
+      setSelectedIds(new Set());
+      bulkConfirmationRef.current = null;
+      setBulkConfirmation(null);
+      setShowDeleteModal(null);
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -104,14 +116,14 @@ export default function History() {
   }
 
   function confirmBulkDelete() {
-    if (!user || loading || deleting || bulkDeletingRef.current || eligibleIds.length === 0) return;
+    if (!user || readFailedRef.current || loading || deleting || bulkDeletingRef.current || eligibleIds.length === 0) return;
     const confirmation = { ids: [...eligibleIds], userId: user.id, direction: filterDirection, score: filterScore };
     bulkConfirmationRef.current = confirmation;
     setBulkConfirmation(confirmation);
   }
 
   async function deleteHistory(id: string) {
-    if (!user) return;
+    if (!user || readFailedRef.current) return;
 
     setDeleting(true);
     try {
@@ -139,7 +151,7 @@ export default function History() {
 
   async function bulkDeleteHistory() {
     const confirmation = bulkConfirmationRef.current;
-    if (!user || !confirmation || loading || deleting || bulkDeletingRef.current) return;
+    if (!user || readFailedRef.current || !confirmation || loading || deleting || bulkDeletingRef.current) return;
     if (confirmation.userId !== user.id || confirmation.direction !== filterDirection || confirmation.score !== filterScore) {
       closeBulkConfirmation();
       return;
@@ -278,7 +290,7 @@ export default function History() {
         </div>
 
         {/* STATS */}
-        {totalTests > 0 && (
+        {!loading && !readError && totalTests > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div className="bg-white/80 dark:bg-gray-800/80 p-6 rounded-2xl shadow">
               <div className="text-sm text-blue-600 dark:text-blue-400 mb-2">
@@ -390,6 +402,13 @@ export default function History() {
       <div className="bg-white/80 dark:bg-gray-800/80 rounded-3xl shadow-xl overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">Loading...</div>
+        ) : readError ? (
+          <div role="alert" className="p-12 text-center text-red-700 dark:text-red-300">
+            <p>{readError}</p>
+            <button type="button" onClick={() => { void loadHistory(); }} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
+              Retry
+            </button>
+          </div>
         ) : filteredHistory.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
             No results found.

@@ -8,6 +8,124 @@ import FreeMode from './FreeMode';
 
 const storageKey = 'vocab_practice_session_state_v2';
 
+describe('Practice vocabulary read errors', () => {
+  it('preserves a completed unsaved result through a vocabulary failure and read retry', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const save = query({ error: { message: 'save offline' } });
+    const { user, rerender, current } = await completePractice({ save });
+    await user.click(screen.getByRole('button', { name: 'Close & Save' }));
+    await screen.findByText('Failed to save result');
+    const stored = localStorage.getItem(storageKey);
+    const snapshot = structuredClone(save.insert.mock.calls[0][0]);
+    const vocabulary = query({ error: { message: 'read offline' } });
+    supabaseMock.from.mockImplementation(table => table === 'words' ? vocabulary : save);
+    authMock.user = { id: 'user-b' };
+    rerender(<FreeMode />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load your vocabulary');
+    expect(screen.getByRole('heading', { name: 'Practice Summary' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry Save' })).toBeEnabled();
+    expect(localStorage.getItem(storageKey)).toBe(stored);
+    const recovered = query({ data: [current], error: null });
+    supabaseMock.from.mockImplementation(table => table === 'words' ? recovered : save);
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText('Unable to load your vocabulary. Please try again.')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Practice Summary' })).toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBe(stored);
+    expect(save.insert).toHaveBeenCalledOnce();
+    authMock.user = { id: 'user-a' };
+    rerender(<FreeMode />);
+    await waitFor(() => expect(recovered.eq).toHaveBeenCalledWith('user_id', 'user-a'));
+    save.insert.mockResolvedValueOnce({ error: null });
+    await user.click(screen.getByRole('button', { name: 'Retry Save' }));
+    await screen.findByText('Result saved to History');
+    expect(save.insert.mock.calls[1][0]).toEqual(snapshot);
+  });
+
+  it.each(['returned', 'rejected'] as const)('preserves restored progress through a %s read failure and retry', async kind => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const saved = {
+      userId: 'user-a', queueIds: ['remaining'], orderMode: 'db-order', direction: 'en-to-geo',
+      totalAttempts: 3, correctCount: 2, mistakes: [{ word_id: 'done', english_word: 'done', user_answer: 'wrong', correct_definitions: ['done'] }],
+      attemptedWordIds: ['done'], hasChecked: false, allowReguess: false,
+    };
+    localStorage.setItem(storageKey, JSON.stringify(saved));
+    const failed = deferred<QueryResult>();
+    // Session restoration changes ordering, so both reads share the controlled outcome.
+    const failedRead = query(failed.promise);
+    supabaseMock.from.mockReturnValue(failedRead);
+    render(<FreeMode />);
+    const stored = localStorage.getItem(storageKey);
+    await act(async () => {
+      if (kind === 'returned') failed.resolve({ error: { message: 'private details' } });
+      else failed.reject(new Error('private details'));
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load your vocabulary. Please try again.');
+    expect(screen.queryByText('Ready to Start Learning?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBe(stored);
+    const retryPending = deferred<QueryResult>();
+    const retry = query(retryPending.promise);
+    supabaseMock.from.mockReturnValue(retry);
+    const button = screen.getByRole('button', { name: 'Retry' });
+    button.focus();
+    await userEvent.keyboard('{Enter}');
+    fireEvent.click(button);
+    expect(screen.getByText('Loading your words...')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBe(stored);
+    await act(async () => retryPending.resolve({ data: [word({ id: 'remaining' })], error: null }));
+    expect(screen.getByText('yield')).toBeInTheDocument();
+    expect(retry.eq).toHaveBeenCalledWith('user_id', 'user-a');
+    expect(retry.order).toHaveBeenCalledWith('created_at', { ascending: true });
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject(saved);
+    expect(supabaseMock.from.mock.calls.every(([table]) => table === 'words')).toBe(true);
+    expect(retry.insert).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
+  });
+
+  it('shows the empty vocabulary screen only after a successful empty read', async () => {
+    supabaseMock.from.mockReturnValue(query({ data: [], error: null }));
+    render(<FreeMode />);
+    expect(await screen.findByText('Ready to Start Learning?')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not let an obsolete ordering success clear the current error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    localStorage.setItem(storageKey, JSON.stringify({ userId: 'user-a', orderMode: 'db-order', queueIds: ['word-1'] }));
+    const old = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValueOnce(query({ error: { message: 'latest failed' } }));
+    render(<FreeMode />);
+    await screen.findByRole('alert');
+    const stored = localStorage.getItem(storageKey);
+    await act(async () => old.resolve({ data: [word()], error: null }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('yield')).not.toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBe(stored);
+  });
+
+  it('keeps the new account successful after an old error and ignores failures after unmount', async () => {
+    const old = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(old.promise));
+    const { rerender, unmount } = render(<FreeMode />);
+    authMock.user = { id: 'user-b' };
+    const current = query({ data: [word({ user_id: 'user-b' })], error: null });
+    supabaseMock.from.mockReturnValueOnce(current);
+    rerender(<FreeMode />);
+    await screen.findByText('yield');
+    await act(async () => old.reject(new Error('old account')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(current.eq).toHaveBeenCalledWith('user_id', 'user-b');
+    const pending = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValueOnce(query(pending.promise));
+    authMock.user = { id: 'user-c' };
+    rerender(<FreeMode />);
+    unmount();
+    await act(async () => pending.reject(new Error('unmounted')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('Practice vocabulary read races', () => {
   function orderingRace() {
     // Restoration changes the initial random request to database order while it is pending.

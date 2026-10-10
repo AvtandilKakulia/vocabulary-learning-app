@@ -15,6 +15,8 @@ import { partOfSpeechStyles } from "./partOfSpeechStyles";
 interface WordTableProps {
   words: Word[];
   loading: boolean;
+  readError: string | null;
+  onRetry: () => void;
   allSelected: boolean;
   selectedIds: Set<string>;
   onToggleSelectAll: () => void;
@@ -27,6 +29,8 @@ interface WordTableProps {
 export default function WordTable({
   words,
   loading,
+  readError,
+  onRetry,
   allSelected,
   selectedIds,
   onToggleSelectAll,
@@ -63,7 +67,7 @@ export default function WordTable({
                       ? "text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-700 bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-800 shadow-inner"
                       : "text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 bg-slate-50/80 dark:bg-gray-800/60 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/70 dark:hover:bg-gray-700/60"
                   }`}
-                  disabled={words.length === 0}
+                  disabled={loading || Boolean(readError) || words.length === 0}
                 >
                   {allSelected ? (
                     <CheckSquare
@@ -96,6 +100,17 @@ export default function WordTable({
                   <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mb-4"></div>
                   <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
                     Loading words...
+                  </div>
+                </td>
+              </tr>
+            ) : readError ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center">
+                  <div role="alert" className="text-red-700 dark:text-red-300">
+                    <p>{readError}</p>
+                    <button type="button" onClick={onRetry} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
+                      Retry
+                    </button>
                   </div>
                 </td>
               </tr>
