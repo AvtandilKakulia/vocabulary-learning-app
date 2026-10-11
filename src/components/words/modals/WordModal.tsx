@@ -44,6 +44,8 @@ export default function WordModal({
   );
   const [description, setDescription] = useState(word?.description || "");
   const [saving, setSaving] = useState(false);
+  // Guard events synchronously, including multiple events before React renders.
+  const phaseRef = useRef<"editing" | "confirming" | "saving" | "duplicate" | "finished">("editing");
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -67,6 +69,8 @@ export default function WordModal({
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
+    phaseRef.current = "editing";
+    setSaving(false);
     setEnglishWord(word?.english_word || "");
     setPartOfSpeech(word?.part_of_speech || "unspecified");
     setIsIrregularVerb(word?.is_irregular_verb || false);
@@ -87,6 +91,13 @@ export default function WordModal({
     };
   }, [word]);
 
+  useEffect(() => {
+    // Back from the duplicate warning restores this same mounted draft.
+    if (!hidden && phaseRef.current === "duplicate") {
+      phaseRef.current = "editing";
+    }
+  }, [hidden]);
+
   const isDirty = () => {
     const initial = initialStateRef.current;
     const defsDirty =
@@ -105,10 +116,13 @@ export default function WordModal({
   };
 
   const handleClose = () => {
+    if (hidden || phaseRef.current !== "editing") return;
     if (isDirty()) {
+      phaseRef.current = "confirming";
       setShowColorPicker(false);
       setShowCloseConfirm(true);
     } else {
+      phaseRef.current = "finished";
       setShowColorPicker(false);
       onClose();
     }
@@ -139,6 +153,7 @@ export default function WordModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hidden || phaseRef.current !== "editing") return;
 
     const trimmedEnglish = englishWord.trim();
     const validDefinitions = georgianDefs.map((definition) => definition.trim()).filter(Boolean);
@@ -160,7 +175,9 @@ export default function WordModal({
       return;
     }
 
+    phaseRef.current = "saving";
     setSaving(true);
+    setShowColorPicker(false);
     try {
       const filteredDefs = validDefinitions;
       const irregularData =
@@ -185,22 +202,28 @@ export default function WordModal({
 
       if (word) {
         await updateWord(word.id, wordData);
-        onSave();
       } else {
         const existingWords = await checkExistingEnglishWords(trimmedEnglish);
         if (existingWords.length > 0) {
+          phaseRef.current = "duplicate";
+          setSaving(false);
           onDuplicateDetected(existingWords, wordData);
           return;
         }
 
         await addWord(wordData);
-        onSave();
       }
     } catch (error: any) {
-      alert("Error saving word: " + error.message);
-    } finally {
+      phaseRef.current = "editing";
       setSaving(false);
+      alert("Error saving word: " + error.message);
+      return;
     }
+
+    // Keep the completed editor locked until its owner closes it. A refresh is
+    // separate from the write and must not make this saved draft retryable.
+    phaseRef.current = "finished";
+    onSave();
   };
 
   const colors = [
@@ -280,6 +303,9 @@ export default function WordModal({
             } modal-scrollbar`}
           >
             <button
+              type="button"
+              aria-label="Close word editor"
+              disabled={saving || showCloseConfirm}
               onClick={handleClose}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10"
             >
@@ -298,7 +324,8 @@ export default function WordModal({
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} aria-busy={saving}>
+                <fieldset disabled={saving || showCloseConfirm} className="min-w-0 space-y-6">
                 <div className="grid gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -552,6 +579,7 @@ export default function WordModal({
                     {saving ? "Saving..." : word ? "Save changes" : "Add word"}
                   </button>
                 </div>
+                </fieldset>
               </form>
             </div>
           </div>
@@ -573,7 +601,11 @@ export default function WordModal({
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowCloseConfirm(false)}
+                    onClick={() => {
+                      if (phaseRef.current !== "confirming") return;
+                      phaseRef.current = "editing";
+                      setShowCloseConfirm(false);
+                    }}
                     className="w-full sm:flex-1 px-5 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-gray-800 dark:text-gray-200 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
                   >
                     Keep editing
@@ -582,6 +614,8 @@ export default function WordModal({
                   <button
                     type="button"
                     onClick={() => {
+                      if (phaseRef.current !== "confirming") return;
+                      phaseRef.current = "finished";
                       setShowCloseConfirm(false);
                       onClose();
                     }}
