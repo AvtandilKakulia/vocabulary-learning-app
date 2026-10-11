@@ -1,38 +1,26 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { Check, ChevronRight, Plus, Shuffle, X } from "lucide-react";
-import { supabase, Word, TestMistake, TestHistory } from "../lib/supabase";
+import { supabase, Word } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { useLatestRequest } from "../hooks/useLatestRequest";
 import { sanitizeDescription } from "../lib/sanitizeDescription";
-
-const STORAGE_KEY = "vocab_practice_session_state_v2";
+import type { User } from '@supabase/supabase-js';
+import { readPracticeSession, persistPracticeSession, removePracticeSession,
+  type StoredPracticeSession, type PracticeResult, type PracticeMistake } from '../lib/practiceSessions';
+import { findPracticeSave, savePracticeResult, type PracticeSave } from '../lib/practiceSaves';
 
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
 type InputStatus = "idle" | "correct" | "incorrect";
-type SaveStatus = "idle" | "saving" | "saved" | "error" | "discarded";
-type PracticeResult = Omit<TestHistory, "id" | "created_at">;
-
-type StoredSession = {
-  userId: string;
-  queueIds: string[];
-  direction: Direction;
-  orderMode: OrderMode;
-  allowReguess: boolean;
-  correctCount: number;
-  totalAttempts: number;
-  mistakes: MistakeWithId[];
-  attemptedWordIds?: string[];
-  hasChecked?: boolean;
-};
-
-type MistakeWithId = TestMistake & { word_id?: string };
+type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error" | "discarded";
+type MistakeWithId = PracticeMistake;
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -49,6 +37,17 @@ function normalize(text: string) {
 
 export default function FreeMode() {
   const { user } = useAuth();
+  return user ? <AccountPractice key={user.id} user={user} /> : null;
+}
+
+function AccountPractice({ user }: { user: User }) {
+  const mountedRef = useRef(false);
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const storageWritableRef = useRef(true);
+  const [storageWarning, setStorageWarning] = useState('');
   const [words, setWords] = useState<Word[]>([]);
   const [wordQueue, setWordQueue] = useState<string[]>([]);
   const [direction, setDirection] = useState<Direction>("en-to-geo");
@@ -68,6 +67,7 @@ export default function FreeMode() {
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveOperation, setSaveOperation] = useState<PracticeSave | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const completedResultRef = useRef<PracticeResult | null>(null);
   const saveStatusRef = useRef<SaveStatus>("idle");
@@ -218,44 +218,46 @@ export default function FreeMode() {
   }, [loadWords]);
 
   useEffect(() => {
-    if (!user) return;
     if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
-    sessionUserIdRef.current = user.id;
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed: StoredSession = JSON.parse(saved);
-        if (parsed.userId === user.id) {
-          setDirection(parsed.direction ?? "en-to-geo");
-          setOrderMode(parsed.orderMode ?? "random");
-          setAllowReguess(parsed.allowReguess ?? false);
-          setCorrectCount(parsed.correctCount ?? 0);
-          setTotalAttempts(parsed.totalAttempts ?? 0);
-          setMistakes(parsed.mistakes ?? []);
-          const restoredQueue = parsed.queueIds ?? [];
-          setAttemptedWordIds(parsed.attemptedWordIds ?? []);
+    sessionUserIdRef.current = userId;
+    const recovery = readPracticeSession(userId);
+    storageWritableRef.current = recovery.writable;
+    setStorageWarning(recovery.warning);
+    const parsed = recovery.session;
+    if (parsed) {
+      setDirection(parsed.direction);
+      setOrderMode(parsed.orderMode);
+      setAllowReguess(parsed.allowReguess);
+      setCorrectCount(parsed.correctCount);
+      setTotalAttempts(parsed.totalAttempts);
+      setMistakes(parsed.mistakes);
+      const restoredQueue = parsed.queueIds;
+      setAttemptedWordIds(parsed.attemptedWordIds ?? []);
 
-          const savedHasChecked = parsed.hasChecked ?? false;
-          if (savedHasChecked && restoredQueue.length > 0) {
-            setWordQueue(restoredQueue.slice(1));
-            setHasChecked(false);
-            restoredHasCheckedRef.current = false;
-          } else {
-            setWordQueue(restoredQueue);
-            setHasChecked(savedHasChecked);
-            restoredHasCheckedRef.current = false;
-          }
-        }
-      } catch (err) {
-        console.error("Error loading saved session", err);
+      const savedHasChecked = parsed.hasChecked ?? false;
+      if (savedHasChecked && restoredQueue.length > 0 && !parsed.completed && !parsed.completedResult) {
+        setWordQueue(restoredQueue.slice(1));
+        setHasChecked(false);
+      } else {
+        setWordQueue(restoredQueue);
+        setHasChecked(savedHasChecked);
+      }
+      restoredHasCheckedRef.current = false;
+      if (parsed.completed || parsed.completedResult) setShowFinishModal(true);
+      if (parsed.completedResult) {
+        completedResultRef.current = parsed.completedResult;
+        const operation = findPracticeSave(parsed.completedResult);
+        saveStatusRef.current = operation?.status === 'error' ? 'error' : operation ? 'saving' : 'pending';
+        setSaveStatus(saveStatusRef.current);
+        setSaveOperation(operation ?? null);
       }
     }
     setSessionInitialized(true);
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     if (!sessionInitialized || !user || !words.length) return;
-    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
+    if (completedResultRef.current) return;
 
     const validIds = words.map((w) => w.id);
     let queueIds = wordQueue.filter((id) => validIds.includes(id));
@@ -294,11 +296,11 @@ export default function FreeMode() {
 
   useEffect(() => {
     if (!sessionInitialized || !user) return;
-    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
+    if (completedResultRef.current) return;
     // Completion cleanup must not immediately persist an empty replacement session.
     if (clearedCompletedSessionRef.current && totalAttempts === 0) return;
     clearedCompletedSessionRef.current = false;
-    const state: StoredSession = {
+    const state: StoredPracticeSession = {
       userId: user.id,
       queueIds: wordQueue,
       direction,
@@ -309,8 +311,11 @@ export default function FreeMode() {
       mistakes,
       attemptedWordIds,
       hasChecked,
+      completed: showFinishModal,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (storageWritableRef.current && persistPracticeSession(state) === null) {
+      setStorageWarning('Browser storage is unavailable. Practice progress cannot be saved locally.');
+    }
   }, [
     allowReguess,
     correctCount,
@@ -323,6 +328,7 @@ export default function FreeMode() {
     wordQueue,
     sessionInitialized,
     hasChecked,
+    showFinishModal,
   ]);
 
   useEffect(() => {
@@ -360,7 +366,7 @@ export default function FreeMode() {
     setWordQueue([]);
     setWords([]);
     setAttemptedWordIds([]);
-    localStorage.removeItem(STORAGE_KEY);
+    if (storageWritableRef.current) removePracticeSession(user.id);
   };
 
   const handleCheckAnswer = () => {
@@ -461,7 +467,7 @@ export default function FreeMode() {
     setWordQueue(updatedQueue);
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback((clearStorage = true) => {
     if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
     sessionUserIdRef.current = user?.id ?? null;
     setCorrectCount(0);
@@ -480,11 +486,32 @@ export default function FreeMode() {
     } else {
       setWordQueue([]);
     }
-    localStorage.removeItem(STORAGE_KEY);
+    if (clearStorage && storageWritableRef.current) removePracticeSession(user.id);
     setShowResetModal(false);
-  };
+  }, [orderMode, user.id, words]);
 
-  const handleFinishClose = async () => {
+  useEffect(() => {
+    if (!saveOperation) return;
+    let cancelled = false;
+    void saveOperation.done.then(outcome => {
+      if (cancelled || !mountedRef.current) return;
+      saveStatusRef.current = outcome.status;
+      setSaveStatus(outcome.status);
+      setSaveOperation(null);
+      if (outcome.status === 'error') {
+        console.error('Error saving history:', outcome.error);
+        return;
+      }
+      completedResultRef.current = null;
+      clearedCompletedSessionRef.current = true;
+      setShowFinishModal(false);
+      // The shared operation already cleaned up its exact copy, even if unmounted.
+      handleReset(false);
+    });
+    return () => { cancelled = true; };
+  }, [saveOperation, handleReset]);
+
+  const handleFinishClose = () => {
     if (!showFinishModal || showDiscardConfirm ||
       saveStatusRef.current === "saving" || saveStatusRef.current === "saved" ||
       saveStatusRef.current === "discarded") return;
@@ -492,10 +519,12 @@ export default function FreeMode() {
     // The ref protects even repeated clicks before React renders the disabled button.
     saveStatusRef.current = "saving";
     setSaveStatus("saving");
+    let savedCopy: string | null = null;
     try {
       if (!completedResultRef.current) {
         if (!sessionUserIdRef.current) throw new Error("No Practice account available.");
         completedResultRef.current = {
+          id: crypto.randomUUID(),
           user_id: sessionUserIdRef.current,
           test_date: new Date().toISOString(),
           test_direction: direction,
@@ -508,24 +537,33 @@ export default function FreeMode() {
         };
       }
 
-      const result = completedResultRef.current;
+      // Upgrade old recovery snapshots once, before their first new request.
+      const result = { ...completedResultRef.current, id: completedResultRef.current.id ?? crypto.randomUUID() };
+      completedResultRef.current = result;
       if (!user || user.id !== result.user_id) {
         throw new Error("Sign in to the account that completed this Practice to save its result.");
       }
-      const { error } = await supabase.from("test_history").insert(result);
-      if (error) throw error;
+      if (!storageWritableRef.current) {
+        storageWritableRef.current = readPracticeSession(user.id).writable;
+      }
+      if (storageWritableRef.current) savedCopy = persistPracticeSession({
+        userId: user.id, queueIds: wordQueue, direction, orderMode, allowReguess,
+        correctCount, totalAttempts, mistakes, attemptedWordIds, hasChecked,
+        completed: true, completedResult: result,
+      }, true);
+      if (savedCopy === null) {
+        setStorageWarning('Could not preserve the result before saving. Keep this tab open and retry when browser storage is available.');
+        throw new Error('Could not checkpoint the Practice result. No History request was sent.');
+      }
+      setStorageWarning('');
+      setSaveOperation(savePracticeResult(result, savedCopy));
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error("Error saving history:", error);
       saveStatusRef.current = "error";
       setSaveStatus("error");
       return;
     }
-
-    saveStatusRef.current = "saved";
-    setSaveStatus("saved");
-    clearedCompletedSessionRef.current = true;
-    setShowFinishModal(false);
-    handleReset();
   };
 
   const handleDiscardResult = () => {
@@ -533,6 +571,7 @@ export default function FreeMode() {
     saveStatusRef.current = "discarded";
     setSaveStatus("discarded");
     clearedCompletedSessionRef.current = true;
+    completedResultRef.current = null;
     setShowDiscardConfirm(false);
     setShowFinishModal(false);
     handleReset();
@@ -691,6 +730,7 @@ export default function FreeMode() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
+      {storageWarning && <p role="alert" className="p-4 text-amber-800 dark:text-amber-200">{storageWarning}</p>}
       {vocabularyError}
       <fieldset disabled={sessionCompleted} className="max-w-4xl mx-auto px-4 py-8 w-full min-w-0">
         <div className="text-center mb-8">
@@ -1128,7 +1168,7 @@ export default function FreeMode() {
                 Cancel
               </button>
               <button
-                onClick={handleReset}
+                onClick={() => handleReset()}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Reset Progress
@@ -1175,6 +1215,7 @@ export default function FreeMode() {
 
             <div role="status" className="mb-4 text-center text-gray-700 dark:text-gray-300">
               {saveStatus === "saving" && "Saving result..."}
+              {saveStatus === "pending" && "This result has not been confirmed saved. Retry to confirm it in History."}
               {saveStatus === "error" && "Failed to save result"}
             </div>
             <div className="flex justify-end gap-3">
@@ -1193,7 +1234,7 @@ export default function FreeMode() {
                 disabled={saveStatus === "saving" || showDiscardConfirm}
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
-                {saveStatus === "saving" ? "Saving result..." : saveStatus === "error" ? "Retry Save" : "Close & Save"}
+                {saveStatus === "saving" ? "Saving result..." : saveStatus === "error" || saveStatus === "pending" ? "Retry Save" : "Close & Save"}
               </button>
             </div>
           </div>
