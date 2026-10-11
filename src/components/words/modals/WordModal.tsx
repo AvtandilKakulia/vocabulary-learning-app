@@ -140,6 +140,17 @@ export default function WordModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const trimmedEnglish = englishWord.trim();
+    const validDefinitions = georgianDefs.map((definition) => definition.trim()).filter(Boolean);
+    if (!trimmedEnglish) {
+      alert("Please enter an English word.");
+      return;
+    }
+    if (validDefinitions.length === 0) {
+      alert("Please enter at least one Georgian definition.");
+      return;
+    }
+
     if (
       partOfSpeech === "verb" &&
       isIrregularVerb &&
@@ -151,7 +162,7 @@ export default function WordModal({
 
     setSaving(true);
     try {
-      const filteredDefs = georgianDefs.filter((d) => d.trim() !== "");
+      const filteredDefs = validDefinitions;
       const irregularData =
         partOfSpeech === "verb" && isIrregularVerb
           ? {
@@ -165,7 +176,7 @@ export default function WordModal({
               pastParticiple: null,
             };
       const wordData: WordFormData = {
-        englishWord,
+        englishWord: trimmedEnglish,
         partOfSpeech,
         georgianDefs: filteredDefs,
         description,
@@ -176,7 +187,7 @@ export default function WordModal({
         await updateWord(word.id, wordData);
         onSave();
       } else {
-        const existingWords = await checkExistingEnglishWords(englishWord);
+        const existingWords = await checkExistingEnglishWords(trimmedEnglish);
         if (existingWords.length > 0) {
           onDuplicateDetected(existingWords, wordData);
           return;
