@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Sparkles, Layers, CheckSquare } from "lucide-react";
 import { Word } from "../lib/supabase";
 
@@ -53,6 +53,7 @@ export default function WordManagement() {
   const [duplicateWords, setDuplicateWords] = useState<Word[]>([]);
   const [newWordData, setNewWordData] = useState<WordFormData | null>(null);
   const [addingMeaning, setAddingMeaning] = useState(false);
+  const addingMeaningRef = useRef(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [viewingWord, setViewingWord] = useState<Word | null>(null);
 
@@ -105,8 +106,9 @@ export default function WordManagement() {
   };
 
   const handleAddAnotherMeaning = async () => {
-    if (!newWordData || addingMeaning) return;
+    if (!newWordData || addingMeaningRef.current) return;
 
+    addingMeaningRef.current = true;
     setAddingMeaning(true);
     setDuplicateError(null);
     try {
@@ -118,11 +120,13 @@ export default function WordManagement() {
     } catch (error: any) {
       setDuplicateError("Error adding word: " + error.message);
     } finally {
+      addingMeaningRef.current = false;
       setAddingMeaning(false);
     }
   };
 
   const handleEditExisting = (word: Word) => {
+    if (addingMeaningRef.current) return;
     closeDuplicateWarning();
     setEditingWord(word);
   };
@@ -273,6 +277,7 @@ export default function WordManagement() {
         onToggleSelectAll={toggleSelectAll}
         onToggleSelect={toggleSelect}
         onEdit={(word) => {
+          if (showAddModal) return;
           setEditingWord(word);
           setShowAddModal(true);
         }}
@@ -312,6 +317,7 @@ export default function WordManagement() {
           word={viewingWord}
           onClose={() => setViewingWord(null)}
           onEdit={(word) => {
+            if (showAddModal) return;
             setViewingWord(null);
             setEditingWord(word);
             setShowAddModal(true);
@@ -344,7 +350,10 @@ export default function WordManagement() {
           error={duplicateError}
           onAddAnotherMeaning={handleAddAnotherMeaning}
           onEditExisting={handleEditExisting}
-          onCancel={closeDuplicateWarning}
+          onCancel={() => {
+            if (addingMeaningRef.current) return;
+            closeDuplicateWarning();
+          }}
         />
       )}
     </div>
