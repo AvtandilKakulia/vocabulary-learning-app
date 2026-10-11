@@ -44,6 +44,7 @@ export default function WordModal({
   );
   const [description, setDescription] = useState(word?.description || "");
   const [saving, setSaving] = useState(false);
+  const saveInProgressRef = useRef(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -105,6 +106,7 @@ export default function WordModal({
   };
 
   const handleClose = () => {
+    if (saveInProgressRef.current) return;
     if (isDirty()) {
       setShowColorPicker(false);
       setShowCloseConfirm(true);
@@ -139,6 +141,8 @@ export default function WordModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Guard synchronously, including before React paints the disabled form.
+    if (saveInProgressRef.current) return;
 
     const trimmedEnglish = englishWord.trim();
     const validDefinitions = georgianDefs.map((definition) => definition.trim()).filter(Boolean);
@@ -160,6 +164,8 @@ export default function WordModal({
       return;
     }
 
+    saveInProgressRef.current = true;
+    setShowCloseConfirm(false);
     setSaving(true);
     try {
       const filteredDefs = validDefinitions;
@@ -199,6 +205,7 @@ export default function WordModal({
     } catch (error: any) {
       alert("Error saving word: " + error.message);
     } finally {
+      saveInProgressRef.current = false;
       setSaving(false);
     }
   };
@@ -281,7 +288,9 @@ export default function WordModal({
           >
             <button
               onClick={handleClose}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10"
+              disabled={saving}
+              aria-label="Close word editor"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 z-10 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <X size={24} />
             </button>
@@ -298,7 +307,8 @@ export default function WordModal({
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} aria-busy={saving} className="space-y-6">
+                <fieldset disabled={saving} className="min-w-0 space-y-6">
                 <div className="grid gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -552,6 +562,7 @@ export default function WordModal({
                     {saving ? "Saving..." : word ? "Save changes" : "Add word"}
                   </button>
                 </div>
+                </fieldset>
               </form>
             </div>
           </div>
@@ -582,10 +593,12 @@ export default function WordModal({
                   <button
                     type="button"
                     onClick={() => {
+                      if (saveInProgressRef.current) return;
                       setShowCloseConfirm(false);
                       onClose();
                     }}
-                    className="w-full sm:flex-1 px-5 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-200"
+                    disabled={saving}
+                    className="w-full sm:flex-1 px-5 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-orange-600 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Discard
                   </button>
