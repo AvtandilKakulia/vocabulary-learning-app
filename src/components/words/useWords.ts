@@ -237,7 +237,7 @@ export function useWords() {
       const { error } = await supabase
         .from("words")
         .update({
-          english_word: wordData.englishWord,
+          english_word: validated.englishWord,
           part_of_speech: wordData.partOfSpeech || "unspecified",
           is_irregular_verb: wordData.isIrregularVerb,
           past_simple: wordData.pastSimple,
