@@ -79,7 +79,6 @@ function AccountPractice({ user }: { user: User }) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusInput = useRef(false);
-  const directionChangeAfterCheckRef = useRef(false);
   const closeAndSaveButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const uniqueWordCount = useMemo(
@@ -347,7 +346,6 @@ function AccountPractice({ user }: { user: User }) {
 
   const handleDirectionChange = (newDirection: Direction) => {
     if (hasChecked) {
-      directionChangeAfterCheckRef.current = true;
       proceedToNextWord();
     }
     setDirection(newDirection);
@@ -601,17 +599,13 @@ function AccountPractice({ user }: { user: User }) {
     setShowFinishModal(true);
   };
 
+  // Input initialization follows the question identity, not the Word object's identity.
+  const currentWordId = currentWord?.id;
   useEffect(() => {
-    if (!currentWord || !sessionInitialized) {
+    if (!currentWordId || !sessionInitialized) {
       setAnswerInputs([""]);
       setInputStatuses(["idle"]);
       setHasChecked(false);
-      return;
-    }
-
-    // ⛔ Skip reset if direction change happened after checking
-    if (directionChangeAfterCheckRef.current) {
-      directionChangeAfterCheckRef.current = false;
       return;
     }
 
@@ -621,7 +615,7 @@ function AccountPractice({ user }: { user: User }) {
     setAnswerInputs(Array(inputCount).fill(""));
     setInputStatuses(Array(inputCount).fill("idle"));
     setHasChecked(false);
-  }, [currentWord?.id, direction, isIrregularActive]);
+  }, [currentWordId, sessionInitialized, direction, isIrregularActive]);
 
   useEffect(() => {
     if (!shouldFocusInput.current) return;
