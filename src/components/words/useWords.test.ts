@@ -396,7 +396,7 @@ describe('useWords query contracts', () => {
       isIrregularVerb: true, pastSimple: 'went', pastParticiple: 'gone',
     };
     const payload = {
-      english_word: 'go', georgian_definitions: ['წასვლა', ' სვლა '],
+      english_word: 'go', georgian_definitions: ['წასვლა', 'სვლა'],
       description: 'Changed description', part_of_speech: 'verb',
       is_irregular_verb: true, past_simple: 'went', past_participle: 'gone',
     };
@@ -405,6 +405,22 @@ describe('useWords query contracts', () => {
     expect(insert.insert).toHaveBeenCalledWith({ ...payload, user_id: 'user-a' });
     expect(update.update).toHaveBeenCalledWith(payload);
     expect(update.eq.mock.calls).toEqual([['id', fullWord.id], ['user_id', 'user-a']]);
+  });
+
+  it('rejects whitespace-only words or definitions before any database mutation', async () => {
+    const { result } = await mountHook();
+    supabaseMock.from.mockClear();
+    const input: WordFormData = {
+      englishWord: '   ', georgianDefs: ['მნიშვნელობა'], description: '',
+      partOfSpeech: 'unspecified', isIrregularVerb: false,
+      pastSimple: null, pastParticiple: null,
+    };
+    await expect(result.current.addWord(input)).rejects.toThrow('Please enter an English word');
+    await expect(result.current.updateWord('word-1', input)).rejects.toThrow('Please enter an English word');
+    const missingDefinitions = { ...input, englishWord: 'yield', georgianDefs: [' ', '\\t'] };
+    await expect(result.current.addWord(missingDefinitions)).rejects.toThrow('Please enter at least one Georgian definition');
+    await expect(result.current.updateWord('word-1', missingDefinitions)).rejects.toThrow('Please enter at least one Georgian definition');
+    expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 
   it('does not issue word queries or mutations without an authenticated user', async () => {
