@@ -10,6 +10,71 @@ import { legacyPracticeKey, practiceSessionKey } from '@/lib/practiceSessions';
 
 const storageKey = practiceSessionKey('user-a');
 
+describe('Practice answer initialization', () => {
+  const irregular = (id: string) => word({ id, english_word: 'go', is_irregular_verb: true,
+    past_simple: 'went', past_participle: 'gone' });
+
+  it.each([false, true])('restores irregular inputs after deferred vocabulary loading (checked=%s)', async checked => {
+    const saved = { userId: 'user-a', queueIds: checked ? ['done', 'remaining'] : ['remaining'],
+      direction: 'geo-to-en', orderMode: 'db-order', allowReguess: false,
+      totalAttempts: 1, correctCount: 1, mistakes: [], attemptedWordIds: ['done'], hasChecked: checked };
+    localStorage.setItem(storageKey, JSON.stringify(saved));
+    const pending = deferred<QueryResult>();
+    supabaseMock.from.mockReturnValue(query(pending.promise));
+    const { rerender } = render(<StrictMode><FreeMode /></StrictMode>);
+    expect(screen.getByText('Loading your words...')).toBeInTheDocument();
+    await act(async () => pending.resolve({ data: [irregular('done'), irregular('remaining')], error: null }));
+    const inputs = screen.getAllByRole('textbox');
+    expect(inputs).toHaveLength(3);
+    inputs.forEach(input => expect(input).toHaveValue(''));
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ ...saved, queueIds: ['remaining'], hasChecked: false });
+    for (const [index, answer] of ['go', 'went', 'gone'].entries()) {
+      fireEvent.change(inputs[index], { target: { value: answer } });
+    }
+    // A refreshed auth object for the same account must not erase entered/checked answers.
+    authMock.user = { id: 'user-a', email: 'refreshed@example.test' };
+    rerender(<StrictMode><FreeMode /></StrictMode>);
+    expect(screen.getAllByRole('textbox').map(input => (input as HTMLInputElement).value)).toEqual(['go', 'went', 'gone']);
+    await userEvent.click(screen.getByRole('button', { name: 'Check Answer' }));
+    rerender(<StrictMode><FreeMode /></StrictMode>);
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ hasChecked: true, totalAttempts: 2, correctCount: 2 });
+    expect(screen.getAllByRole('textbox').map(input => (input as HTMLInputElement).value)).toEqual(['go', 'went', 'gone']);
+  });
+
+  it('reinitializes one or three inputs when changing direction before checking', async () => {
+    supabaseMock.from.mockReturnValue(query({ data: [irregular('first')], error: null }));
+    render(<FreeMode />);
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'unfinished' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Georgian → English' }));
+    expect(screen.getAllByRole('textbox')).toHaveLength(3);
+    screen.getAllByRole('textbox').forEach(input => expect(input).toHaveValue(''));
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'unfinished English' } });
+    await userEvent.click(screen.getByRole('button', { name: 'English → Georgian' }));
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ totalAttempts: 0, hasChecked: false });
+  });
+
+  it('advances a checked answer once and initializes the next irregular question in the new direction', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({ userId: 'user-a', queueIds: ['first', 'second', 'third'], orderMode: 'db-order' }));
+    supabaseMock.from.mockReturnValue(query({ data: [irregular('first'), irregular('second'), word({ id: 'third' })], error: null }));
+    render(<FreeMode />);
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'დათმობა' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Check Answer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Georgian → English' }));
+    expect(screen.getAllByRole('textbox')).toHaveLength(3);
+    screen.getAllByRole('textbox').forEach(input => expect(input).toHaveValue(''));
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ queueIds: ['second', 'third'],
+      totalAttempts: 1, correctCount: 1, hasChecked: false, attemptedWordIds: ['first'] });
+    for (const [index, answer] of ['go', 'went', 'gone'].entries()) {
+      fireEvent.change(screen.getAllByRole('textbox')[index], { target: { value: answer } });
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'Check Answer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next Word' }));
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ queueIds: ['third'], totalAttempts: 2, correctCount: 2 });
+  });
+});
+
 describe('Practice account storage isolation', () => {
   const bKey = practiceSessionKey('user-b');
   const progress = (userId = 'user-a') => ({
