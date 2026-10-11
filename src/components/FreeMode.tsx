@@ -14,11 +14,12 @@ import { sanitizeDescription } from "../lib/sanitizeDescription";
 import type { User } from '@supabase/supabase-js';
 import { readPracticeSession, persistPracticeSession, removePracticeSession,
   type StoredPracticeSession, type PracticeResult, type PracticeMistake } from '../lib/practiceSessions';
+import { findPracticeSave, savePracticeResult, type PracticeSave } from '../lib/practiceSaves';
 
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
 type InputStatus = "idle" | "correct" | "incorrect";
-type SaveStatus = "idle" | "saving" | "saved" | "error" | "discarded";
+type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error" | "discarded";
 type MistakeWithId = PracticeMistake;
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -66,6 +67,7 @@ function AccountPractice({ user }: { user: User }) {
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveOperation, setSaveOperation] = useState<PracticeSave | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const completedResultRef = useRef<PracticeResult | null>(null);
   const saveStatusRef = useRef<SaveStatus>("idle");
@@ -244,8 +246,10 @@ function AccountPractice({ user }: { user: User }) {
       if (parsed.completed || parsed.completedResult) setShowFinishModal(true);
       if (parsed.completedResult) {
         completedResultRef.current = parsed.completedResult;
-        saveStatusRef.current = 'error';
-        setSaveStatus('error');
+        const operation = findPracticeSave(parsed.completedResult);
+        saveStatusRef.current = operation?.status === 'error' ? 'error' : operation ? 'saving' : 'pending';
+        setSaveStatus(saveStatusRef.current);
+        setSaveOperation(operation ?? null);
       }
     }
     setSessionInitialized(true);
@@ -253,7 +257,7 @@ function AccountPractice({ user }: { user: User }) {
 
   useEffect(() => {
     if (!sessionInitialized || !user || !words.length) return;
-    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
+    if (completedResultRef.current) return;
 
     const validIds = words.map((w) => w.id);
     let queueIds = wordQueue.filter((id) => validIds.includes(id));
@@ -292,7 +296,7 @@ function AccountPractice({ user }: { user: User }) {
 
   useEffect(() => {
     if (!sessionInitialized || !user) return;
-    if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
+    if (completedResultRef.current) return;
     // Completion cleanup must not immediately persist an empty replacement session.
     if (clearedCompletedSessionRef.current && totalAttempts === 0) return;
     clearedCompletedSessionRef.current = false;
@@ -463,7 +467,7 @@ function AccountPractice({ user }: { user: User }) {
     setWordQueue(updatedQueue);
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback((clearStorage = true) => {
     if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
     sessionUserIdRef.current = user?.id ?? null;
     setCorrectCount(0);
@@ -482,11 +486,32 @@ function AccountPractice({ user }: { user: User }) {
     } else {
       setWordQueue([]);
     }
-    if (storageWritableRef.current) removePracticeSession(user.id);
+    if (clearStorage && storageWritableRef.current) removePracticeSession(user.id);
     setShowResetModal(false);
-  };
+  }, [orderMode, user.id, words]);
 
-  const handleFinishClose = async () => {
+  useEffect(() => {
+    if (!saveOperation) return;
+    let cancelled = false;
+    void saveOperation.done.then(outcome => {
+      if (cancelled || !mountedRef.current) return;
+      saveStatusRef.current = outcome.status;
+      setSaveStatus(outcome.status);
+      setSaveOperation(null);
+      if (outcome.status === 'error') {
+        console.error('Error saving history:', outcome.error);
+        return;
+      }
+      completedResultRef.current = null;
+      clearedCompletedSessionRef.current = true;
+      setShowFinishModal(false);
+      // The shared operation already cleaned up its exact copy, even if unmounted.
+      handleReset(false);
+    });
+    return () => { cancelled = true; };
+  }, [saveOperation, handleReset]);
+
+  const handleFinishClose = () => {
     if (!showFinishModal || showDiscardConfirm ||
       saveStatusRef.current === "saving" || saveStatusRef.current === "saved" ||
       saveStatusRef.current === "discarded") return;
@@ -499,6 +524,7 @@ function AccountPractice({ user }: { user: User }) {
       if (!completedResultRef.current) {
         if (!sessionUserIdRef.current) throw new Error("No Practice account available.");
         completedResultRef.current = {
+          id: crypto.randomUUID(),
           user_id: sessionUserIdRef.current,
           test_date: new Date().toISOString(),
           test_direction: direction,
@@ -511,17 +537,26 @@ function AccountPractice({ user }: { user: User }) {
         };
       }
 
-      const result = completedResultRef.current;
+      // Upgrade old recovery snapshots once, before their first new request.
+      const result = { ...completedResultRef.current, id: completedResultRef.current.id ?? crypto.randomUUID() };
+      completedResultRef.current = result;
       if (!user || user.id !== result.user_id) {
         throw new Error("Sign in to the account that completed this Practice to save its result.");
+      }
+      if (!storageWritableRef.current) {
+        storageWritableRef.current = readPracticeSession(user.id).writable;
       }
       if (storageWritableRef.current) savedCopy = persistPracticeSession({
         userId: user.id, queueIds: wordQueue, direction, orderMode, allowReguess,
         correctCount, totalAttempts, mistakes, attemptedWordIds, hasChecked,
         completed: true, completedResult: result,
-      });
-      const { error } = await supabase.from("test_history").insert(result);
-      if (error) throw error;
+      }, true);
+      if (savedCopy === null) {
+        setStorageWarning('Could not preserve the result before saving. Keep this tab open and retry when browser storage is available.');
+        throw new Error('Could not checkpoint the Practice result. No History request was sent.');
+      }
+      setStorageWarning('');
+      setSaveOperation(savePracticeResult(result, savedCopy));
     } catch (error) {
       if (!mountedRef.current) return;
       console.error("Error saving history:", error);
@@ -529,17 +564,6 @@ function AccountPractice({ user }: { user: User }) {
       setSaveStatus("error");
       return;
     }
-
-    if (!mountedRef.current) {
-      if (savedCopy !== null) removePracticeSession(user.id, savedCopy);
-      return;
-    }
-
-    saveStatusRef.current = "saved";
-    setSaveStatus("saved");
-    clearedCompletedSessionRef.current = true;
-    setShowFinishModal(false);
-    handleReset();
   };
 
   const handleDiscardResult = () => {
@@ -547,6 +571,7 @@ function AccountPractice({ user }: { user: User }) {
     saveStatusRef.current = "discarded";
     setSaveStatus("discarded");
     clearedCompletedSessionRef.current = true;
+    completedResultRef.current = null;
     setShowDiscardConfirm(false);
     setShowFinishModal(false);
     handleReset();
@@ -1143,7 +1168,7 @@ function AccountPractice({ user }: { user: User }) {
                 Cancel
               </button>
               <button
-                onClick={handleReset}
+                onClick={() => handleReset()}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Reset Progress
@@ -1190,6 +1215,7 @@ function AccountPractice({ user }: { user: User }) {
 
             <div role="status" className="mb-4 text-center text-gray-700 dark:text-gray-300">
               {saveStatus === "saving" && "Saving result..."}
+              {saveStatus === "pending" && "This result has not been confirmed saved. Retry to confirm it in History."}
               {saveStatus === "error" && "Failed to save result"}
             </div>
             <div className="flex justify-end gap-3">
@@ -1208,7 +1234,7 @@ function AccountPractice({ user }: { user: User }) {
                 disabled={saveStatus === "saving" || showDiscardConfirm}
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
-                {saveStatus === "saving" ? "Saving result..." : saveStatus === "error" ? "Retry Save" : "Close & Save"}
+                {saveStatus === "saving" ? "Saving result..." : saveStatus === "error" || saveStatus === "pending" ? "Retry Save" : "Close & Save"}
               </button>
             </div>
           </div>

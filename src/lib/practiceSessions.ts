@@ -2,7 +2,8 @@ import type { TestHistory, TestMistake } from './supabase';
 
 export const legacyPracticeKey = 'vocab_practice_session_state_v2';
 export const practiceSessionKey = (userId: string) => `${legacyPracticeKey}:${encodeURIComponent(userId)}`;
-export type PracticeResult = Omit<TestHistory, 'id' | 'created_at'>;
+// ID is optional only for recovery copies written before stable IDs were added.
+export type PracticeResult = Omit<TestHistory, 'id' | 'created_at'> & { id?: string };
 export type PracticeMistake = TestMistake & { word_id?: string };
 export interface StoredPracticeSession {
   userId: string;
@@ -44,10 +45,12 @@ function parse(raw: string, userId: string): StoredPracticeSession | null {
       (session.completed !== undefined && typeof session.completed !== 'boolean')) return null;
     const result = session.completedResult;
     if (result !== undefined && (!object(result) || result.user_id !== userId ||
+      (result.id !== undefined && (typeof result.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.id))) ||
       typeof result.test_date !== 'string' || !Number.isFinite(Date.parse(result.test_date)) ||
       !['en-to-geo', 'geo-to-en'].includes(result.test_direction) || !count(result.total_words) ||
       !count(result.correct_count) || result.correct_count > result.total_words || !mistakes(result.mistakes))) return null;
     if (result) session.completedResult = {
+      ...(result.id === undefined ? {} : { id: result.id }),
       user_id: result.user_id, test_date: result.test_date, test_direction: result.test_direction,
       total_words: result.total_words, correct_count: result.correct_count,
       mistakes: result.mistakes.map((item: PracticeMistake) => ({
@@ -88,10 +91,11 @@ export function readPracticeSession(userId: string): { session: StoredPracticeSe
   }
 }
 
-export function persistPracticeSession(session: StoredPracticeSession): string | null {
+export function persistPracticeSession(session: StoredPracticeSession, verify = false): string | null {
   try {
     const raw = JSON.stringify(session);
     window.localStorage.setItem(practiceSessionKey(session.userId), raw);
+    if (verify && window.localStorage.getItem(practiceSessionKey(session.userId)) !== raw) return null;
     return raw;
   } catch { return null; }
 }

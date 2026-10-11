@@ -403,6 +403,98 @@ async function completePractice(options: {
 }
 
 describe('FreeMode save lifecycle', () => {
+  it('gives separate intentional sessions distinct IDs even with identical answers and timestamps', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+    const first = await completePractice();
+    await first.user.click(screen.getByRole('button', { name: 'Close & Save' }));
+    await screen.findByText('Result saved to History');
+    const firstResult = first.save.insert.mock.calls[0][0];
+    first.unmount();
+    const second = await completePractice();
+    await second.user.click(screen.getByRole('button', { name: 'Close & Save' }));
+    await screen.findByText('Result saved to History');
+    const secondResult = second.save.insert.mock.calls[0][0];
+    expect(secondResult.id).not.toBe(firstResult.id);
+    expect({ ...secondResult, id: firstResult.id }).toEqual(firstResult);
+  });
+
+  it.each(['write', 'verification'] as const)('sends no insert if checkpoint %s fails, then retries when storage recovers', async failure => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { user, save } = await completePractice();
+    const storage = failure === 'write'
+      ? vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); })
+      : vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    await user.click(screen.getByRole('button', { name: 'Close & Save' }));
+    expect(await screen.findByText('Failed to save result')).toBeInTheDocument();
+    expect(save.insert).not.toHaveBeenCalled();
+    storage.mockRestore();
+    await user.click(screen.getByRole('button', { name: 'Retry Save' }));
+    await screen.findByText('Result saved to History');
+    expect(save.insert).toHaveBeenCalledOnce();
+  });
+
+  it('restores an unknown save as unconfirmed and reuses its persisted ID on retry', async () => {
+    const id = crypto.randomUUID();
+    const result = { id, user_id: 'user-a', test_date: new Date().toISOString(), test_direction: 'en-to-geo',
+      total_words: 1, correct_count: 1, mistakes: [] };
+    localStorage.setItem(storageKey, JSON.stringify({ userId: 'user-a', queueIds: [], completed: true, completedResult: result,
+      direction: 'en-to-geo', orderMode: 'db-order', allowReguess: false, totalAttempts: 1, correctCount: 1, mistakes: [] }));
+    const save = query();
+    supabaseMock.from.mockImplementation(table => table === 'words' ? query({ data: [word()], error: null }) : save);
+    render(<StrictMode><FreeMode /></StrictMode>);
+    expect(screen.getByText(/This result has not been confirmed saved/)).toBeInTheDocument();
+    expect(screen.queryByText('Failed to save result')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
+    await screen.findByText('Result saved to History');
+    expect(save.insert).toHaveBeenCalledExactlyOnceWith(result);
+  });
+
+  it.each([
+    ['account switch', 'success'], ['navigation', 'success'],
+    ['account switch', 'failure'], ['navigation', 'failure'],
+  ] as const)('follows the original pending save across %s until %s', async (route, outcome) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pending = deferred<QueryResult>();
+    const save = query(pending.promise);
+    const { user, rerender } = await completePractice({ save });
+    await user.click(screen.getByRole('button', { name: 'Close & Save' }));
+    const snapshot = structuredClone(save.insert.mock.calls[0][0]);
+    if (route === 'account switch') {
+      authMock.user = { id: 'user-b' };
+      rerender(<FreeMode />);
+      await screen.findByRole('textbox');
+      authMock.user = { id: 'user-a' };
+    } else {
+      // App unmounts Practice when the Words view is selected.
+      rerender(<div>Words</div>);
+    }
+    const bCopy = localStorage.getItem(practiceSessionKey('user-b'));
+    rerender(<FreeMode />);
+    expect(screen.queryByText('Failed to save result')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
+    const saving = screen.getByRole('button', { name: 'Saving result...' });
+    expect(saving).toBeDisabled();
+    fireEvent.click(saving);
+    expect(save.insert).toHaveBeenCalledExactlyOnceWith(snapshot);
+    await act(async () => {
+      if (outcome === 'success') pending.resolve({ error: null });
+      else pending.reject(new Error('Offline'));
+    });
+    if (outcome === 'failure') {
+      expect(await screen.findByText('Failed to save result')).toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem(storageKey)!).completedResult).toEqual(snapshot);
+      save.insert.mockResolvedValueOnce({ error: null });
+      await user.click(screen.getByRole('button', { name: 'Retry Save' }));
+      expect(save.insert).toHaveBeenCalledTimes(2);
+      expect(save.insert.mock.calls[1][0]).toEqual(snapshot);
+    }
+    await screen.findByText('Result saved to History');
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBeNull();
+    expect(localStorage.getItem(practiceSessionKey('user-b'))).toBe(bCopy);
+  });
+
   it.each(['returned', 'thrown'] as const)('preserves the result after a %s insert error and retries the exact snapshot', async (kind) => {
     const error = new Error('Save unavailable');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -421,6 +513,7 @@ describe('FreeMode save lifecycle', () => {
     expect(logged).toHaveBeenCalledExactlyOnceWith('Error saving history:', error);
     const captured = structuredClone(save.insert.mock.calls[0][0]);
     expect(captured).toEqual({
+      id: expect.any(String),
       user_id: 'user-a', test_date: expect.any(String), test_direction: 'en-to-geo',
       total_words: 1, correct_count: 0, mistakes: [{
         english_word: 'yield', question_prompt: 'yield', user_answer: 'wrong',
@@ -447,7 +540,7 @@ describe('FreeMode save lifecycle', () => {
     await completePractice({ save, answers: ['დათმობა'] });
     const stored = localStorage.getItem(storageKey);
     const button = screen.getByRole('button', { name: 'Close & Save' });
-    act(() => { fireEvent.click(button); fireEvent.click(button); });
+    await act(async () => { fireEvent.click(button); fireEvent.click(button); });
     expect(save.insert).toHaveBeenCalledOnce();
     expect(save.insert).toHaveBeenCalledWith(expect.objectContaining({ correct_count: 1, mistakes: [] }));
     expect(button).toBeDisabled();
