@@ -15,6 +15,14 @@ export interface WordFormData {
   pastParticiple: string | null;
 }
 
+function validateWordFormData(data: WordFormData): { englishWord: string; georgianDefs: string[] } {
+  const englishWord = data.englishWord.trim();
+  const georgianDefs = data.georgianDefs.map((definition) => definition.trim()).filter(Boolean);
+  if (!englishWord) throw new Error("Please enter an English word.");
+  if (georgianDefs.length === 0) throw new Error("Please enter at least one Georgian definition.");
+  return { englishWord, georgianDefs };
+}
+
 export const pageSizeOptions = [10, 25, 50, 100];
 
 export type SortOption = "alpha-asc" | "alpha-desc" | "recent";
@@ -204,16 +212,15 @@ export function useWords() {
     async (wordData: WordFormData): Promise<void> => {
       if (!user) return;
 
+      const validated = validateWordFormData(wordData);
       const { error } = await supabase.from("words").insert({
         user_id: user.id,
-        english_word: wordData.englishWord,
+        english_word: validated.englishWord,
         part_of_speech: wordData.partOfSpeech || "unspecified",
         is_irregular_verb: wordData.isIrregularVerb,
         past_simple: wordData.pastSimple,
         past_participle: wordData.pastParticiple,
-        georgian_definitions: wordData.georgianDefs.filter(
-          (d) => d.trim() !== ""
-        ),
+        georgian_definitions: validated.georgianDefs,
         description: wordData.description || null,
       });
 
@@ -226,6 +233,7 @@ export function useWords() {
     async (wordId: string, wordData: WordFormData) => {
       if (!user) return;
 
+      const validated = validateWordFormData(wordData);
       const { error } = await supabase
         .from("words")
         .update({
@@ -234,9 +242,7 @@ export function useWords() {
           is_irregular_verb: wordData.isIrregularVerb,
           past_simple: wordData.pastSimple,
           past_participle: wordData.pastParticiple,
-          georgian_definitions: wordData.georgianDefs.filter(
-            (d) => d.trim() !== ""
-          ),
+          georgian_definitions: validated.georgianDefs,
           description: wordData.description || null,
         })
         .eq("id", wordId)
