@@ -26,7 +26,7 @@ describe('WordModal in-flight saving safeguards (R3-A18)', () => {
     fireEvent.change(screen.getByPlaceholderText('Enter the English word'), { target: { value: 'yield edited' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(updateWord).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('form', { hidden: true })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Saving...' }).closest('form')).toHaveAttribute('aria-busy', 'true');
     const close = screen.getByRole('button', { name: 'Close word editor' });
     const cancel = screen.getByRole('button', { name: 'Cancel' });
     expect(close).toBeDisabled();
