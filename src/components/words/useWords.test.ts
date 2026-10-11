@@ -417,7 +417,7 @@ describe('useWords query contracts', () => {
     };
     await expect(result.current.addWord(input)).rejects.toThrow('Please enter an English word');
     await expect(result.current.updateWord('word-1', input)).rejects.toThrow('Please enter an English word');
-    const missingDefinitions = { ...input, englishWord: 'yield', georgianDefs: [' ', '\\t'] };
+    const missingDefinitions = { ...input, englishWord: 'yield', georgianDefs: [' ', '\t'] };
     await expect(result.current.addWord(missingDefinitions)).rejects.toThrow('Please enter at least one Georgian definition');
     await expect(result.current.updateWord('word-1', missingDefinitions)).rejects.toThrow('Please enter at least one Georgian definition');
     expect(supabaseMock.from).not.toHaveBeenCalled();
