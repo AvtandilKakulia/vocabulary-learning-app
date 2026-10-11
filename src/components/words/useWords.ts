@@ -23,6 +23,33 @@ function validateWordFormData(data: WordFormData): { englishWord: string; georgi
   return { englishWord, georgianDefs };
 }
 
+async function verifyWordMutation(
+  mutation: PromiseLike<{ error: unknown; count: number | null }>,
+  expectedCount: number,
+  action: "save" | "delete"
+) {
+  const failureMessage = `Unable to ${action} your words. Please try again.`;
+  // Check the mutation response itself, not a pre-read that can become stale.
+  const { error, count } = await Promise.resolve(mutation).catch(() => {
+    throw new Error(failureMessage);
+  });
+  if (error) throw new Error(failureMessage);
+  if (count === expectedCount) return;
+
+  if (action === "save") {
+    throw new Error(count === 0
+      ? "This word could not be saved. It may no longer exist or be accessible. Your changes are still in the editor; copy them before reloading."
+      : "The save result could not be confirmed. Copy your changes and reload before trying again.");
+  }
+  if (count === 0) {
+    throw new Error("No words were deleted. They may no longer exist or be accessible. Review the refreshed list before selecting again.");
+  }
+  if (Number.isInteger(count) && count !== null && count > 0 && count < expectedCount) {
+    throw new Error(`Only ${count} of ${expectedCount} selected words were deleted. Review the refreshed list before selecting again.`);
+  }
+  throw new Error("The deletion result could not be confirmed. Review the refreshed list before selecting again.");
+}
+
 export const pageSizeOptions = [10, 25, 50, 100];
 
 export type SortOption = "alpha-asc" | "alpha-desc" | "recent";
@@ -160,32 +187,30 @@ export function useWords() {
 
   const deleteWord = useCallback(
     async (id: string) => {
-      if (!user) return;
+      if (!user) throw new Error("Please sign in before changing your words.");
       if (!readReadyRef.current) throw new Error("Reload your words before deleting.");
 
-      const { error } = await supabase
+      await verifyWordMutation(supabase
         .from("words")
-        .delete()
+        .delete({ count: "exact" })
         .eq("id", id)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+        .eq("user_id", user.id), 1, "delete");
     },
     [user]
   );
 
   const bulkDeleteWords = useCallback(
     async (ids: string[]) => {
-      if (!user || ids.length === 0) return;
+      if (!user) throw new Error("Please sign in before changing your words.");
+      if (ids.length === 0) return;
       if (!readReadyRef.current) throw new Error("Reload your words before deleting.");
+      const uniqueIds = [...new Set(ids)];
 
-      const { error } = await supabase
+      await verifyWordMutation(supabase
         .from("words")
-        .delete()
-        .in("id", ids)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+        .delete({ count: "exact" })
+        .in("id", uniqueIds)
+        .eq("user_id", user.id), uniqueIds.length, "delete");
     },
     [user]
   );
@@ -210,7 +235,7 @@ export function useWords() {
 
   const addWord = useCallback(
     async (wordData: WordFormData): Promise<void> => {
-      if (!user) return;
+      if (!user) throw new Error("Please sign in before changing your words.");
 
       const validated = validateWordFormData(wordData);
       const { error } = await supabase.from("words").insert({
@@ -231,10 +256,10 @@ export function useWords() {
 
   const updateWord = useCallback(
     async (wordId: string, wordData: WordFormData) => {
-      if (!user) return;
+      if (!user) throw new Error("Please sign in before changing your words.");
 
       const validated = validateWordFormData(wordData);
-      const { error } = await supabase
+      await verifyWordMutation(supabase
         .from("words")
         .update({
           english_word: validated.englishWord,
@@ -244,11 +269,9 @@ export function useWords() {
           past_participle: wordData.pastParticiple,
           georgian_definitions: validated.georgianDefs,
           description: wordData.description || null,
-        })
+        }, { count: "exact" })
         .eq("id", wordId)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+        .eq("user_id", user.id), 1, "save");
     },
     [user]
   );

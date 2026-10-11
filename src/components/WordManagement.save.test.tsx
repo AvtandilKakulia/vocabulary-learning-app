@@ -141,13 +141,13 @@ describe('Word editor save workflow', () => {
       english_word: 'yield', part_of_speech: 'verb', is_irregular_verb: true,
       past_simple: 'yielded', past_participle: 'yielded',
       georgian_definitions: existing.georgian_definitions, description: 'Edited context',
-    });
+    }, { count: 'exact' });
     expect(update.eq).toHaveBeenCalledWith('id', existing.id);
     expect(update.eq).toHaveBeenCalledWith('user_id', 'user-a');
     expect(update.insert).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'Refine your entry' })).toBeInTheDocument();
     supabaseMock.from.mockReturnValueOnce(query({ data: [existing], count: 1, error: null }));
-    await act(async () => pending.resolve({ error: null }));
+    await act(async () => pending.resolve({ error: null, count: 1 }));
     expect(screen.queryByRole('heading', { name: 'Refine your entry' })).not.toBeInTheDocument();
     expect(screen.getByText('Yield')).toBeInTheDocument();
     expect(supabaseMock.from).toHaveBeenCalledTimes(4);
