@@ -139,6 +139,10 @@ export default function WordManagement() {
     setDeleting(true);
     try {
       await deleteWord(id);
+    } catch (error: any) {
+      alert("Error deleting word: " + error.message);
+    } finally {
+      // Even an unsuccessful/uncertain delete may leave the visible row stale.
       setSelectedIds((prev) => {
         const next = new Set(prev);
         next.delete(id);
@@ -146,9 +150,6 @@ export default function WordManagement() {
       });
       setDeleteModalWord(null);
       await loadWords();
-    } catch (error: any) {
-      alert("Error deleting word: " + error.message);
-    } finally {
       setDeleting(false);
     }
   };
@@ -161,12 +162,14 @@ export default function WordManagement() {
     setDeleting(true);
     try {
       await bulkDeleteWords(ids);
-      setSelectedIds(new Set());
-      setShowBulkDeleteModal(false);
-      await loadWords();
     } catch (error: any) {
       alert("Error deleting words: " + error.message);
     } finally {
+      // Partial writes are already committed. Refresh, then require a new
+      // selection/confirmation instead of retrying the original destructive set.
+      setSelectedIds(new Set());
+      setShowBulkDeleteModal(false);
+      await loadWords();
       setDeleting(false);
     }
   };

@@ -96,7 +96,7 @@ describe('useWords read races', () => {
     const afterDeletion = query({ data: [], count: 0, error: null });
     supabaseMock.from.mockReturnValueOnce(afterDeletion);
     await act(async () => {
-      mutation.resolve({ error: null });
+      mutation.resolve({ error: null, count: 1 });
       await saving;
       await refreshAfterMutation();
     });
@@ -370,14 +370,14 @@ describe('useWords query contracts', () => {
 
   it('scopes single and bulk deletion by both identity and owner', async () => {
     const { result } = await mountHook();
-    const single = query();
-    const bulk = query();
+    const single = query({ error: null, count: 1 });
+    const bulk = query({ error: null, count: 2 });
     supabaseMock.from.mockReturnValueOnce(single).mockReturnValueOnce(bulk);
     await result.current.deleteWord('word-1');
     await result.current.bulkDeleteWords(['word-2', 'word-3']);
-    expect(single.delete).toHaveBeenCalledOnce();
+    expect(single.delete).toHaveBeenCalledExactlyOnceWith({ count: 'exact' });
     expect(single.eq.mock.calls).toEqual([['id', 'word-1'], ['user_id', 'user-a']]);
-    expect(bulk.delete).toHaveBeenCalledOnce();
+    expect(bulk.delete).toHaveBeenCalledExactlyOnceWith({ count: 'exact' });
     expect(bulk.in).toHaveBeenCalledWith('id', ['word-2', 'word-3']);
     expect(bulk.eq).toHaveBeenCalledWith('user_id', 'user-a');
     supabaseMock.from.mockClear();
@@ -388,7 +388,7 @@ describe('useWords query contracts', () => {
   it('inserts ownership and preserves grammatical fields on scoped updates while filtering blanks', async () => {
     const { result } = await mountHook();
     const insert = query();
-    const update = query();
+    const update = query({ error: null, count: 1 });
     supabaseMock.from.mockReturnValueOnce(insert).mockReturnValueOnce(update);
     const form: WordFormData = {
       englishWord: 'go', georgianDefs: ['', '  ', 'წასვლა', ' სვლა '],
@@ -403,7 +403,7 @@ describe('useWords query contracts', () => {
     await result.current.addWord(form);
     await result.current.updateWord(fullWord.id, form);
     expect(insert.insert).toHaveBeenCalledWith({ ...payload, user_id: 'user-a' });
-    expect(update.update).toHaveBeenCalledWith(payload);
+    expect(update.update).toHaveBeenCalledWith(payload, { count: 'exact' });
     expect(update.eq.mock.calls).toEqual([['id', fullWord.id], ['user_id', 'user-a']]);
   });
 
@@ -428,10 +428,140 @@ describe('useWords query contracts', () => {
     supabaseMock.from.mockClear();
     const { result } = renderHook(() => useWords());
     await act(async () => {
-      await result.current.deleteWord('word-1');
-      await result.current.bulkDeleteWords(['word-1']);
+      await expect(result.current.deleteWord('word-1')).rejects.toThrow('Please sign in');
+      await expect(result.current.bulkDeleteWords(['word-1'])).rejects.toThrow('Please sign in');
       expect(await result.current.checkExistingEnglishWords('yield')).toEqual([]);
     });
     expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+});
+
+describe('useWords mutation results', () => {
+  const form: WordFormData = {
+    englishWord: 'go', georgianDefs: ['წასვლა'], description: 'Unsaved changes',
+    partOfSpeech: 'verb', isIrregularVerb: true, pastSimple: 'went', pastParticiple: 'gone',
+  };
+
+  it.each([0, null, undefined, 2])('rejects an UPDATE with no error but count %s', async count => {
+    const { result } = await mountHook();
+    const update = query({ error: null, count });
+    supabaseMock.from.mockClear().mockReturnValueOnce(update);
+    await expect(result.current.updateWord('word-1', form)).rejects.toThrow(count === 0 ? 'no longer exist or be accessible' : 'could not be confirmed');
+    expect(update.update).toHaveBeenCalledWith(expect.any(Object), { count: 'exact' });
+    expect(update.eq.mock.calls).toEqual([['id', 'word-1'], ['user_id', 'user-a']]);
+    expect(supabaseMock.from).toHaveBeenCalledExactlyOnceWith('words');
+    expect(update.select).not.toHaveBeenCalled();
+  });
+
+  it.each([0, null, undefined, 2])('rejects a single DELETE with no error but count %s', async count => {
+    const { result } = await mountHook();
+    const deletion = query({ error: null, count });
+    supabaseMock.from.mockClear().mockReturnValueOnce(deletion);
+    await expect(result.current.deleteWord('word-1')).rejects.toThrow(count === 0 ? 'No words were deleted' : 'could not be confirmed');
+    expect(deletion.delete).toHaveBeenCalledExactlyOnceWith({ count: 'exact' });
+    expect(deletion.eq.mock.calls).toEqual([['id', 'word-1'], ['user_id', 'user-a']]);
+    expect(supabaseMock.from).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [0, 'No words were deleted'], [1, 'Only 1 of 2 selected words were deleted'],
+    [null, 'could not be confirmed'], [undefined, 'could not be confirmed'], [3, 'could not be confirmed'],
+  ] as const)('rejects an incomplete or unconfirmed BULK DELETE with count %s', async (count, message) => {
+    const { result } = await mountHook();
+    const deletion = query({ error: null, count });
+    supabaseMock.from.mockClear().mockReturnValueOnce(deletion);
+    await expect(result.current.bulkDeleteWords(['word-1', 'word-2'])).rejects.toThrow(message);
+    expect(deletion.delete).toHaveBeenCalledExactlyOnceWith({ count: 'exact' });
+    expect(deletion.in).toHaveBeenCalledWith('id', ['word-1', 'word-2']);
+    expect(deletion.eq).toHaveBeenCalledWith('user_id', 'user-a');
+    expect(supabaseMock.from).toHaveBeenCalledOnce();
+  });
+
+  it('compares bulk results with unique requested IDs', async () => {
+    const { result } = await mountHook();
+    const deletion = query({ error: null, count: 2 });
+    supabaseMock.from.mockReturnValueOnce(deletion);
+    await expect(result.current.bulkDeleteWords(['word-1', 'word-2', 'word-1'])).resolves.toBeUndefined();
+    expect(deletion.in).toHaveBeenCalledWith('id', ['word-1', 'word-2']);
+  });
+
+  it.each(['update', 'delete', 'bulk'] as const)('sanitizes returned and rejected database errors for %s without retrying', async action => {
+    const { result } = await mountHook();
+    for (const rejected of [false, true]) {
+      const pending = deferred<QueryResult>();
+      const mutation = query(pending.promise);
+      supabaseMock.from.mockClear().mockReturnValueOnce(mutation);
+      const request = action === 'update' ? result.current.updateWord('word-1', form)
+        : action === 'delete' ? result.current.deleteWord('word-1')
+        : result.current.bulkDeleteWords(['word-1', 'word-2']);
+      const assertion = expect(request).rejects.toThrow(`Unable to ${action === 'update' ? 'save' : 'delete'} your words. Please try again.`);
+      if (rejected) pending.reject(new Error('private database details'));
+      else pending.resolve({ error: { message: 'private database details' }, count: 1 });
+      await assertion;
+      expect(supabaseMock.from).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('rejects saves without an authenticated user instead of resolving as success', async () => {
+    authMock.user = null;
+    supabaseMock.from.mockClear();
+    const { result } = renderHook(() => useWords());
+    await expect(result.current.updateWord('word-1', form)).rejects.toThrow('Please sign in');
+    await expect(result.current.addWord(form)).rejects.toThrow('Please sign in');
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
+  it('does not reconcile an old account mutation into the current account after a partial delete', async () => {
+    const { result, rerender } = await mountHook();
+    const oldRefresh = result.current.loadWords;
+    const pending = deferred<QueryResult>();
+    const deletion = query(pending.promise);
+    supabaseMock.from.mockReturnValueOnce(deletion);
+    const mutation = result.current.bulkDeleteWords(['word-1', 'word-2']);
+    const failure = expect(mutation).rejects.toThrow('Only 1 of 2');
+    const currentWord = word({ id: 'current-word', user_id: 'user-b' });
+    const currentRead = query({ data: [currentWord], count: 1, error: null });
+    supabaseMock.from.mockReturnValueOnce(currentRead);
+    authMock.user = { id: 'user-b' };
+    rerender();
+    await waitFor(() => expect(result.current.words).toEqual([currentWord]));
+    const callsBeforeCompletion = supabaseMock.from.mock.calls.length;
+    await act(async () => {
+      pending.resolve({ error: null, count: 1 });
+      await failure;
+      await oldRefresh();
+    });
+    expect(deletion.eq).toHaveBeenCalledWith('user_id', 'user-a');
+    expect(currentRead.eq).toHaveBeenCalledWith('user_id', 'user-b');
+    expect(supabaseMock.from).toHaveBeenCalledTimes(callsBeforeCompletion);
+    expect(result.current.words).toEqual([currentWord]);
+  });
+
+  it.each(['update', 'delete'] as const)('the installed Supabase client requests and parses exact %s counts without returned rows', async action => {
+    // Exercise the real client with an injected transport, never the network.
+    const { createClient } = await vi.importActual<typeof import('@supabase/supabase-js')>('@supabase/supabase-js');
+    const transport = vi.fn<typeof fetch>();
+    const client = createClient('https://example.test', 'test-key', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { fetch: transport },
+    });
+    for (const count of [0, 1, null]) {
+      transport.mockResolvedValueOnce(new Response(null, {
+        status: 204,
+        headers: count === null ? {} : { 'Content-Range': `*/${count}` },
+      }));
+      const table = client.from('words');
+      const mutation = action === 'update'
+        ? table.update({ description: 'test' }, { count: 'exact' })
+        : table.delete({ count: 'exact' });
+      const result = await mutation.eq('id', 'word-1').eq('user_id', 'user-a');
+      expect(result).toMatchObject({ error: null, data: null, count });
+      const [url, options] = transport.mock.lastCall!;
+      expect(new Headers(options?.headers).get('Prefer')).toContain('count=exact');
+      expect(options?.method).toBe(action === 'update' ? 'PATCH' : 'DELETE');
+      expect(String(url)).toContain('id=eq.word-1');
+      expect(String(url)).toContain('user_id=eq.user-a');
+    }
+    expect(transport).toHaveBeenCalledTimes(3);
   });
 });

@@ -28,7 +28,7 @@ beforeEach(() => {
 export interface QueryResult {
   data?: unknown;
   error: { message: string } | null;
-  count?: number;
+  count?: number | null;
 }
 
 // Only records the fluent query contract; it deliberately does not emulate a DB.
