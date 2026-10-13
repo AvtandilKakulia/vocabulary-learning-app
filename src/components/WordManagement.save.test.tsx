@@ -144,6 +144,7 @@ describe('Word editor save workflow', () => {
     }, { count: 'exact' });
     expect(update.eq).toHaveBeenCalledWith('id', existing.id);
     expect(update.eq).toHaveBeenCalledWith('user_id', 'user-a');
+    expect(update.eq).toHaveBeenCalledWith('updated_at', existing.updated_at);
     expect(update.insert).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'Refine your entry' })).toBeInTheDocument();
     supabaseMock.from.mockReturnValueOnce(query({ data: [existing], count: 1, error: null }));

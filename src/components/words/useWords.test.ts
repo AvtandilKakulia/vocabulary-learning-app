@@ -401,10 +401,10 @@ describe('useWords query contracts', () => {
       is_irregular_verb: true, past_simple: 'went', past_participle: 'gone',
     };
     await result.current.addWord(form);
-    await result.current.updateWord(fullWord.id, form);
+    await result.current.updateWord(fullWord.id, form, fullWord.updated_at);
     expect(insert.insert).toHaveBeenCalledWith({ ...payload, user_id: 'user-a' });
     expect(update.update).toHaveBeenCalledWith(payload, { count: 'exact' });
-    expect(update.eq.mock.calls).toEqual([['id', fullWord.id], ['user_id', 'user-a']]);
+    expect(update.eq.mock.calls).toEqual([['id', fullWord.id], ['user_id', 'user-a'], ['updated_at', fullWord.updated_at]]);
   });
 
   it('rejects whitespace-only words or definitions before any database mutation', async () => {
@@ -416,10 +416,10 @@ describe('useWords query contracts', () => {
       pastSimple: null, pastParticiple: null,
     };
     await expect(result.current.addWord(input)).rejects.toThrow('Please enter an English word');
-    await expect(result.current.updateWord('word-1', input)).rejects.toThrow('Please enter an English word');
+    await expect(result.current.updateWord('word-1', input, fullWord.updated_at)).rejects.toThrow('Please enter an English word');
     const missingDefinitions = { ...input, englishWord: 'yield', georgianDefs: [' ', '\t'] };
     await expect(result.current.addWord(missingDefinitions)).rejects.toThrow('Please enter at least one Georgian definition');
-    await expect(result.current.updateWord('word-1', missingDefinitions)).rejects.toThrow('Please enter at least one Georgian definition');
+    await expect(result.current.updateWord('word-1', missingDefinitions, fullWord.updated_at)).rejects.toThrow('Please enter at least one Georgian definition');
     expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 
@@ -442,13 +442,21 @@ describe('useWords mutation results', () => {
     partOfSpeech: 'verb', isIrregularVerb: true, pastSimple: 'went', pastParticiple: 'gone',
   };
 
+  it.each([undefined, null, '', '   '])('rejects a missing original version (%s) before sending a mutation', async version => {
+    const { result } = await mountHook();
+    supabaseMock.from.mockClear();
+    // Exercise malformed runtime data as well as the typed API contract.
+    await expect(result.current.updateWord('word-1', form, version as string)).rejects.toThrow('original word version is missing');
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
   it.each([0, null, undefined, 2])('rejects an UPDATE with no error but count %s', async count => {
     const { result } = await mountHook();
     const update = query({ error: null, count });
     supabaseMock.from.mockClear().mockReturnValueOnce(update);
-    await expect(result.current.updateWord('word-1', form)).rejects.toThrow(count === 0 ? 'no longer exist or be accessible' : 'could not be confirmed');
+    await expect(result.current.updateWord('word-1', form, fullWord.updated_at)).rejects.toThrow(count === 0 ? 'may have changed, been deleted, or become inaccessible' : 'could not be confirmed');
     expect(update.update).toHaveBeenCalledWith(expect.any(Object), { count: 'exact' });
-    expect(update.eq.mock.calls).toEqual([['id', 'word-1'], ['user_id', 'user-a']]);
+    expect(update.eq.mock.calls).toEqual([['id', 'word-1'], ['user_id', 'user-a'], ['updated_at', fullWord.updated_at]]);
     expect(supabaseMock.from).toHaveBeenCalledExactlyOnceWith('words');
     expect(update.select).not.toHaveBeenCalled();
   });
@@ -491,7 +499,7 @@ describe('useWords mutation results', () => {
       const pending = deferred<QueryResult>();
       const mutation = query(pending.promise);
       supabaseMock.from.mockClear().mockReturnValueOnce(mutation);
-      const request = action === 'update' ? result.current.updateWord('word-1', form)
+      const request = action === 'update' ? result.current.updateWord('word-1', form, fullWord.updated_at)
         : action === 'delete' ? result.current.deleteWord('word-1')
         : result.current.bulkDeleteWords(['word-1', 'word-2']);
       const assertion = expect(request).rejects.toThrow(`Unable to ${action === 'update' ? 'save' : 'delete'} your words. Please try again.`);
@@ -506,7 +514,7 @@ describe('useWords mutation results', () => {
     authMock.user = null;
     supabaseMock.from.mockClear();
     const { result } = renderHook(() => useWords());
-    await expect(result.current.updateWord('word-1', form)).rejects.toThrow('Please sign in');
+    await expect(result.current.updateWord('word-1', form, fullWord.updated_at)).rejects.toThrow('Please sign in');
     await expect(result.current.addWord(form)).rejects.toThrow('Please sign in');
     expect(supabaseMock.from).not.toHaveBeenCalled();
   });
