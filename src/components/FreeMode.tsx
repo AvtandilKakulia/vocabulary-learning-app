@@ -62,7 +62,8 @@ function AccountPractice({ user }: { user: User }) {
   const [correctCount, setCorrectCount] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [mistakes, setMistakes] = useState<MistakeWithId[]>([]);
-  const [attemptedWordIds, setAttemptedWordIds] = useState<string[]>([]);
+  const [attemptedWordIds, setAttemptedWordIds] = useState<string[] | undefined>([]);
+  const [unresolvedWordIds, setUnresolvedWordIds] = useState<string[]>([]);
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -74,7 +75,6 @@ function AccountPractice({ user }: { user: User }) {
   const sessionUserIdRef = useRef<string | null>(null);
   const clearedCompletedSessionRef = useRef(false);
   const [sessionInitialized, setSessionInitialized] = useState(false);
-  const previousAllowReguess = useRef(allowReguess);
   const restoredHasCheckedRef = useRef(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -230,12 +230,18 @@ function AccountPractice({ user }: { user: User }) {
       setCorrectCount(parsed.correctCount);
       setTotalAttempts(parsed.totalAttempts);
       setMistakes(parsed.mistakes);
-      const restoredQueue = parsed.queueIds;
-      setAttemptedWordIds(parsed.attemptedWordIds ?? []);
+      const restoredQueue = [...new Set(parsed.queueIds)];
+      setAttemptedWordIds(parsed.attemptedWordIds);
+      // Do not infer unresolved answers from the historical mistake log.
+      const unresolvedIds = parsed.unresolvedWordIds ?? [];
+      setUnresolvedWordIds(unresolvedIds);
 
       const savedHasChecked = parsed.hasChecked ?? false;
       if (savedHasChecked && restoredQueue.length > 0 && !parsed.completed && !parsed.completedResult) {
-        setWordQueue(restoredQueue.slice(1));
+        const remaining = restoredQueue.slice(1);
+        // Restore the same transition as Next, without treating restoration as a toggle.
+        setWordQueue(parsed.allowReguess && unresolvedIds.includes(restoredQueue[0])
+          ? [...remaining, restoredQueue[0]] : remaining);
         setHasChecked(false);
       } else {
         setWordQueue(restoredQueue);
@@ -261,8 +267,13 @@ function AccountPractice({ user }: { user: User }) {
     const validIds = words.map((w) => w.id);
     let queueIds = wordQueue.filter((id) => validIds.includes(id));
 
+    // Very old progress has no visited IDs. Missing words may already be complete;
+    // conservatively retain its saved queue instead of treating them as new questions.
+    const visitedIds = attemptedWordIds ?? (totalAttempts > 0 ? validIds.filter(id => !queueIds.includes(id)) : []);
+    if (attemptedWordIds === undefined) setAttemptedWordIds(visitedIds);
+
     const newWordIds = validIds.filter(
-      (id) => !queueIds.includes(id) && !attemptedWordIds.includes(id)
+      (id) => !queueIds.includes(id) && !visitedIds.includes(id)
     );
 
     if (newWordIds.length > 0) {
@@ -309,6 +320,7 @@ function AccountPractice({ user }: { user: User }) {
       totalAttempts,
       mistakes,
       attemptedWordIds,
+      unresolvedWordIds,
       hasChecked,
       completed: showFinishModal,
     };
@@ -320,6 +332,7 @@ function AccountPractice({ user }: { user: User }) {
     correctCount,
     direction,
     attemptedWordIds,
+    unresolvedWordIds,
     mistakes,
     orderMode,
     totalAttempts,
@@ -364,6 +377,7 @@ function AccountPractice({ user }: { user: User }) {
     setWordQueue([]);
     setWords([]);
     setAttemptedWordIds([]);
+    setUnresolvedWordIds([]);
     if (storageWritableRef.current) removePracticeSession(user.id);
   };
 
@@ -416,8 +430,11 @@ function AccountPractice({ user }: { user: User }) {
     setIsCorrect(correct);
     setTotalAttempts((prev) => prev + 1);
     setAttemptedWordIds((prev) =>
-      prev.includes(currentWord.id) ? prev : [...prev, currentWord.id]
+      prev?.includes(currentWord.id) ? prev : [...(prev ?? []), currentWord.id]
     );
+    setUnresolvedWordIds(prev => correct
+      ? prev.filter(id => id !== currentWord.id)
+      : prev.includes(currentWord.id) ? prev : [...prev, currentWord.id]);
     if (correct) {
       setCorrectCount((prev) => prev + 1);
     } else {
@@ -458,8 +475,8 @@ function AccountPractice({ user }: { user: User }) {
     setAnswerInputs([""]);
     shouldFocusInput.current = true;
 
-    let updatedQueue = wordQueue.slice(1);
-    if (!isCorrect && allowReguess) {
+    let updatedQueue = wordQueue.slice(1).filter(id => id !== currentWord.id);
+    if (unresolvedWordIds.includes(currentWord.id) && allowReguess) {
       updatedQueue = [...updatedQueue, currentWord.id];
     }
     setWordQueue(updatedQueue);
@@ -472,6 +489,7 @@ function AccountPractice({ user }: { user: User }) {
     setTotalAttempts(0);
     setMistakes([]);
     setAttemptedWordIds([]);
+    setUnresolvedWordIds([]);
     setAnswerInputs([""]);
     setInputStatuses(["idle"]);
     setHasChecked(false);
@@ -546,7 +564,7 @@ function AccountPractice({ user }: { user: User }) {
       }
       if (storageWritableRef.current) savedCopy = persistPracticeSession({
         userId: user.id, queueIds: wordQueue, direction, orderMode, allowReguess,
-        correctCount, totalAttempts, mistakes, attemptedWordIds, hasChecked,
+        correctCount, totalAttempts, mistakes, attemptedWordIds, unresolvedWordIds, hasChecked,
         completed: true, completedResult: result,
       }, true);
       if (savedCopy === null) {
@@ -627,25 +645,15 @@ function AccountPractice({ user }: { user: User }) {
     }
   }, [answerInputs]);
 
-  useEffect(() => {
-    if (!previousAllowReguess.current && allowReguess) {
-      const mistakeIds = Array.from(
-        new Set(
-          mistakes
-            .map((mistake) => mistake.word_id)
-            .filter((id): id is string => Boolean(id))
-        )
-      );
-      if (mistakeIds.length) {
-        setWordQueue((prev) => {
-          const existing = new Set(prev);
-          const toAdd = mistakeIds.filter((id) => !existing.has(id));
-          return toAdd.length ? [...prev, ...toAdd] : prev;
-        });
-      }
+  const handleReguessToggle = () => {
+    if (!allowReguess) {
+      setWordQueue(prev => {
+        const toAdd = unresolvedWordIds.filter(id => !prev.includes(id) && words.some(word => word.id === id));
+        return toAdd.length ? [...prev, ...toAdd] : prev;
+      });
     }
-    previousAllowReguess.current = allowReguess;
-  }, [allowReguess, mistakes]);
+    setAllowReguess(prev => !prev);
+  };
 
   const formattedDate = () => {
     const now = new Date();
@@ -805,7 +813,7 @@ function AccountPractice({ user }: { user: User }) {
                   Allow re-guessing wrong answers
                 </span>
                 <button
-                  onClick={() => setAllowReguess((prev) => !prev)}
+                  onClick={handleReguessToggle}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     allowReguess
                       ? "bg-gradient-to-r from-orange-500 to-red-500"

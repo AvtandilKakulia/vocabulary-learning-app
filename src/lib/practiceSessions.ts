@@ -15,6 +15,8 @@ export interface StoredPracticeSession {
   totalAttempts: number;
   mistakes: PracticeMistake[];
   attemptedWordIds?: string[];
+  // Absent in older copies: historical mistakes cannot establish retry eligibility.
+  unresolvedWordIds?: string[];
   hasChecked?: boolean;
   completed?: boolean;
   completedResult?: PracticeResult;
@@ -41,6 +43,9 @@ function parse(raw: string, userId: string): StoredPracticeSession | null {
       typeof session.allowReguess !== 'boolean' || !count(session.correctCount) || !count(session.totalAttempts) ||
       session.correctCount > session.totalAttempts || !mistakes(session.mistakes) ||
       (session.attemptedWordIds !== undefined && !strings(session.attemptedWordIds)) ||
+      (session.unresolvedWordIds !== undefined && (!strings(session.unresolvedWordIds) ||
+        session.unresolvedWordIds.some((id: string) => !id) ||
+        new Set(session.unresolvedWordIds).size !== session.unresolvedWordIds.length)) ||
       (session.hasChecked !== undefined && typeof session.hasChecked !== 'boolean') ||
       (session.completed !== undefined && typeof session.completed !== 'boolean')) return null;
     const result = session.completedResult;
