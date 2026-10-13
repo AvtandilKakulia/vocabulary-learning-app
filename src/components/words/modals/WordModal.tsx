@@ -14,7 +14,7 @@ interface WordModalProps {
   onSave: () => void;
   onDuplicateDetected: (existingWords: Word[], wordData: WordFormData) => void;
   addWord: (wordData: WordFormData) => Promise<void>;
-  updateWord: (wordId: string, wordData: WordFormData) => Promise<void>;
+  updateWord: (wordId: string, wordData: WordFormData, expectedUpdatedAt: Word["updated_at"]) => Promise<void>;
   checkExistingEnglishWords: (englishWord: string) => Promise<Word[]>;
 }
 
@@ -43,6 +43,7 @@ export default function WordModal({
     word?.georgian_definitions || [""]
   );
   const [description, setDescription] = useState(word?.description || "");
+  const originalVersionRef = useRef(word?.updated_at ?? "");
   const [saving, setSaving] = useState(false);
   // Guard events synchronously, including multiple events before React renders.
   const phaseRef = useRef<"editing" | "confirming" | "saving" | "duplicate" | "finished">("editing");
@@ -69,6 +70,7 @@ export default function WordModal({
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
+    originalVersionRef.current = word?.updated_at ?? "";
     phaseRef.current = "editing";
     setSaving(false);
     setEnglishWord(word?.english_word || "");
@@ -201,7 +203,7 @@ export default function WordModal({
       };
 
       if (word) {
-        await updateWord(word.id, wordData);
+        await updateWord(word.id, wordData, originalVersionRef.current);
       } else {
         const existingWords = await checkExistingEnglishWords(trimmedEnglish);
         if (existingWords.length > 0) {

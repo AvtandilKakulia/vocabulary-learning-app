@@ -38,7 +38,7 @@ async function verifyWordMutation(
 
   if (action === "save") {
     throw new Error(count === 0
-      ? "This word could not be saved. It may no longer exist or be accessible. Your changes are still in the editor; copy them before reloading."
+      ? "This word could not be saved. It may have changed, been deleted, or become inaccessible since you opened it. Your changes are still in the editor. Copy them, then reload and reopen the latest word before trying again."
       : "The save result could not be confirmed. Copy your changes and reload before trying again.");
   }
   if (count === 0) {
@@ -255,10 +255,16 @@ export function useWords() {
   );
 
   const updateWord = useCallback(
-    async (wordId: string, wordData: WordFormData) => {
+    async (wordId: string, wordData: WordFormData, expectedUpdatedAt: Word["updated_at"]) => {
       if (!user) throw new Error("Please sign in before changing your words.");
 
       const validated = validateWordFormData(wordData);
+      if (typeof expectedUpdatedAt !== "string" || !expectedUpdatedAt.trim()) {
+        throw new Error("The original word version is missing. Copy your changes, then reload and reopen the word before saving.");
+      }
+      // Keep the exact server string (including microseconds); Date/ISO conversion
+      // loses precision. The DB must advance updated_at on EVERY update:
+      // see the R3-A01 deployment prerequisite in supabase/README.md.
       await verifyWordMutation(supabase
         .from("words")
         .update({
@@ -271,7 +277,8 @@ export function useWords() {
           description: wordData.description || null,
         }, { count: "exact" })
         .eq("id", wordId)
-        .eq("user_id", user.id), 1, "save");
+        .eq("user_id", user.id)
+        .eq("updated_at", expectedUpdatedAt), 1, "save");
     },
     [user]
   );

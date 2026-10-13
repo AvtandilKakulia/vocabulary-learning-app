@@ -11,7 +11,7 @@ function editor(editing = false) {
     word: editing ? word({ part_of_speech: 'verb', is_irregular_verb: true, past_simple: 'yielded', past_participle: 'yielded' }) : null,
     onClose: vi.fn(), onSave: vi.fn(), onDuplicateDetected: vi.fn(),
     addWord: vi.fn<(data: WordFormData) => Promise<void>>().mockResolvedValue(undefined),
-    updateWord: vi.fn<(id: string, data: WordFormData) => Promise<void>>().mockResolvedValue(undefined),
+    updateWord: vi.fn<(id: string, data: WordFormData, expectedUpdatedAt: string) => Promise<void>>().mockResolvedValue(undefined),
     checkExistingEnglishWords: vi.fn().mockResolvedValue([]),
   };
   const view = render(<WordModal {...props} />);
@@ -46,7 +46,7 @@ describe('Word Modal pending saves', () => {
       englishWord: 'yield', partOfSpeech: 'verb', isIrregularVerb: true,
       pastSimple: 'yielded', pastParticiple: 'yielded',
       georgianDefs: ['მოსავალი', 'მოსავლიანობა'], description: 'Original draft',
-    });
+    }, props.word!.updated_at);
     fireEvent.submit(form);
     expect(props.updateWord).toHaveBeenCalledOnce();
   });
