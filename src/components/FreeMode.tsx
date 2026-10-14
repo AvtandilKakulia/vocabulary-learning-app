@@ -80,6 +80,16 @@ function AccountPractice({ user }: { user: User }) {
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusInput = useRef(false);
   const closeAndSaveButtonRef = useRef<HTMLButtonElement | null>(null);
+  // A presentation can recur for the same word ID. Claim it synchronously so
+  // duplicate events cannot score it again before React commits hasChecked.
+  const [presentationId, setPresentationId] = useState(0);
+  const presentationRef = useRef({ id: 0, scored: false });
+  const beginPresentation = useCallback(() => {
+    const id = presentationRef.current.id + 1;
+    presentationRef.current = { id, scored: false };
+    setPresentationId(id);
+    setHasChecked(false);
+  }, []);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
@@ -358,8 +368,13 @@ function AccountPractice({ user }: { user: User }) {
   ]);
 
   const handleDirectionChange = (newDirection: Direction) => {
+    if (newDirection === direction || presentationId !== presentationRef.current.id) return;
+    // Wait for the scored answer/queue state to commit before advancing it.
+    if (presentationRef.current.scored && !hasChecked) return;
     if (hasChecked) {
       proceedToNextWord();
+    } else {
+      beginPresentation();
     }
     setDirection(newDirection);
   };
@@ -370,7 +385,7 @@ function AccountPractice({ user }: { user: User }) {
     setOrderMode(newOrder);
     setAnswerInputs([""]);
     setInputStatuses(["idle"]);
-    setHasChecked(false);
+    beginPresentation();
     setCorrectCount(0);
     setTotalAttempts(0);
     setMistakes([]);
@@ -382,9 +397,11 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const handleCheckAnswer = () => {
-    if (!currentWord || showFinishModal) return;
+    if (!mountedRef.current || !currentWord || showFinishModal ||
+      presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     const trimmedInputs = answerInputs.map((a) => a.trim());
     if (trimmedInputs.every((a) => a.length === 0)) return;
+    presentationRef.current.scored = true;
 
     if (totalAttempts === 0) sessionUserIdRef.current = user?.id ?? null;
     completedResultRef.current = null;
@@ -469,8 +486,8 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const proceedToNextWord = () => {
-    if (!currentWord) return;
-    setHasChecked(false);
+    if (!currentWord || !hasChecked || !presentationRef.current.scored || presentationId !== presentationRef.current.id) return;
+    beginPresentation();
     setInputStatuses(["idle"]);
     setAnswerInputs([""]);
     shouldFocusInput.current = true;
@@ -492,7 +509,7 @@ function AccountPractice({ user }: { user: User }) {
     setUnresolvedWordIds([]);
     setAnswerInputs([""]);
     setInputStatuses(["idle"]);
-    setHasChecked(false);
+    beginPresentation();
     if (words.length > 0) {
       const orderedIds =
         orderMode === "random"
@@ -504,7 +521,7 @@ function AccountPractice({ user }: { user: User }) {
     }
     if (clearStorage && storageWritableRef.current) removePracticeSession(user.id);
     setShowResetModal(false);
-  }, [orderMode, user.id, words]);
+  }, [beginPresentation, orderMode, user.id, words]);
 
   useEffect(() => {
     if (!saveOperation) return;
@@ -594,16 +611,15 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const addInput = () => {
+    if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     setAnswerInputs((prev) => [...prev, ""]);
     setInputStatuses((prev) => [...prev, "idle"]);
-    setHasChecked(false);
   };
 
   const removeInput = (index: number) => {
-    if (answerInputs.length === 1) return;
+    if (presentationId !== presentationRef.current.id || presentationRef.current.scored || answerInputs.length === 1) return;
     setAnswerInputs((prev) => prev.filter((_, idx) => idx !== index));
     setInputStatuses((prev) => prev.filter((_, idx) => idx !== index));
-    setHasChecked(false);
   };
 
   const handleFinishRequest = () => {
@@ -617,9 +633,10 @@ function AccountPractice({ user }: { user: User }) {
     setShowFinishModal(true);
   };
 
-  // Input initialization follows the question identity, not the Word object's identity.
+  // A same-word retry is a fresh presentation too; unrelated renders keep feedback.
   const currentWordId = currentWord?.id;
   useEffect(() => {
+    if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     if (!currentWordId || !sessionInitialized) {
       setAnswerInputs([""]);
       setInputStatuses(["idle"]);
@@ -633,7 +650,7 @@ function AccountPractice({ user }: { user: User }) {
     setAnswerInputs(Array(inputCount).fill(""));
     setInputStatuses(Array(inputCount).fill("idle"));
     setHasChecked(false);
-  }, [currentWordId, sessionInitialized, direction, isIrregularActive]);
+  }, [currentWordId, sessionInitialized, direction, isIrregularActive, presentationId]);
 
   useEffect(() => {
     if (!shouldFocusInput.current) return;
@@ -954,11 +971,12 @@ function AccountPractice({ user }: { user: User }) {
                       ref={(el) => (inputRefs.current[idx] = el)}
                       type="text"
                       value={value}
+                      readOnly={hasChecked}
                       onChange={(e) => {
+                        if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
                         const newInputs = [...answerInputs];
                         newInputs[idx] = e.target.value;
                         setAnswerInputs(newInputs);
-                        setHasChecked(false);
                         setInputStatuses((prev) => {
                           const updated = [...prev];
                           updated[idx] = "idle";
@@ -968,6 +986,7 @@ function AccountPractice({ user }: { user: User }) {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
+                          if (e.repeat) return;
 
                           if (!hasChecked) {
                             handleCheckAnswer();
@@ -987,7 +1006,8 @@ function AccountPractice({ user }: { user: User }) {
                       (idx === answerInputs.length - 1 ? (
                         <button
                           onClick={addInput}
-                          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                          disabled={hasChecked}
+                          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
                           aria-label="Add another answer"
                         >
                           <Plus size={18} />
@@ -1009,6 +1029,7 @@ function AccountPractice({ user }: { user: User }) {
               <div className="flex flex-col md:flex-row gap-3 pt-4">
                 {!hasChecked ? (
                   <button
+                    key="check-answer"
                     onClick={handleCheckAnswer}
                     disabled={answerInputs.every((a) => !a.trim())}
                     className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold text-base hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
@@ -1017,6 +1038,7 @@ function AccountPractice({ user }: { user: User }) {
                   </button>
                 ) : (
                   <button
+                    key="next-word"
                     ref={nextButtonRef}
                     onClick={proceedToNextWord}
                     className={`flex-1 px-6 py-3 rounded-2xl font-bold text-base transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
