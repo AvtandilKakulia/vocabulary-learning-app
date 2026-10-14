@@ -80,6 +80,41 @@ function AccountPractice({ user }: { user: User }) {
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusInput = useRef(false);
   const closeAndSaveButtonRef = useRef<HTMLButtonElement | null>(null);
+  const enterDownRef = useRef(false);
+  useEffect(() => {
+    const releaseEnter = (event: KeyboardEvent) => {
+      if (event.key === "Enter") enterDownRef.current = false;
+    };
+    const clearHeldKey = () => { enterDownRef.current = false; };
+    // Keyup may target a different control (or leave Practice). Window blur is
+    // deliberately not captured: moving focus between our controls isn't a release.
+    window.addEventListener("keyup", releaseEnter, true);
+    window.addEventListener("blur", clearHeldKey);
+    return () => {
+      window.removeEventListener("keyup", releaseEnter, true);
+      window.removeEventListener("blur", clearHeldKey);
+    };
+  }, []);
+  const handleEnterKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter") return;
+    if (event.repeat || enterDownRef.current) {
+      // Cancel native button activation too, after Check moves focus to Next.
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    enterDownRef.current = true;
+  };
+  // A presentation can recur for the same word ID. Claim it synchronously so
+  // duplicate events cannot score it again before React commits hasChecked.
+  const [presentationId, setPresentationId] = useState(0);
+  const presentationRef = useRef({ id: 0, scored: false });
+  const beginPresentation = useCallback(() => {
+    const id = presentationRef.current.id + 1;
+    presentationRef.current = { id, scored: false };
+    setPresentationId(id);
+    setHasChecked(false);
+  }, []);
 
   const uniqueWordCount = useMemo(
     () => new Set(words.map((word) => word.id)).size,
@@ -358,8 +393,13 @@ function AccountPractice({ user }: { user: User }) {
   ]);
 
   const handleDirectionChange = (newDirection: Direction) => {
+    if (newDirection === direction || presentationId !== presentationRef.current.id) return;
+    // Wait for the scored answer/queue state to commit before advancing it.
+    if (presentationRef.current.scored && !hasChecked) return;
     if (hasChecked) {
       proceedToNextWord();
+    } else {
+      beginPresentation();
     }
     setDirection(newDirection);
   };
@@ -370,7 +410,7 @@ function AccountPractice({ user }: { user: User }) {
     setOrderMode(newOrder);
     setAnswerInputs([""]);
     setInputStatuses(["idle"]);
-    setHasChecked(false);
+    beginPresentation();
     setCorrectCount(0);
     setTotalAttempts(0);
     setMistakes([]);
@@ -382,9 +422,11 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const handleCheckAnswer = () => {
-    if (!currentWord || showFinishModal) return;
+    if (!mountedRef.current || !currentWord || showFinishModal ||
+      presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     const trimmedInputs = answerInputs.map((a) => a.trim());
     if (trimmedInputs.every((a) => a.length === 0)) return;
+    presentationRef.current.scored = true;
 
     if (totalAttempts === 0) sessionUserIdRef.current = user?.id ?? null;
     completedResultRef.current = null;
@@ -463,14 +505,15 @@ function AccountPractice({ user }: { user: User }) {
     }
 
     setTimeout(() => {
+      if (!mountedRef.current || presentationId !== presentationRef.current.id) return;
       inputRefs.current.forEach((ref) => ref?.blur());
       nextButtonRef.current?.focus();
     }, 0);
   };
 
   const proceedToNextWord = () => {
-    if (!currentWord) return;
-    setHasChecked(false);
+    if (!currentWord || !hasChecked || !presentationRef.current.scored || presentationId !== presentationRef.current.id) return;
+    beginPresentation();
     setInputStatuses(["idle"]);
     setAnswerInputs([""]);
     shouldFocusInput.current = true;
@@ -492,7 +535,7 @@ function AccountPractice({ user }: { user: User }) {
     setUnresolvedWordIds([]);
     setAnswerInputs([""]);
     setInputStatuses(["idle"]);
-    setHasChecked(false);
+    beginPresentation();
     if (words.length > 0) {
       const orderedIds =
         orderMode === "random"
@@ -504,7 +547,7 @@ function AccountPractice({ user }: { user: User }) {
     }
     if (clearStorage && storageWritableRef.current) removePracticeSession(user.id);
     setShowResetModal(false);
-  }, [orderMode, user.id, words]);
+  }, [beginPresentation, orderMode, user.id, words]);
 
   useEffect(() => {
     if (!saveOperation) return;
@@ -594,16 +637,15 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const addInput = () => {
+    if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     setAnswerInputs((prev) => [...prev, ""]);
     setInputStatuses((prev) => [...prev, "idle"]);
-    setHasChecked(false);
   };
 
   const removeInput = (index: number) => {
-    if (answerInputs.length === 1) return;
+    if (presentationId !== presentationRef.current.id || presentationRef.current.scored || answerInputs.length === 1) return;
     setAnswerInputs((prev) => prev.filter((_, idx) => idx !== index));
     setInputStatuses((prev) => prev.filter((_, idx) => idx !== index));
-    setHasChecked(false);
   };
 
   const handleFinishRequest = () => {
@@ -617,9 +659,10 @@ function AccountPractice({ user }: { user: User }) {
     setShowFinishModal(true);
   };
 
-  // Input initialization follows the question identity, not the Word object's identity.
+  // A same-word retry is a fresh presentation too; unrelated renders keep feedback.
   const currentWordId = currentWord?.id;
   useEffect(() => {
+    if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     if (!currentWordId || !sessionInitialized) {
       setAnswerInputs([""]);
       setInputStatuses(["idle"]);
@@ -633,7 +676,7 @@ function AccountPractice({ user }: { user: User }) {
     setAnswerInputs(Array(inputCount).fill(""));
     setInputStatuses(Array(inputCount).fill("idle"));
     setHasChecked(false);
-  }, [currentWordId, sessionInitialized, direction, isIrregularActive]);
+  }, [currentWordId, sessionInitialized, direction, isIrregularActive, presentationId]);
 
   useEffect(() => {
     if (!shouldFocusInput.current) return;
@@ -731,7 +774,7 @@ function AccountPractice({ user }: { user: User }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
+    <div onKeyDownCapture={handleEnterKeyDownCapture} className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
       {storageWarning && <p role="alert" className="p-4 text-amber-800 dark:text-amber-200">{storageWarning}</p>}
       {vocabularyError}
       <fieldset disabled={sessionCompleted} className="max-w-4xl mx-auto px-4 py-8 w-full min-w-0">
@@ -954,11 +997,12 @@ function AccountPractice({ user }: { user: User }) {
                       ref={(el) => (inputRefs.current[idx] = el)}
                       type="text"
                       value={value}
+                      readOnly={hasChecked}
                       onChange={(e) => {
+                        if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
                         const newInputs = [...answerInputs];
                         newInputs[idx] = e.target.value;
                         setAnswerInputs(newInputs);
-                        setHasChecked(false);
                         setInputStatuses((prev) => {
                           const updated = [...prev];
                           updated[idx] = "idle";
@@ -968,6 +1012,7 @@ function AccountPractice({ user }: { user: User }) {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
+                          if (e.repeat) return;
 
                           if (!hasChecked) {
                             handleCheckAnswer();
@@ -987,7 +1032,8 @@ function AccountPractice({ user }: { user: User }) {
                       (idx === answerInputs.length - 1 ? (
                         <button
                           onClick={addInput}
-                          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                          disabled={hasChecked}
+                          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
                           aria-label="Add another answer"
                         >
                           <Plus size={18} />
