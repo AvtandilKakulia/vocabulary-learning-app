@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { authMock, query, supabaseMock } from '../test/mocks';
@@ -49,6 +49,15 @@ function clickHandler(element: HTMLElement): () => void {
   return (Reflect.get(element, key) as { onClick: () => void }).onClick;
 }
 
+// jsdom does not perform native button activation for fireEvent.keyDown. Model
+// that default explicitly: only an uncancelled Enter keydown may dispatch click.
+// A real-browser check is still required for platform-specific event ordering.
+function enterWithButtonDefault(button: HTMLElement, repeat = false) {
+  const allowed = fireEvent.keyDown(button, { key: 'Enter', repeat, cancelable: true });
+  if (allowed) fireEvent.click(button, { detail: 0 });
+  return allowed;
+}
+
 beforeEach(() => {
   vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(0);
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
@@ -83,13 +92,199 @@ describe('Practice scores each question presentation once', () => {
     expect(screen.getByRole('textbox')).toHaveValue('ვაშლი');
   });
 
-  it('keeps feedback visible after a real double-click on Check Answer', async () => {
+  it('allows two rapid mouse clicks to check then advance without scoring the next question', async () => {
     await start();
     fill('wrong');
-    await userEvent.dblClick(screen.getByRole('button', { name: 'Check Answer' }));
-    expect(stored()).toMatchObject({ queueIds: ['a', 'b'], totalAttempts: 1, correctCount: 0, hasChecked: true });
-    expect(screen.getByRole('textbox')).toHaveValue('wrong');
-    expect(screen.getByRole('textbox')).toHaveClass('border-red-500');
+    const user = userEvent.setup({ delay: null });
+    await user.click(screen.getByRole('button', { name: 'Check Answer' }));
+    // Retarget the current button like browser hit-testing; do not click a stale
+    // detached Check node after React has rendered Next.
+    await user.click(screen.getByRole('button', { name: 'Next Word' }));
+    expect(stored()).toMatchObject({ queueIds: ['b'], totalAttempts: 1, correctCount: 0, hasChecked: false });
+    expect(stored().mistakes).toHaveLength(1);
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Check Answer' })).toBeDisabled();
+  });
+
+  it.each([
+    { direction: 'en-to-geo', irregular: false, correct: false },
+    { direction: 'en-to-geo', irregular: false, correct: true },
+    { direction: 'geo-to-en', irregular: false, correct: false },
+    { direction: 'geo-to-en', irregular: false, correct: true },
+    { direction: 'geo-to-en', irregular: true, correct: false },
+    { direction: 'geo-to-en', irregular: true, correct: true },
+  ] as const)('cancels held Enter after focus transfer ($direction, irregular: $irregular, correct: $correct)', async ({ direction, irregular, correct }) => {
+    const current = irregular ? word({ id: 'a', english_word: 'go', is_irregular_verb: true,
+      past_simple: 'went', past_participle: 'gone' }) : vocabulary[0];
+    await start({ words: [current, vocabulary[1]], session: { direction } });
+    const values = irregular ? ['go', 'went', correct ? 'gone' : 'wrong']
+      : [correct ? direction === 'en-to-geo' ? 'ვაშლი' : 'apple' : 'wrong'];
+    fill(...values);
+    screen.getAllByRole('textbox').at(-1)!.focus();
+    const user = userEvent.setup();
+    await user.keyboard('{Enter>}');
+    const nextButton = screen.getByRole('button', { name: 'Next Word' });
+    await waitFor(() => expect(nextButton).toHaveFocus());
+    const submitted = stored();
+    expect(submitted).toMatchObject({ totalAttempts: 1, correctCount: Number(correct), hasChecked: true });
+    for (let i = 0; i < 3; i++) expect(enterWithButtonDefault(nextButton, true)).toBe(false);
+    // The physical-press latch also protects a duplicate event without repeat set.
+    expect(enterWithButtonDefault(nextButton)).toBe(false);
+    expect(stored()).toEqual(submitted);
+    expect(screen.getAllByRole('textbox').map(input => (input as HTMLInputElement).value)).toEqual(values);
+    expect(screen.getAllByRole('textbox').at(-1)).toHaveClass(correct ? 'border-green-500' : 'border-red-500');
+    await user.keyboard('{/Enter}');
+    await user.keyboard('{Enter>}');
+    expect(stored()).toMatchObject({ queueIds: ['b'], totalAttempts: 1, correctCount: Number(correct), hasChecked: false });
+    expect(fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', repeat: true })).toBe(false);
+    expect(stored().totalAttempts).toBe(1);
+    await user.keyboard('{/Enter}');
+  });
+
+  it('protects focus transfer when the original Enter activates Check as a native button', async () => {
+    await start();
+    fill('wrong');
+    screen.getByRole('button', { name: 'Check Answer' }).focus();
+    const user = userEvent.setup();
+    await user.keyboard('{Enter>}');
+    const nextButton = screen.getByRole('button', { name: 'Next Word' });
+    await waitFor(() => expect(nextButton).toHaveFocus());
+    const submitted = stored();
+    expect(enterWithButtonDefault(nextButton, true)).toBe(false);
+    expect(stored()).toEqual(submitted);
+    // Keyup outside Practice must still release the latch.
+    fireEvent.keyUp(document.body, { key: 'Enter' });
+    expect(enterWithButtonDefault(nextButton)).toBe(true);
+    fireEvent.keyUp(window, { key: 'Enter' });
+    expect(stored()).toMatchObject({ queueIds: ['b'], totalAttempts: 1, hasChecked: false });
+  });
+
+  it('keeps explicit mouse Next working while Enter is held', async () => {
+    await start();
+    fill('wrong');
+    screen.getByRole('textbox').focus();
+    const user = userEvent.setup();
+    await user.keyboard('{Enter>}');
+    await user.click(screen.getByRole('button', { name: 'Next Word' }));
+    expect(stored()).toMatchObject({ queueIds: ['b'], totalAttempts: 1, hasChecked: false });
+    fill('მსხალი');
+    expect(fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', repeat: true })).toBe(false);
+    expect(stored().totalAttempts).toBe(1);
+    await user.keyboard('{/Enter}');
+    screen.getByRole('textbox').focus();
+    await user.keyboard('{Enter}');
+    expect(stored()).toMatchObject({ totalAttempts: 2, correctCount: 1 });
+  });
+
+  it('clears the held-key latch on window blur without accepting auto-repeat on return', async () => {
+    await start();
+    fill('wrong');
+    screen.getByRole('textbox').focus();
+    await userEvent.keyboard('{Enter>}');
+    const nextButton = screen.getByRole('button', { name: 'Next Word' });
+    await waitFor(() => expect(nextButton).toHaveFocus());
+    fireEvent.blur(window);
+    expect(enterWithButtonDefault(nextButton, true)).toBe(false);
+    // Simulate release while away (no keyup delivered), then a fresh press.
+    expect(enterWithButtonDefault(nextButton)).toBe(true);
+    fireEvent.keyUp(window, { key: 'Enter' });
+    expect(stored()).toMatchObject({ queueIds: ['b'], totalAttempts: 1, hasChecked: false });
+  });
+
+  it('handles fast release/fresh press without a stale focus timer blurring the next answer', async () => {
+    await start();
+    fill('wrong');
+    vi.useFakeTimers();
+    try {
+      const input = screen.getByRole('textbox');
+      input.focus();
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.keyUp(input, { key: 'Enter' });
+      // Advance before the 0ms focus transfer from Check has executed.
+      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.keyUp(input, { key: 'Enter' });
+      expect(stored()).toMatchObject({ queueIds: ['b'], totalAttempts: 1, hasChecked: false });
+      const nextInput = screen.getByRole('textbox');
+      nextInput.focus();
+      fireEvent.change(nextInput, { target: { value: 'მსხალი' } });
+      act(() => vi.runOnlyPendingTimers());
+      expect(nextInput).toHaveFocus();
+      fireEvent.keyDown(nextInput, { key: 'Enter' });
+      fireEvent.keyUp(nextInput, { key: 'Enter' });
+      expect(stored()).toMatchObject({ totalAttempts: 2, correctCount: 1 });
+      act(() => vi.runOnlyPendingTimers());
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(['navigation', 'reload', 'account'] as const)('ignores a still-held Enter after %s, then accepts a fresh press', async restore => {
+    const view = await start({ session: { allowReguess: true } });
+    fill('wrong');
+    screen.getByRole('textbox').focus();
+    await userEvent.keyboard('{Enter>}');
+    const aCopy = localStorage.getItem(practiceSessionKey('user-a'));
+    if (restore === 'account') {
+      const bWord = word({ id: 'b-private', user_id: 'user-b', georgian_definitions: ['B meaning'] });
+      seed([bWord], { userId: 'user-b' });
+      supabaseMock.from.mockReturnValue(query({ data: [bWord], error: null }));
+      authMock.user = { id: 'user-b' };
+      view.rerender(<StrictMode><FreeMode /></StrictMode>);
+    } else if (restore === 'navigation') {
+      view.rerender(<div>Words</div>);
+      view.rerender(<StrictMode><FreeMode /></StrictMode>);
+    } else {
+      view.unmount();
+      render(<StrictMode><FreeMode /></StrictMode>);
+    }
+    const input = await screen.findByRole('textbox');
+    const userId = restore === 'account' ? 'user-b' : 'user-a';
+    const before = stored(userId);
+    fill(restore === 'account' ? 'B meaning' : 'მსხალი');
+    input.focus();
+    expect(fireEvent.keyDown(input, { key: 'Enter', repeat: true })).toBe(false);
+    expect(stored(userId)).toEqual(before);
+    fireEvent.keyUp(window, { key: 'Enter' });
+    await userEvent.keyboard('{Enter}');
+    expect(stored(userId)).toMatchObject({ totalAttempts: restore === 'account' ? 1 : 2, correctCount: 1 });
+    if (restore === 'account') expect(localStorage.getItem(practiceSessionKey('user-a'))).toBe(aCopy);
+    else expect(stored().unresolvedWordIds).toEqual(['a']);
+  });
+
+  it('does not let a held Finish press activate Close & Save after focus moves to the summary', async () => {
+    const { save } = await start({ words: [vocabulary[0]] });
+    fill('ვაშლი');
+    await check();
+    const finish = screen.getByRole('button', { name: 'Finish Practice' });
+    finish.focus();
+    const user = userEvent.setup();
+    await user.keyboard('{Enter>}');
+    await screen.findByRole('heading', { name: 'Practice Summary' });
+    const close = screen.getByRole('button', { name: 'Close & Save' });
+    // The animation frame is stubbed in these tests; focus its target explicitly.
+    close.focus();
+    expect(enterWithButtonDefault(close, true)).toBe(false);
+    expect(save.insert).not.toHaveBeenCalled();
+    await user.keyboard('{/Enter}');
+    await user.keyboard('{Enter}');
+    await screen.findByText('Result saved to History');
+    expect(save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ total_words: 1, correct_count: 1, mistakes: [] }));
+  });
+
+  it('preserves five attempts/four correct when a wrong word returns after three other records', async () => {
+    const words = [...vocabulary,
+      word({ id: 'c', english_word: 'third', georgian_definitions: ['third meaning'] }),
+      word({ id: 'd', english_word: 'fourth', georgian_definitions: ['fourth meaning'] })];
+    const { save } = await start({ words, session: { allowReguess: true } });
+    for (const answer of ['wrong', 'მსხალი', 'third meaning', 'fourth meaning', 'ვაშლი']) {
+      fill(answer);
+      await check();
+      await next();
+    }
+    await screen.findByRole('heading', { name: 'Practice Summary' });
+    expect(stored()).toMatchObject({ totalAttempts: 5, correctCount: 4, unresolvedWordIds: [] });
+    await userEvent.click(screen.getByRole('button', { name: 'Close & Save' }));
+    await screen.findByText('Result saved to History');
+    expect(save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ total_words: 5, correct_count: 4,
+      mistakes: [expect.objectContaining({ english_word: 'apple', user_answer: 'wrong' })] }));
   });
 
   it.each(['en-to-geo', 'geo-to-en'] as const)('locks a correct answer in %s and independently scores another meaning', async direction => {
@@ -171,6 +366,7 @@ describe('Practice scores each question presentation once', () => {
     expect(submitted.mistakes).toHaveLength(1);
     fireEvent.keyDown(input, { key: 'Enter', repeat: true });
     expect(stored()).toEqual(submitted);
+    fireEvent.keyUp(input, { key: 'Enter' });
     input.focus();
     await userEvent.keyboard('{Enter}');
     expect(stored()).toMatchObject({ queueIds: ['b'], totalAttempts: 1, hasChecked: false });

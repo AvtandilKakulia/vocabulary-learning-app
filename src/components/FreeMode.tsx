@@ -80,6 +80,31 @@ function AccountPractice({ user }: { user: User }) {
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const shouldFocusInput = useRef(false);
   const closeAndSaveButtonRef = useRef<HTMLButtonElement | null>(null);
+  const enterDownRef = useRef(false);
+  useEffect(() => {
+    const releaseEnter = (event: KeyboardEvent) => {
+      if (event.key === "Enter") enterDownRef.current = false;
+    };
+    const clearHeldKey = () => { enterDownRef.current = false; };
+    // Keyup may target a different control (or leave Practice). Window blur is
+    // deliberately not captured: moving focus between our controls isn't a release.
+    window.addEventListener("keyup", releaseEnter, true);
+    window.addEventListener("blur", clearHeldKey);
+    return () => {
+      window.removeEventListener("keyup", releaseEnter, true);
+      window.removeEventListener("blur", clearHeldKey);
+    };
+  }, []);
+  const handleEnterKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter") return;
+    if (event.repeat || enterDownRef.current) {
+      // Cancel native button activation too, after Check moves focus to Next.
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    enterDownRef.current = true;
+  };
   // A presentation can recur for the same word ID. Claim it synchronously so
   // duplicate events cannot score it again before React commits hasChecked.
   const [presentationId, setPresentationId] = useState(0);
@@ -480,6 +505,7 @@ function AccountPractice({ user }: { user: User }) {
     }
 
     setTimeout(() => {
+      if (!mountedRef.current || presentationId !== presentationRef.current.id) return;
       inputRefs.current.forEach((ref) => ref?.blur());
       nextButtonRef.current?.focus();
     }, 0);
@@ -748,7 +774,7 @@ function AccountPractice({ user }: { user: User }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
+    <div onKeyDownCapture={handleEnterKeyDownCapture} className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 transition-all duration-500">
       {storageWarning && <p role="alert" className="p-4 text-amber-800 dark:text-amber-200">{storageWarning}</p>}
       {vocabularyError}
       <fieldset disabled={sessionCompleted} className="max-w-4xl mx-auto px-4 py-8 w-full min-w-0">
@@ -1029,7 +1055,6 @@ function AccountPractice({ user }: { user: User }) {
               <div className="flex flex-col md:flex-row gap-3 pt-4">
                 {!hasChecked ? (
                   <button
-                    key="check-answer"
                     onClick={handleCheckAnswer}
                     disabled={answerInputs.every((a) => !a.trim())}
                     className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold text-base hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
@@ -1038,7 +1063,6 @@ function AccountPractice({ user }: { user: User }) {
                   </button>
                 ) : (
                   <button
-                    key="next-word"
                     ref={nextButtonRef}
                     onClick={proceedToNextWord}
                     className={`flex-1 px-6 py-3 rounded-2xl font-bold text-base transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
