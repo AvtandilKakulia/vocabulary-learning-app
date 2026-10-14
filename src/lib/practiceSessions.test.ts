@@ -98,4 +98,20 @@ describe('Practice storage ownership and migration', () => {
     expect(removePracticeSession('a', oldCopy)).toBe(false);
     expect(readPracticeSession('a').session).toEqual(newer);
   });
+
+  it('round-trips explicit retry IDs while leaving legacy retry eligibility unknown', () => {
+    persistPracticeSession(session());
+    expect(readPracticeSession('a').session?.unresolvedWordIds).toBeUndefined();
+    const current = { ...session(), unresolvedWordIds: ['done'] };
+    persistPracticeSession(current);
+    expect(readPracticeSession('a').session).toEqual(current);
+  });
+
+  it.each([null, 'done', [1], [''], ['done', 'done']])('preserves invalid retry metadata unchanged: %j', unresolvedWordIds => {
+    const raw = JSON.stringify({ ...session(), unresolvedWordIds });
+    localStorage.setItem(practiceSessionKey('a'), raw);
+    expect(readPracticeSession('a')).toMatchObject({ session: null, writable: false });
+    expect(removePracticeSession('a')).toBe(false);
+    expect(localStorage.getItem(practiceSessionKey('a'))).toBe(raw);
+  });
 });
