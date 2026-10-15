@@ -49,6 +49,7 @@ function AccountPractice({ user }: { user: User }) {
   const storageWritableRef = useRef(true);
   const [storageWarning, setStorageWarning] = useState('');
   const [words, setWords] = useState<Word[]>([]);
+  const [reconciledWords, setReconciledWords] = useState<Word[] | null>(null);
   const [wordQueue, setWordQueue] = useState<string[]>([]);
   const [direction, setDirection] = useState<Direction>("en-to-geo");
   const [orderMode, setOrderMode] = useState<OrderMode>("random");
@@ -213,7 +214,7 @@ function AccountPractice({ user }: { user: User }) {
   }, [sessionCompleted]);
 
   const userId = user?.id;
-  const beginWordRead = useLatestRequest(JSON.stringify([userId, orderMode]));
+  const beginWordRead = useLatestRequest(userId);
 
   useEffect(() => {
     setWords([]);
@@ -229,15 +230,14 @@ function AccountPractice({ user }: { user: User }) {
     }
     setLoading(true);
     try {
-      let query = supabase.from("words").select("*").eq("user_id", userId);
-      if (orderMode === "db-order") {
-        query = query.order("created_at", { ascending: true });
-      }
-      const { data, error } = await query;
+      // Keep canonical DB order independently of the session's queue preference.
+      // Switching order is local and must not restart this account-scoped read.
+      const { data, error } = await supabase.from("words").select("*").eq("user_id", userId)
+        .order("created_at", { ascending: true }).order("id", { ascending: true });
       if (!isCurrent()) return;
       if (error) throw error;
       const fetched = data || [];
-      setWords(orderMode === "random" ? shuffleArray(fetched) : fetched);
+      setWords(fetched);
     } catch (error) {
       if (!isCurrent()) return;
       console.error("Error loading words:", error);
@@ -245,7 +245,7 @@ function AccountPractice({ user }: { user: User }) {
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [beginWordRead, orderMode, userId]);
+  }, [beginWordRead, userId]);
 
   useEffect(() => {
     void loadWords();
@@ -296,8 +296,9 @@ function AccountPractice({ user }: { user: User }) {
   }, [userId]);
 
   useEffect(() => {
-    if (!sessionInitialized || !user || !words.length) return;
-    if (completedResultRef.current) return;
+    if (!sessionInitialized || !user || loading || readError) return;
+    setReconciledWords(words);
+    if (showFinishModal || completedResultRef.current || !words.length) return;
 
     const validIds = words.map((w) => w.id);
     let queueIds = wordQueue.filter((id) => validIds.includes(id));
@@ -316,7 +317,15 @@ function AccountPractice({ user }: { user: User }) {
         orderMode === "db-order"
           ? words.filter((w) => newWordIds.includes(w.id)).map((w) => w.id)
           : shuffleArray(newWordIds);
-      queueIds = [...queueIds, ...orderedNewIds];
+      // A refresh can discover new words. Keep the active presentation fixed and
+      // insert new work before deferred retries, without replaying visited words.
+      const active = queueIds.slice(0, 1);
+      const pending = queueIds.slice(1);
+      const retries = pending.filter(id => unresolvedWordIds.includes(id));
+      const unattempted = [...pending.filter(id => !unresolvedWordIds.includes(id)), ...orderedNewIds];
+      const orderedPending = orderMode === "db-order"
+        ? validIds.filter(id => unattempted.includes(id)) : unattempted;
+      queueIds = [...active, ...orderedPending, ...retries];
     }
 
     if (queueIds.length === 0) {
@@ -336,11 +345,15 @@ function AccountPractice({ user }: { user: User }) {
     wordQueue,
     words,
     attemptedWordIds,
+    unresolvedWordIds,
+    loading,
+    readError,
+    showFinishModal,
     user,
   ]);
 
   useEffect(() => {
-    if (!sessionInitialized || !user) return;
+    if (!sessionInitialized || !user || loading || readError || reconciledWords !== words) return;
     if (completedResultRef.current) return;
     // Completion cleanup must not immediately persist an empty replacement session.
     if (clearedCompletedSessionRef.current && totalAttempts === 0) return;
@@ -376,10 +389,14 @@ function AccountPractice({ user }: { user: User }) {
     sessionInitialized,
     hasChecked,
     showFinishModal,
+    loading,
+    readError,
+    reconciledWords,
+    words,
   ]);
 
   useEffect(() => {
-    if (!sessionInitialized || loading || readError) return;
+    if (!sessionInitialized || loading || readError || reconciledWords !== words) return;
     if (wordQueue.length === 0 && words.length > 0 && totalAttempts > 0) {
       setShowFinishModal(true);
     }
@@ -390,6 +407,8 @@ function AccountPractice({ user }: { user: User }) {
     totalAttempts,
     wordQueue.length,
     words.length,
+    reconciledWords,
+    words,
   ]);
 
   const handleDirectionChange = (newDirection: Direction) => {
@@ -405,20 +424,19 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const handleOrderChange = (newOrder: OrderMode) => {
-    if (newOrder === orderMode) return;
-    setLoading(true);
+    if (newOrder === orderMode || showFinishModal || completedResultRef.current) return;
     setOrderMode(newOrder);
-    setAnswerInputs([""]);
-    setInputStatuses(["idle"]);
-    beginPresentation();
-    setCorrectCount(0);
-    setTotalAttempts(0);
-    setMistakes([]);
-    setWordQueue([]);
-    setWords([]);
-    setAttemptedWordIds([]);
-    setUnresolvedWordIds([]);
-    if (storageWritableRef.current) removePracticeSession(user.id);
+    const [active, ...remaining] = wordQueue;
+    if (!active) return;
+    const pending = [...new Set(remaining)].filter(id => id !== active);
+    const arrange = (ids: string[]) => newOrder === "random"
+      ? shuffleArray(ids) : words.filter(word => ids.includes(word.id)).map(word => word.id);
+    // Historical mistakes are not retry eligibility. Keep genuine deferred
+    // retries behind unattempted work, and never replace the active presentation.
+    setWordQueue([active,
+      ...arrange(pending.filter(id => !unresolvedWordIds.includes(id))),
+      ...arrange(pending.filter(id => unresolvedWordIds.includes(id))),
+    ]);
   };
 
   const handleCheckAnswer = () => {
@@ -717,7 +735,7 @@ function AccountPractice({ user }: { user: User }) {
 
   if (readError && !showFinishModal) return vocabularyError;
 
-  if (loading && !showFinishModal) {
+  if ((loading || reconciledWords !== words) && !showFinishModal) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900/20 flex items-center justify-center">
         <div className="text-center">
