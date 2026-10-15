@@ -408,7 +408,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
   useEffect(() => {
     if (!handoffRequested || !owner.canWrite()) return;
     if (!sessionInitialized || loading || readError || reconciledWords !== words) {
-      owner.release(); // No editable question during initialization/read failure.
+      owner.finishHandoff(); // No editable question during initialization/read failure.
       return;
     }
     const completedResult = completedResultRef.current;
@@ -418,7 +418,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
       correctCount, totalAttempts, mistakes, attemptedWordIds, unresolvedWordIds, hasChecked,
       completed: showFinishModal, ...(completedResult ? { completedResult } : {}),
     }, owner, true);
-    if (saved) owner.release();
+    if (saved) owner.finishHandoff();
     else {
       owner.cancelHandoff();
       setStorageWarning('Could not save progress for the other tab. Practice remains active here. Restore browser storage, then cancel and retry the request in the other tab.');

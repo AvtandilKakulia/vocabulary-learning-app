@@ -10,10 +10,12 @@ export interface PracticeWriteAccess {
 }
 export interface PracticeOwner extends PracticeWriteAccess {
   release(): void;
+  finishHandoff(): void;
   cancelHandoff(): void;
 }
 export type PracticeOwnershipState =
-  | { status: 'checking' | 'passive' | 'waiting' | 'unavailable' }
+  | { status: 'checking' | 'passive' | 'unavailable' }
+  | { status: 'waiting'; cancel(): void }
   | { status: 'active'; owner: PracticeOwner; handoffRequested: boolean };
 
 export function ownsPractice(access: PracticeWriteAccess | undefined, userId: string) {
@@ -31,26 +33,51 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
   let owner: PracticeOwner | undefined;
   let ownerToken: string | undefined;
   let waiting = false;
+  let waitingId: string | undefined;
   let handoffRequested = false;
+  const handoffRequests = new Set<string>();
   let channel: BroadcastChannel | undefined;
   let requestDone: Promise<unknown> = Promise.resolve();
   const locks = navigator.locks;
   const emit = (state: PracticeOwnershipState) => { if (!disposed) changed(state); };
   const post = (message: object) => { try { channel?.postMessage(message); } catch { /* Closing the other tab remains safe. */ } };
+  const withdraw = () => {
+    if (waitingId) post({ type: 'cancel', requestId: waitingId });
+    waitingId = undefined;
+  };
+  const cancel = (request = generation) => {
+    // Acquisition is the commit point, independent of React rendering. A stale
+    // waiting button must never hide an editor whose lock has already been granted.
+    if (disposed || request !== generation || owner?.canWrite() || !waiting || !pending) return;
+    generation += 1;
+    pending.abort();
+    pending = undefined;
+    waiting = false;
+    withdraw();
+    emit({ status: 'passive' });
+  };
 
   try {
     channel = new BroadcastChannel(practiceLockName(userId));
     channel.onmessage = ({ data }: MessageEvent<unknown>) => {
       if (!data || typeof data !== 'object' || disposed) return;
-      const message = data as { type?: string; token?: string };
+      const message = data as { type?: string; token?: string; requestId?: string };
       if (message.type === 'probe' && owner?.canWrite()) post({ type: 'owner', token: ownerToken });
       if (message.type === 'owner' && waiting && typeof message.token === 'string') {
-        post({ type: 'yield', token: message.token });
+        post({ type: 'yield', token: message.token, requestId: waitingId });
       }
-      if (message.type === 'yield' && message.token === ownerToken && owner?.canWrite() && !handoffRequested) {
-        handoffRequested = true;
-        // React commits/persists its latest state before calling owner.release().
-        emit({ status: 'active', owner, handoffRequested: true });
+      if (message.type === 'yield' && message.token === ownerToken && owner?.canWrite() && typeof message.requestId === 'string') {
+        handoffRequests.add(message.requestId);
+        if (!handoffRequested) {
+          handoffRequested = true;
+          // React checkpoints before finishHandoff rechecks the live requests.
+          emit({ status: 'active', owner, handoffRequested: true });
+        }
+      }
+      if (message.type === 'cancel' && typeof message.requestId === 'string' && handoffRequests.delete(message.requestId) &&
+        handoffRequests.size === 0 && owner?.canWrite()) {
+        handoffRequested = false;
+        emit({ status: 'active', owner, handoffRequested: false });
       }
     };
   } catch { /* Without messaging, Continue waits for the owner to close/leave. */ }
@@ -62,7 +89,8 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
     const controller = new AbortController();
     pending = controller;
     waiting = wait;
-    emit({ status: wait ? 'waiting' : 'checking' });
+    waitingId = wait ? crypto.randomUUID() : undefined;
+    emit(wait ? { status: 'waiting', cancel: () => cancel(request) } : { status: 'checking' });
     try {
       const launch = () => locks.request(practiceLockName(userId), wait
         ? { mode: 'exclusive', signal: controller.signal }
@@ -70,6 +98,7 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
         if (disposed || request !== generation) return;
         pending = undefined;
         waiting = false;
+        waitingId = undefined;
         if (!lock) { emit({ status: 'passive' }); return; }
         let held = true;
         let unlock!: () => void;
@@ -77,7 +106,14 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
         const acquired: PracticeOwner = {
           userId,
           canWrite: () => held && !disposed,
+          finishHandoff: () => {
+            // Cancellation may arrive while React prepares the checkpoint.
+            // A delayed completion must not release an otherwise usable editor.
+            if (acquired.canWrite() && handoffRequests.size > 0) acquired.release();
+          },
           cancelHandoff: () => {
+            if (!acquired.canWrite()) return;
+            handoffRequests.clear();
             handoffRequested = false;
             emit({ status: 'active', owner: acquired, handoffRequested: false });
           },
@@ -87,6 +123,7 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
             owner = undefined;
             ownerToken = undefined;
             handoffRequested = false;
+            handoffRequests.clear();
             unlock();
             emit({ status: 'passive' });
           },
@@ -104,12 +141,14 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
         if (disposed || request !== generation) return;
         pending = undefined;
         waiting = false;
+        withdraw();
         if (error?.name !== 'AbortError') emit({ status: 'unavailable' });
       });
       if (wait) post({ type: 'probe' });
     } catch {
       pending = undefined;
       waiting = false;
+      withdraw();
       emit({ status: 'unavailable' });
     }
   };
@@ -117,17 +156,12 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
   acquire(false);
   return {
     continueHere: () => acquire(true),
-    cancel: () => {
-      generation += 1;
-      pending?.abort();
-      pending = undefined;
-      waiting = false;
-      emit({ status: 'passive' });
-    },
+    cancel: () => cancel(),
     stop: () => {
       disposed = true;
       generation += 1;
       pending?.abort();
+      withdraw();
       owner?.release();
       channel?.close();
       const released = requestDone;

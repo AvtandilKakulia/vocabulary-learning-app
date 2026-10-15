@@ -139,6 +139,37 @@ it('continues from the latest checkpoint after the owner closes', async () => {
   expect(stored()).toEqual(latest);
 });
 
+it('keeps the editor usable after stale Cancel clicks and lets a third tab continue without reloading', async () => {
+  vi.stubGlobal('BroadcastChannel', undefined); // Deliberately hold the request in the queue.
+  seed();
+  const a = open();
+  await answer(a, 'meaning a');
+  await next(a);
+  const checkpoint = stored();
+  const b = open();
+  await takeover(b);
+  const oldCancel = capturedClick(b.ui.getByRole('button', { name: 'Cancel request' }));
+  act(() => oldCancel());
+  await takeover(b);
+  const grantedCancel = capturedClick(b.ui.getByRole('button', { name: 'Cancel request' }));
+  act(() => oldCancel());
+  expect(b.ui.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+  a.unmount();
+  await b.ui.findByRole('textbox');
+  act(() => { oldCancel(); grantedCancel(); });
+  expect(b.ui.getByRole('textbox')).toBeInTheDocument();
+  expect(stored()).toEqual(checkpoint);
+  await answer(b, 'meaning b');
+  await next(b);
+  const latest = stored();
+  const c = open();
+  await c.ui.findByRole('button', { name: 'Continue in this tab' });
+  b.unmount();
+  await takeover(c);
+  await c.ui.findByRole('textbox');
+  expect(stored()).toEqual(latest);
+});
+
 it('ignores pending vocabulary responses after a handoff', async () => {
   seed();
   const old = deferred<QueryResult>();
@@ -245,6 +276,41 @@ it.each(['success', 'failure'] as const)('preserves a pending result identity an
     await b.ui.findByText('Result saved to History');
     expect(save.insert.mock.calls[1][0]).toEqual(checkpoint.completedResult);
   }
+});
+
+it('preserves the pending History snapshot through Cancel, another request and a stale post-grant Cancel', async () => {
+  vi.stubGlobal('BroadcastChannel', undefined);
+  seed({ queueIds: ['a'], attemptedWordIds: ['b', 'c', 'd'] });
+  const pending = deferred<QueryResult>();
+  const save = query(pending.promise);
+  supabaseMock.from.mockImplementation(table => table === 'words' ? query({ data: words, error: null }) : save);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const a = open();
+  await answer(a, 'meaning a');
+  await next(a);
+  await userEvent.click(await a.ui.findByRole('button', { name: 'Close & Save' }));
+  await waitFor(() => expect(save.insert).toHaveBeenCalledOnce());
+  const checkpoint = stored();
+  const b = open();
+  await takeover(b);
+  await userEvent.click(b.ui.getByRole('button', { name: 'Cancel request' }));
+  expect(a.ui.getByRole('button', { name: 'Saving result...' })).toBeDisabled();
+  expect(stored()).toEqual(checkpoint);
+  await takeover(b);
+  const staleCancel = capturedClick(b.ui.getByRole('button', { name: 'Cancel request' }));
+  a.unmount();
+  await b.ui.findByRole('button', { name: 'Saving result...' });
+  act(() => staleCancel());
+  expect(b.ui.getByRole('button', { name: 'Saving result...' })).toBeDisabled();
+  expect(stored()).toEqual(checkpoint);
+  expect(save.insert).toHaveBeenCalledOnce();
+  await act(async () => pending.resolve({ error: { message: 'offline' } }));
+  await b.ui.findByRole('button', { name: 'Retry Save' });
+  expect(stored()).toEqual(checkpoint);
+  save.insert.mockResolvedValueOnce({ error: null });
+  await userEvent.click(b.ui.getByRole('button', { name: 'Retry Save' }));
+  await b.ui.findByText('Result saved to History');
+  expect(save.insert.mock.calls[1][0]).toEqual(checkpoint.completedResult);
 });
 
 it('retains 5 attempts / 4 correct, 4/5 (80%) and the exact History result across a mid-session takeover', async () => {

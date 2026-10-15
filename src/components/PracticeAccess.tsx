@@ -45,7 +45,7 @@ export function PracticeAccess({ userId, children }: {
         : 'Practice is active in another tab, or this tab has released it. Continue here to restore the latest saved progress.'}</p>
     {snapshot && <p>Last saved progress: {snapshot.correctCount} / {snapshot.totalAttempts} correct{snapshot.completed ? ' — completed' : ''}.</p>}
     {state.status === 'passive' && <button className="px-4 py-2 rounded-lg bg-blue-600 text-white" onClick={() => setConfirm(true)}>Continue in this tab</button>}
-    {state.status === 'waiting' && <button className="px-4 py-2 rounded-lg border" onClick={() => coordination.current?.cancel()}>Cancel request</button>}
+    {state.status === 'waiting' && <button className="px-4 py-2 rounded-lg border" onClick={state.cancel}>Cancel request</button>}
     {confirm && <div role="alertdialog" aria-modal="true" aria-labelledby="practice-takeover-title" className="border rounded-xl p-6 space-y-4">
       <h2 id="practice-takeover-title" className="text-xl font-bold">Continue Practice here?</h2>
       <p>The other tab will stop editing before this tab restores the latest saved progress. Unchecked answer text in the other tab is not saved and will be lost. A pending History result remains recoverable.</p>

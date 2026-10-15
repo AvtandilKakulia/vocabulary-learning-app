@@ -35,6 +35,32 @@ Identical snapshots do not cause redundant storage writes. The persisted session
 schema and existing account keys are unchanged; malformed and incompatible data
 are retained.
 
+### Cancellation at acquisition
+
+The coordinator's grant callback is the ownership commit point, even if React has
+not rendered its active state yet. **Cancel request** only cancels a still-pending
+request. After the grant, an old Cancel callback is a no-op: the editor remains
+visible/usable and retains its lock until normal handoff or cleanup. It cannot
+emit passive state while leaving an invisible active owner behind.
+
+Each waiting UI callback is bound to its acquisition generation. An old callback
+cannot cancel a newer Continue request or another account's replacement
+coordinator. If the browser grants a lock but delivers its callback after local
+cancellation, the obsolete generation returns immediately, releasing that grant.
+
+Handoff messages include a unique request ID. Cancel and navigation/account
+cleanup withdraw that ID. If withdrawal reaches the current owner before its
+checkpoint finishes, `finishHandoff()` retains ownership when no requester
+remains. Cancelling one requester does not cancel another tab's request. A failed
+checkpoint still cancels the handoff and retains the active editor as before.
+
+Cancellation messages cannot undo a release that already completed in another
+tab. In that ordering, the verified checkpoint remains intact; the cancelled tab
+does not become active. Both tabs may be passive with no editor lock held, and
+either can explicitly Continue again without a reload. There is no automatic
+ownership reassignment, lock stealing or localStorage lock. Unchecked text has the
+same documented takeover limitation if release already completed.
+
 ## History and delayed responses
 
 The existing stable result UUID is checkpointed before any insert. A second Web
@@ -121,9 +147,13 @@ It starts a localhost-only server and a fresh headless browser profile under
 ignored `tmp/`, runs the actual Practice UI in independent pages with native Web
 Locks/BroadcastChannel/storage, and closes its own browser/server. Auth and History
 are mocked; CSP blocks connections. It neither loads Supabase credentials nor
-contacts a database. Nine checks cover passive startup/drafts, focus, explicit
+contacts a database. Twelve checks cover passive startup/drafts, focus, explicit
 handoff/stale handlers/order, owner closure, reload, pending same-ID save,
 server-commit/lost-response recovery, unsupported locks and missing messaging.
+They also invoke a captured Cancel callback inside the real native grant callback
+before React commits, test rapid Continue/Cancel/Continue and third-tab recovery,
+and deliberately delay a separate coordinator's checkpoint to test withdrawal
+before handoff completion.
 
 ## Manual Preview checks (separate owner review)
 
@@ -148,3 +178,8 @@ the same test account. Do not use Production records for this verification.
    records, so perform this only in an approved test setup.
 6. Check a different account in an independent test context: its local snapshot
    must not be changed by the first account's handoff/save/cleanup.
+7. Repeat Continue/Cancel/Continue quickly. If Cancel wins before the grant, that
+   request must stop; if the grant wins, the new editor must remain usable. If both
+   tabs are passive after a completed release, Continue in either tab must work
+   without reloading. A third tab must also be able to continue after the active
+   editor leaves. Repeat while a History response is pending in the test setup.

@@ -18,9 +18,23 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', 
   import { createRoot } from 'react-dom/client';
   import { flushSync } from 'react-dom';
   import FreeMode from './src/components/FreeMode';
+  import { coordinatePractice } from './src/lib/practiceOwnership';
+  import { persistPracticeSession } from './src/lib/practiceSessions';
   const options = new URLSearchParams(location.search);
   if (options.has('unsupported')) Object.defineProperty(navigator, 'locks', {value: undefined});
   if (options.has('no-channel')) window.BroadcastChannel = undefined;
+  if (options.has('cancel-at-grant')) {
+    const request = navigator.locks.request.bind(navigator.locks);
+    navigator.locks.request = (name, options, callback) => request(name, options, lock => {
+      const lifetime = callback(lock);
+      // Invoke the old UI callback immediately after the real native grant,
+      // before React can commit its newly queued active state.
+      if (lock && name.startsWith('vocab:practice:editor:') && window.cancelAtGrant) {
+        const cancel = window.cancelAtGrant; window.cancelAtGrant = null; cancel();
+      }
+      return lifetime;
+    });
+  }
   window.account = options.get('account') || 'user-a';
   window.words = ['a','b','c','d'].map((id,i) => ({id, user_id: window.account,
     english_word: id, georgian_definitions: ['meaning ' + id], description: '', part_of_speech: 'noun',
@@ -29,6 +43,8 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', 
   window.fetch = () => { throw new Error('Network forbidden in Practice fixture'); };
   window.inserts = []; window.holdSave = false;
   window.snapshot = () => JSON.parse(localStorage.getItem('vocab_practice_session_state_v2:'+window.account));
+  window.startCoordination = () => { window.controller = coordinatePractice(window.account, state => { window.ownership = state; }); };
+  window.checkpoint = () => persistPracticeSession(window.snapshot(), window.ownership.owner, true);
   window.seed = (extra = {}) => localStorage.setItem('vocab_practice_session_state_v2:'+window.account, JSON.stringify({
     userId: window.account, queueIds: ['a','b','c','d'], direction:'en-to-geo', orderMode:'db-order', allowReguess:true,
     totalAttempts:0, correctCount:0, mistakes:[], attemptedWordIds:[], unresolvedWordIds:[], hasChecked:false, completed:false, ...extra}));
@@ -133,6 +149,10 @@ try {
     await click(tab, 'Continue here');
   }
   const close = tab => manager.call('Target.closeTarget', { targetId: tab.targetId });
+  const captureCancel = (tab, name) => tab.evaluate(`(() => {
+    const button=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Cancel request');
+    window[${JSON.stringify(name)}]=button[Object.keys(button).find(k=>k.startsWith('__reactProps$'))].onClick;
+  })()`);
   console.log('Browser:', (await manager.call('Browser.getVersion')).product);
   let checks = 0;
 
@@ -196,10 +216,45 @@ try {
   assert.equal(await unsupported.evaluate('document.querySelectorAll("input,button").length'), 0); checks++;
   await close(unsupported);
   const g = await page('?no-channel'); await ready(g);
-  const h = await page('?no-channel'); await takeover(h);
+  const h = await page('?no-channel&cancel-at-grant'); await takeover(h);
   assert.equal(await h.evaluate('document.querySelectorAll("input").length'), 0);
+  await captureCancel(h, 'oldCancel');
+  await click(h, 'Cancel request'); await passive(h);
+  await takeover(h); await h.evaluate('window.oldCancel()');
+  assert.match(await text(h), /Cancel request/); checks++;
+  const checkpoint = await state(g);
+  await captureCancel(h, 'cancelAtGrant');
   await close(g); await ready(h); checks++;
+  await h.evaluate('window.oldCancel()');
+  assert.deepEqual(await state(h), checkpoint);
+  const i = await page('?no-channel'); await passive(i);
+  await h.evaluate('window.leave()');
+  await takeover(i); await ready(i);
+  assert.deepEqual(await state(i), checkpoint); checks++;
   await close(h);
+  await close(i);
+
+  // Delay the checkpoint deliberately to deliver cancellation before completion.
+  // These participants still use real independent pages and native lock queues.
+  const j = await page('?idle');
+  await j.evaluate('window.seed({correctCount:1,totalAttempts:2}); window.startCoordination()');
+  await until(() => j.evaluate('window.ownership?.status === "active"'));
+  const k = await page('?idle'); await k.evaluate('window.startCoordination()');
+  await until(() => k.evaluate('window.ownership?.status === "passive"'));
+  await k.evaluate('window.controller.continueHere()');
+  await until(() => j.evaluate('window.ownership.handoffRequested'));
+  const saved = await j.evaluate('window.checkpoint()');
+  await k.evaluate('window.ownership.cancel()');
+  await until(() => j.evaluate('window.ownership.handoffRequested === false'));
+  await j.evaluate('window.ownership.owner.finishHandoff()');
+  assert.equal(await j.evaluate('window.ownership.owner.canWrite()'), true);
+  assert.equal(await k.evaluate('window.ownership.status'), 'passive');
+  await k.evaluate('window.controller.continueHere()');
+  await until(() => j.evaluate('window.ownership.handoffRequested'));
+  await j.evaluate('window.ownership.owner.finishHandoff()');
+  await until(() => k.evaluate('window.ownership.status === "active"'));
+  assert.equal(await k.evaluate('JSON.stringify(window.snapshot())'), saved); checks++;
+  await close(j); await close(k);
   assert.deepEqual(runtimeErrors, []);
   console.log(`${checks} native two-page checks passed. Real Web Locks/BroadcastChannel/localStorage; Auth/Supabase mocked.`);
   console.log('Isolated profile:', folder);
