@@ -90,6 +90,8 @@ describe('Practice account storage isolation', () => {
     const bWords = [word({ id: 'b1', user_id: 'user-b', english_word: 'B first' }),
       word({ id: 'b2', user_id: 'user-b', english_word: 'B second' })];
     supabaseMock.from.mockImplementation(() => query({ data: authMock.user?.id === 'user-a' ? aWords : bWords, error: null }));
+    // Ordering now preserves the active word instead of restarting at the first.
+    localStorage.setItem(storageKey, JSON.stringify({ userId: 'user-a', queueIds: ['a1', 'a2'], orderMode: 'db-order' }));
     const { rerender } = render(<FreeMode />);
     const user = userEvent.setup();
     await screen.findByRole('textbox');
@@ -264,7 +266,7 @@ describe('Practice vocabulary read errors', () => {
     };
     localStorage.setItem(storageKey, JSON.stringify(saved));
     const failed = deferred<QueryResult>();
-    // Session restoration changes ordering, so both reads share the controlled outcome.
+    // A failed read must keep the saved queue intact until Retry succeeds.
     const failedRead = query(failed.promise);
     supabaseMock.from.mockReturnValue(failedRead);
     render(<FreeMode />);
@@ -304,12 +306,12 @@ describe('Practice vocabulary read errors', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('does not let an obsolete ordering success clear the current error', async () => {
+  it('does not let an obsolete StrictMode read success clear the current error', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     localStorage.setItem(storageKey, JSON.stringify({ userId: 'user-a', orderMode: 'db-order', queueIds: ['word-1'] }));
     const old = deferred<QueryResult>();
     supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValueOnce(query({ error: { message: 'latest failed' } }));
-    render(<FreeMode />);
+    render(<StrictMode><FreeMode /></StrictMode>);
     await screen.findByRole('alert');
     const stored = localStorage.getItem(storageKey);
     await act(async () => old.resolve({ data: [word()], error: null }));
@@ -341,8 +343,9 @@ describe('Practice vocabulary read errors', () => {
 });
 
 describe('Practice vocabulary read races', () => {
-  function orderingRace() {
-    // Restoration changes the initial random request to database order while it is pending.
+  function vocabularyRace() {
+    // Ordering no longer refetches. StrictMode still starts a replacement read,
+    // exercising the same latest-request protection with real effect cleanup.
     localStorage.setItem(storageKey, JSON.stringify({
       userId: 'user-a', queueIds: ['new'], orderMode: 'db-order', direction: 'en-to-geo',
       totalAttempts: 1, correctCount: 1, mistakes: [], attemptedWordIds: ['completed'],
@@ -352,14 +355,14 @@ describe('Practice vocabulary read races', () => {
     const oldQuery = query(old.promise);
     const newQuery = query(current.promise);
     supabaseMock.from.mockReturnValueOnce(oldQuery).mockReturnValueOnce(newQuery);
-    const view = render(<FreeMode />);
-    expect(oldQuery.order).not.toHaveBeenCalled();
+    const view = render(<StrictMode><FreeMode /></StrictMode>);
+    expect(oldQuery.order).toHaveBeenCalledWith('created_at', { ascending: true });
     expect(newQuery.order).toHaveBeenCalledWith('created_at', { ascending: true });
     return { old, current, ...view };
   }
 
-  it('keeps the latest ordering and restored progress when the old request finishes last', async () => {
-    const { old, current } = orderingRace();
+  it('keeps the latest vocabulary and restored progress when the old request finishes last', async () => {
+    const { old, current } = vocabularyRace();
     await act(async () => current.resolve({ data: [word({ id: 'new', english_word: 'current vocabulary' })], error: null }));
     expect(screen.getByText('current vocabulary')).toBeInTheDocument();
     await act(async () => old.resolve({ data: [word({ english_word: 'obsolete vocabulary' })], error: null }));
@@ -371,8 +374,8 @@ describe('Practice vocabulary read races', () => {
     });
   });
 
-  it('keeps loading while the current ordering request is pending', async () => {
-    const { old, current } = orderingRace();
+  it('keeps loading while the current vocabulary request is pending', async () => {
+    const { old, current } = vocabularyRace();
     await act(async () => old.resolve({ data: [word()], error: null }));
     expect(screen.getByText('Loading your words...')).toBeInTheDocument();
     await act(async () => current.resolve({ data: [word({ id: 'new' })], error: null }));
@@ -382,7 +385,7 @@ describe('Practice vocabulary read races', () => {
 
   it.each(['returned', 'rejected'] as const)('ignores stale %s errors without damaging progress', async kind => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { old, current } = orderingRace();
+    const { old, current } = vocabularyRace();
     await act(async () => current.resolve({ data: [word({ id: 'new' })], error: null }));
     const stored = localStorage.getItem(storageKey);
     await act(async () => {

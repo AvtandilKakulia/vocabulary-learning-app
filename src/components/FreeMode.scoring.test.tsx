@@ -41,6 +41,11 @@ function fill(...values: string[]) {
 const check = () => userEvent.click(screen.getByRole('button', { name: 'Check Answer' }));
 const next = () => userEvent.click(screen.getByRole('button', { name: /^(Next Word|Finish Practice)$/ }));
 
+function expectProgress(correct: number, attempts: number) {
+  const counter = screen.getByText('/').parentElement!;
+  expect(Array.from(counter.children, item => item.textContent).join(' ')).toBe(`${correct} / ${attempts}`);
+}
+
 // Test-only React 18 adapter: exercise the actual captured callback, bypassing
 // disabled DOM controls and rerenders, without adding an application test API.
 function clickHandler(element: HTMLElement): () => void {
@@ -61,6 +66,30 @@ function enterWithButtonDefault(button: HTMLElement, repeat = false) {
 beforeEach(() => {
   vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(0);
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+});
+
+describe('Practice progress counter presentation', () => {
+  it('initially displays 0 / 0', async () => {
+    await start();
+    expectProgress(0, 0);
+  });
+
+  it.each([
+    { answer: 'wrong', correct: 0 },
+    { answer: 'ვაშლი', correct: 1 },
+  ])('displays $correct / 1 consistently after one attempt', async ({ answer, correct }) => {
+    await start();
+    fill(answer);
+    await check();
+    expectProgress(correct, 1);
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    expect(screen.getByRole('heading', { name: 'Finish Practice' })).toBeInTheDocument();
+    expect(screen.getByText(`${correct}/1 correct (${correct * 100}%)`)).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Finish' }).at(-1)!);
+    await screen.findByRole('heading', { name: 'Practice Summary' });
+    expect(screen.getByText(`${correct}/1 correct (${correct * 100}%)`)).toBeInTheDocument();
+    expectProgress(correct, 1);
+  });
 });
 
 describe('Practice scores each question presentation once', () => {
@@ -274,12 +303,15 @@ describe('Practice scores each question presentation once', () => {
       word({ id: 'c', english_word: 'third', georgian_definitions: ['third meaning'] }),
       word({ id: 'd', english_word: 'fourth', georgian_definitions: ['fourth meaning'] })];
     const { save } = await start({ words, session: { allowReguess: true } });
-    for (const answer of ['wrong', 'მსხალი', 'third meaning', 'fourth meaning', 'ვაშლი']) {
+    for (const [index, answer] of ['wrong', 'მსხალი', 'third meaning', 'fourth meaning', 'ვაშლი'].entries()) {
       fill(answer);
       await check();
+      expectProgress(index, index + 1);
       await next();
     }
     await screen.findByRole('heading', { name: 'Practice Summary' });
+    expectProgress(4, 5);
+    expect(screen.getByText('4/5 correct (80%)')).toBeInTheDocument();
     expect(stored()).toMatchObject({ totalAttempts: 5, correctCount: 4, unresolvedWordIds: [] });
     await userEvent.click(screen.getByRole('button', { name: 'Close & Save' }));
     await screen.findByText('Result saved to History');
