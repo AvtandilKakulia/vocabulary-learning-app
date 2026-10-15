@@ -898,11 +898,11 @@ function AccountPractice({ user }: { user: User }) {
               <div className="flex-1">
                 <div className="flex items-center gap-4 mb-2">
                   <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    {totalAttempts}
+                    {correctCount}
                   </div>
                   <div className="text-2xl text-gray-400">/</div>
                   <div className="text-3xl font-bold text-gray-600 dark:text-gray-400">
-                    {correctCount}
+                    {totalAttempts}
                   </div>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
