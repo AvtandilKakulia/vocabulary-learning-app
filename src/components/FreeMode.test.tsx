@@ -324,6 +324,7 @@ describe('Practice vocabulary read errors', () => {
     const old = deferred<QueryResult>();
     supabaseMock.from.mockReturnValueOnce(query(old.promise));
     const { rerender, unmount } = render(<FreeMode />);
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(1));
     authMock.user = { id: 'user-b' };
     const current = query({ data: [word({ user_id: 'user-b' })], error: null });
     supabaseMock.from.mockReturnValueOnce(current);
@@ -336,6 +337,7 @@ describe('Practice vocabulary read errors', () => {
     supabaseMock.from.mockReturnValueOnce(query(pending.promise));
     authMock.user = { id: 'user-c' };
     rerender(<FreeMode />);
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(3));
     unmount();
     await act(async () => pending.reject(new Error('unmounted')));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -343,7 +345,7 @@ describe('Practice vocabulary read errors', () => {
 });
 
 describe('Practice vocabulary read races', () => {
-  function vocabularyRace() {
+  async function vocabularyRace() {
     // Ordering no longer refetches. StrictMode still starts a replacement read,
     // exercising the same latest-request protection with real effect cleanup.
     localStorage.setItem(storageKey, JSON.stringify({
@@ -356,13 +358,15 @@ describe('Practice vocabulary read races', () => {
     const newQuery = query(current.promise);
     supabaseMock.from.mockReturnValueOnce(oldQuery).mockReturnValueOnce(newQuery);
     const view = render(<StrictMode><FreeMode /></StrictMode>);
+    // Vocabulary reads begin only after asynchronous editor-lock acquisition.
+    await waitFor(() => expect(newQuery.order).toHaveBeenCalledWith('created_at', { ascending: true }));
     expect(oldQuery.order).toHaveBeenCalledWith('created_at', { ascending: true });
     expect(newQuery.order).toHaveBeenCalledWith('created_at', { ascending: true });
     return { old, current, ...view };
   }
 
   it('keeps the latest vocabulary and restored progress when the old request finishes last', async () => {
-    const { old, current } = vocabularyRace();
+    const { old, current } = await vocabularyRace();
     await act(async () => current.resolve({ data: [word({ id: 'new', english_word: 'current vocabulary' })], error: null }));
     expect(screen.getByText('current vocabulary')).toBeInTheDocument();
     await act(async () => old.resolve({ data: [word({ english_word: 'obsolete vocabulary' })], error: null }));
@@ -375,7 +379,7 @@ describe('Practice vocabulary read races', () => {
   });
 
   it('keeps loading while the current vocabulary request is pending', async () => {
-    const { old, current } = vocabularyRace();
+    const { old, current } = await vocabularyRace();
     await act(async () => old.resolve({ data: [word()], error: null }));
     expect(screen.getByText('Loading your words...')).toBeInTheDocument();
     await act(async () => current.resolve({ data: [word({ id: 'new' })], error: null }));
@@ -385,7 +389,7 @@ describe('Practice vocabulary read races', () => {
 
   it.each(['returned', 'rejected'] as const)('ignores stale %s errors without damaging progress', async kind => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { old, current } = vocabularyRace();
+    const { old, current } = await vocabularyRace();
     await act(async () => current.resolve({ data: [word({ id: 'new' })], error: null }));
     const stored = localStorage.getItem(storageKey);
     await act(async () => {
@@ -403,9 +407,10 @@ describe('Practice vocabulary read races', () => {
     const bQuery = query(b.promise);
     supabaseMock.from.mockReturnValueOnce(query(a.promise)).mockReturnValueOnce(bQuery);
     const { rerender } = render(<FreeMode />);
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(1));
     authMock.user = { id: 'user-b' };
     rerender(<FreeMode />);
-    expect(bQuery.eq).toHaveBeenCalledWith('user_id', 'user-b');
+    await waitFor(() => expect(bQuery.eq).toHaveBeenCalledWith('user_id', 'user-b'));
     await act(async () => b.resolve({ data: [word({ id: 'b', user_id: 'user-b', english_word: 'B vocabulary' })], error: null }));
     await act(async () => a.resolve({ data: [word({ english_word: 'A vocabulary' })], error: null }));
     expect(screen.getByText('B vocabulary')).toBeInTheDocument();
@@ -421,6 +426,7 @@ describe('Practice vocabulary read races', () => {
     const pending = deferred<QueryResult>();
     supabaseMock.from.mockReturnValueOnce(query(pending.promise));
     const { unmount } = render(<FreeMode />);
+    await waitFor(() => expect(supabaseMock.from).toHaveBeenCalledTimes(1));
     unmount();
     const stored = localStorage.getItem(storageKey);
     await act(async () => {
@@ -511,7 +517,7 @@ describe('FreeMode save lifecycle', () => {
     const save = query();
     supabaseMock.from.mockImplementation(table => table === 'words' ? query({ data: [word()], error: null }) : save);
     render(<StrictMode><FreeMode /></StrictMode>);
-    expect(screen.getByText(/This result has not been confirmed saved/)).toBeInTheDocument();
+    expect(await screen.findByText(/This result has not been confirmed saved/)).toBeInTheDocument();
     expect(screen.queryByText('Failed to save result')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Retry Save' }));
     await screen.findByText('Result saved to History');
@@ -541,7 +547,7 @@ describe('FreeMode save lifecycle', () => {
     rerender(<FreeMode />);
     expect(screen.queryByText('Failed to save result')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
-    const saving = screen.getByRole('button', { name: 'Saving result...' });
+    const saving = await screen.findByRole('button', { name: 'Saving result...' });
     expect(saving).toBeDisabled();
     fireEvent.click(saving);
     expect(save.insert).toHaveBeenCalledExactlyOnceWith(snapshot);
@@ -643,7 +649,7 @@ describe('FreeMode save lifecycle', () => {
     authMock.user = { id: 'user-a' };
     save.insert.mockResolvedValueOnce({ error: null });
     rerender(<FreeMode />);
-    await user.click(screen.getByRole('button', { name: 'Retry Save' }));
+    await user.click(await screen.findByRole('button', { name: 'Retry Save' }));
     await screen.findByText('Result saved to History');
     expect(save.insert.mock.calls[1][0]).toEqual(captured);
   });

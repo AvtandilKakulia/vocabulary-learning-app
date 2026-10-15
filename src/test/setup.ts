@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
+import { practiceBrowser } from './practiceBrowser';
 
 // A missed application-boundary mock must fail before the real client starts.
 vi.mock('@supabase/supabase-js', () => ({
@@ -14,6 +15,9 @@ function blockNetwork(kind: string): never {
 }
 
 beforeEach(() => {
+  const browser = practiceBrowser();
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: browser.locks });
+  vi.stubGlobal('BroadcastChannel', browser.BroadcastChannel);
   localStorage.clear();
   networkAttempts.length = 0;
   vi.stubGlobal('fetch', () => blockNetwork('fetch'));

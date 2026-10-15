@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { legacyPracticeKey, practiceSessionKey, readPracticeSession, persistPracticeSession,
-  removePracticeSession, type StoredPracticeSession } from './practiceSessions';
+import { legacyPracticeKey, practiceSessionKey, readPracticeSession as read, persistPracticeSession as persist,
+  removePracticeSession as remove, type StoredPracticeSession } from './practiceSessions';
+
+// These storage unit tests assume an active owner; exclusion is exercised by
+// independent participants in practiceOwnership and FreeMode.tabs tests.
+const access = (userId: string) => ({ userId, canWrite: () => true });
+const readPracticeSession = (id: string) => read(id, access(id));
+const persistPracticeSession = (session: StoredPracticeSession) => persist(session, access(session.userId));
+const removePracticeSession = (id: string, expected?: string) => remove(id, access(id), expected);
 
 const session = (userId = 'a'): StoredPracticeSession => ({
   userId, queueIds: ['remaining'], direction: 'geo-to-en', orderMode: 'db-order',

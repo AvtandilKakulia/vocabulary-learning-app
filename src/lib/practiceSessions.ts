@@ -1,4 +1,5 @@
 import type { TestHistory, TestMistake } from './supabase';
+import { ownsPractice, type PracticeWriteAccess } from './practiceOwnership';
 
 export const legacyPracticeKey = 'vocab_practice_session_state_v2';
 export const practiceSessionKey = (userId: string) => `${legacyPracticeKey}:${encodeURIComponent(userId)}`;
@@ -68,7 +69,7 @@ function parse(raw: string, userId: string): StoredPracticeSession | null {
   } catch { return null; }
 }
 
-export function readPracticeSession(userId: string): { session: StoredPracticeSession | null; writable: boolean; warning: string } {
+export function readPracticeSession(userId: string, access?: PracticeWriteAccess): { session: StoredPracticeSession | null; writable: boolean; warning: string } {
   try {
     const storage = window.localStorage;
     const key = practiceSessionKey(userId);
@@ -82,6 +83,8 @@ export function readPracticeSession(userId: string): { session: StoredPracticeSe
     const session = parse(legacy, userId);
     // Never alter a malformed, incompatible, or another account's legacy copy.
     if (!session) return { session: null, writable: true, warning: '' };
+    // Passive readers may inspect legacy progress but must never migrate it.
+    if (!ownsPractice(access, userId)) return { session, writable: false, warning: '' };
     try {
       storage.setItem(key, legacy);
       if (storage.getItem(key) !== legacy) throw new Error('Copy verification failed');
@@ -96,17 +99,23 @@ export function readPracticeSession(userId: string): { session: StoredPracticeSe
   }
 }
 
-export function persistPracticeSession(session: StoredPracticeSession, verify = false): string | null {
+export function persistPracticeSession(session: StoredPracticeSession, access: PracticeWriteAccess, verify = false): string | null {
+  if (!ownsPractice(access, session.userId)) return null;
   try {
     const raw = JSON.stringify(session);
-    window.localStorage.setItem(practiceSessionKey(session.userId), raw);
+    const existing = window.localStorage.getItem(practiceSessionKey(session.userId));
+    if (existing !== null && !parse(existing, session.userId)) return null;
+    if (existing !== raw) {
+      window.localStorage.setItem(practiceSessionKey(session.userId), raw);
+    }
     if (verify && window.localStorage.getItem(practiceSessionKey(session.userId)) !== raw) return null;
     return raw;
   } catch { return null; }
 }
 
 // expected protects a newer session from cleanup by an older asynchronous save.
-export function removePracticeSession(userId: string, expected?: string): boolean {
+export function removePracticeSession(userId: string, access: PracticeWriteAccess, expected?: string): boolean {
+  if (!ownsPractice(access, userId)) return false;
   try {
     const storage = window.localStorage;
     const key = practiceSessionKey(userId);
