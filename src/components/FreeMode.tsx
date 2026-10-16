@@ -579,6 +579,12 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
     setWordQueue(updatedQueue);
   };
 
+  // Manual actions require scored progress from this still-current presentation.
+  // Reset advances the presentation synchronously, invalidating captured callbacks
+  // even before React commits 0 / 0. Internal History cleanup stays independent.
+  const canManuallyReset = () => mountedRef.current && owner.canWrite() &&
+    totalAttempts > 0 && presentationId === presentationRef.current.id;
+
   const handleReset = useCallback((clearStorage = true) => {
     if (!owner.canWrite()) return;
     if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
@@ -993,8 +999,9 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                 </div>
 
                 <button
-                  onClick={() => setShowResetModal(true)}
-                  className="px-4 py-2 text-sm bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl hover:from-red-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  onClick={() => { if (canManuallyReset()) setShowResetModal(true); }}
+                  disabled={totalAttempts === 0}
+                  className="px-4 py-2 text-sm bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl enabled:hover:from-red-600 enabled:hover:to-pink-600 transition-all duration-200 shadow-lg enabled:hover:shadow-xl transform enabled:hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                 >
                   Reset Progress
                 </button>
@@ -1280,7 +1287,8 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                 Cancel
               </button>
               <button
-                onClick={() => handleReset()}
+                onClick={() => { if (canManuallyReset()) handleReset(); }}
+                disabled={totalAttempts === 0}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
               >
                 Reset Progress

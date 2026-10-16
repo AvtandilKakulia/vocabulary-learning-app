@@ -112,8 +112,10 @@ describe('Practice account storage isolation', () => {
     expect(await screen.findByRole('textbox')).toHaveValue('');
     expect(screen.queryByText('A next')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('A unfinished input')).not.toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ userId: 'user-b', direction: 'en-to-geo',
-      orderMode: 'random', allowReguess: false, totalAttempts: 0, correctCount: 0, mistakes: [], attemptedWordIds: [], hasChecked: false });
+    // The first checkpoint follows vocabulary reconciliation, after the input
+    // can already be visible. Wait for storage itself, not just the rendered UI.
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ userId: 'user-b', direction: 'en-to-geo',
+      orderMode: 'random', allowReguess: false, totalAttempts: 0, correctCount: 0, mistakes: [], attemptedWordIds: [], hasChecked: false }));
     await user.click(screen.getByRole('button', { name: 'In database order' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'wrong B' } });
     await user.click(screen.getByRole('button', { name: 'Check Answer' }));
@@ -152,7 +154,7 @@ describe('Practice account storage isolation', () => {
     await screen.findByRole('textbox');
     expect(localStorage.getItem(legacyPracticeKey)).toBe(legacy);
     expect(localStorage.getItem(storageKey)).toBeNull();
-    expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ totalAttempts: 0, mistakes: [] });
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ totalAttempts: 0, mistakes: [] }));
     const writes = vi.spyOn(Storage.prototype, 'setItem');
     authMock.user = { id: 'user-a' };
     view.rerender(<StrictMode><FreeMode /></StrictMode>);
@@ -172,7 +174,7 @@ describe('Practice account storage isolation', () => {
     supabaseMock.from.mockReturnValue(query({ data: [word({ id: 'checked' }), word({ id: 'remaining' })], error: null }));
     render(<FreeMode />);
     expect(await screen.findByRole('textbox')).toHaveValue('');
-    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ ...progress(), queueIds: ['remaining'], attemptedWordIds: ['done', 'checked'] });
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject({ ...progress(), queueIds: ['remaining'], attemptedWordIds: ['done', 'checked'] }));
   });
 
   it('does not autosave over legacy progress when migration writes fail', async () => {
