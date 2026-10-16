@@ -15,6 +15,8 @@ import type { User } from '@supabase/supabase-js';
 import { readPracticeSession, persistPracticeSession, removePracticeSession,
   type StoredPracticeSession, type PracticeResult, type PracticeMistake } from '../lib/practiceSessions';
 import { findPracticeSave, savePracticeResult, type PracticeSave } from '../lib/practiceSaves';
+import { PracticeAccess } from './PracticeAccess';
+import type { PracticeOwner } from '../lib/practiceOwnership';
 
 type Direction = "en-to-geo" | "geo-to-en";
 type OrderMode = "random" | "db-order";
@@ -37,10 +39,12 @@ function normalize(text: string) {
 
 export default function FreeMode() {
   const { user } = useAuth();
-  return user ? <AccountPractice key={user.id} user={user} /> : null;
+  return user ? <PracticeAccess key={user.id} userId={user.id}>
+    {(owner, handoffRequested) => <AccountPractice user={user} owner={owner} handoffRequested={handoffRequested} />}
+  </PracticeAccess> : null;
 }
 
-function AccountPractice({ user }: { user: User }) {
+function AccountPractice({ user, owner, handoffRequested }: { user: User; owner: PracticeOwner; handoffRequested: boolean }) {
   const mountedRef = useRef(false);
   useLayoutEffect(() => {
     mountedRef.current = true;
@@ -221,6 +225,7 @@ function AccountPractice({ user }: { user: User }) {
   }, [userId]);
 
   const loadWords = useCallback(async () => {
+    if (!owner.canWrite()) return;
     const isCurrent = beginWordRead();
     if (!isCurrent) return;
     setReadError(null);
@@ -234,27 +239,28 @@ function AccountPractice({ user }: { user: User }) {
       // Switching order is local and must not restart this account-scoped read.
       const { data, error } = await supabase.from("words").select("*").eq("user_id", userId)
         .order("created_at", { ascending: true }).order("id", { ascending: true });
-      if (!isCurrent()) return;
+      if (!isCurrent() || !owner.canWrite()) return;
       if (error) throw error;
       const fetched = data || [];
       setWords(fetched);
     } catch (error) {
-      if (!isCurrent()) return;
+      if (!isCurrent() || !owner.canWrite()) return;
       console.error("Error loading words:", error);
       setReadError("Unable to load your vocabulary. Please try again.");
     } finally {
-      if (isCurrent()) setLoading(false);
+      if (isCurrent() && owner.canWrite()) setLoading(false);
     }
-  }, [beginWordRead, userId]);
+  }, [beginWordRead, userId, owner]);
 
   useEffect(() => {
     void loadWords();
   }, [loadWords]);
 
   useEffect(() => {
+    if (!owner.canWrite()) return;
     if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
     sessionUserIdRef.current = userId;
-    const recovery = readPracticeSession(userId);
+    const recovery = readPracticeSession(userId, owner);
     storageWritableRef.current = recovery.writable;
     setStorageWarning(recovery.warning);
     const parsed = recovery.session;
@@ -293,10 +299,10 @@ function AccountPractice({ user }: { user: User }) {
       }
     }
     setSessionInitialized(true);
-  }, [userId]);
+  }, [userId, owner]);
 
   useEffect(() => {
-    if (!sessionInitialized || !user || loading || readError) return;
+    if (!owner.canWrite() || !sessionInitialized || !user || loading || readError) return;
     setReconciledWords(words);
     if (showFinishModal || completedResultRef.current || !words.length) return;
 
@@ -350,10 +356,11 @@ function AccountPractice({ user }: { user: User }) {
     readError,
     showFinishModal,
     user,
+    owner,
   ]);
 
   useEffect(() => {
-    if (!sessionInitialized || !user || loading || readError || reconciledWords !== words) return;
+    if (!owner.canWrite() || !sessionInitialized || !user || loading || readError || reconciledWords !== words) return;
     if (completedResultRef.current) return;
     // Completion cleanup must not immediately persist an empty replacement session.
     if (clearedCompletedSessionRef.current && totalAttempts === 0) return;
@@ -372,7 +379,7 @@ function AccountPractice({ user }: { user: User }) {
       hasChecked,
       completed: showFinishModal,
     };
-    if (storageWritableRef.current && persistPracticeSession(state) === null) {
+    if (storageWritableRef.current && persistPracticeSession(state, owner) === null) {
       setStorageWarning('Browser storage is unavailable. Practice progress cannot be saved locally.');
     }
   }, [
@@ -393,10 +400,35 @@ function AccountPractice({ user }: { user: User }) {
     readError,
     reconciledWords,
     words,
+    owner,
   ]);
 
+  // The boundary synchronously commits pending React updates when a handoff is
+  // requested. Checkpoint that committed state before relinquishing the lock.
   useEffect(() => {
-    if (!sessionInitialized || loading || readError || reconciledWords !== words) return;
+    if (!handoffRequested || !owner.canWrite()) return;
+    if (!sessionInitialized || loading || readError || reconciledWords !== words) {
+      owner.finishHandoff(); // No editable question during initialization/read failure.
+      return;
+    }
+    const completedResult = completedResultRef.current;
+    if (!storageWritableRef.current) storageWritableRef.current = readPracticeSession(user.id, owner).writable;
+    const saved = storageWritableRef.current && persistPracticeSession({
+      userId: user.id, queueIds: wordQueue, direction, orderMode, allowReguess,
+      correctCount, totalAttempts, mistakes, attemptedWordIds, unresolvedWordIds, hasChecked,
+      completed: showFinishModal, ...(completedResult ? { completedResult } : {}),
+    }, owner, true);
+    if (saved) owner.finishHandoff();
+    else {
+      owner.cancelHandoff();
+      setStorageWarning('Could not save progress for the other tab. Practice remains active here. Restore browser storage, then cancel and retry the request in the other tab.');
+    }
+  }, [handoffRequested, owner, sessionInitialized, loading, readError, reconciledWords, words,
+    user.id, wordQueue, direction, orderMode, allowReguess, correctCount, totalAttempts,
+    mistakes, attemptedWordIds, unresolvedWordIds, hasChecked, showFinishModal]);
+
+  useEffect(() => {
+    if (!owner.canWrite() || !sessionInitialized || loading || readError || reconciledWords !== words) return;
     if (wordQueue.length === 0 && words.length > 0 && totalAttempts > 0) {
       setShowFinishModal(true);
     }
@@ -409,9 +441,11 @@ function AccountPractice({ user }: { user: User }) {
     words.length,
     reconciledWords,
     words,
+    owner,
   ]);
 
   const handleDirectionChange = (newDirection: Direction) => {
+    if (!owner.canWrite()) return;
     if (newDirection === direction || presentationId !== presentationRef.current.id) return;
     // Wait for the scored answer/queue state to commit before advancing it.
     if (presentationRef.current.scored && !hasChecked) return;
@@ -424,6 +458,7 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const handleOrderChange = (newOrder: OrderMode) => {
+    if (!owner.canWrite()) return;
     if (newOrder === orderMode || showFinishModal || completedResultRef.current) return;
     setOrderMode(newOrder);
     const [active, ...remaining] = wordQueue;
@@ -440,7 +475,7 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const handleCheckAnswer = () => {
-    if (!mountedRef.current || !currentWord || showFinishModal ||
+    if (!owner.canWrite() || !mountedRef.current || !currentWord || showFinishModal ||
       presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     const trimmedInputs = answerInputs.map((a) => a.trim());
     if (trimmedInputs.every((a) => a.length === 0)) return;
@@ -523,13 +558,14 @@ function AccountPractice({ user }: { user: User }) {
     }
 
     setTimeout(() => {
-      if (!mountedRef.current || presentationId !== presentationRef.current.id) return;
+      if (!owner.canWrite() || !mountedRef.current || presentationId !== presentationRef.current.id) return;
       inputRefs.current.forEach((ref) => ref?.blur());
       nextButtonRef.current?.focus();
     }, 0);
   };
 
   const proceedToNextWord = () => {
+    if (!owner.canWrite()) return;
     if (!currentWord || !hasChecked || !presentationRef.current.scored || presentationId !== presentationRef.current.id) return;
     beginPresentation();
     setInputStatuses(["idle"]);
@@ -544,6 +580,7 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const handleReset = useCallback((clearStorage = true) => {
+    if (!owner.canWrite()) return;
     if (saveStatusRef.current === "saving" || saveStatusRef.current === "error") return;
     sessionUserIdRef.current = user?.id ?? null;
     setCorrectCount(0);
@@ -563,15 +600,15 @@ function AccountPractice({ user }: { user: User }) {
     } else {
       setWordQueue([]);
     }
-    if (clearStorage && storageWritableRef.current) removePracticeSession(user.id);
+    if (clearStorage && storageWritableRef.current) removePracticeSession(user.id, owner);
     setShowResetModal(false);
-  }, [beginPresentation, orderMode, user.id, words]);
+  }, [beginPresentation, orderMode, user.id, words, owner]);
 
   useEffect(() => {
     if (!saveOperation) return;
     let cancelled = false;
     void saveOperation.done.then(outcome => {
-      if (cancelled || !mountedRef.current) return;
+      if (cancelled || !mountedRef.current || !owner.canWrite()) return;
       saveStatusRef.current = outcome.status;
       setSaveStatus(outcome.status);
       setSaveOperation(null);
@@ -582,13 +619,16 @@ function AccountPractice({ user }: { user: User }) {
       completedResultRef.current = null;
       clearedCompletedSessionRef.current = true;
       setShowFinishModal(false);
-      // The shared operation already cleaned up its exact copy, even if unmounted.
+      // A response in another editor may have been unable to acquire cleanup
+      // access. The current owner can now remove only that exact checkpoint.
+      removePracticeSession(user.id, owner, saveOperation.savedCopy);
       handleReset(false);
     });
     return () => { cancelled = true; };
-  }, [saveOperation, handleReset]);
+  }, [saveOperation, handleReset, owner, user.id]);
 
   const handleFinishClose = () => {
+    if (!owner.canWrite()) return;
     if (!showFinishModal || showDiscardConfirm ||
       saveStatusRef.current === "saving" || saveStatusRef.current === "saved" ||
       saveStatusRef.current === "discarded") return;
@@ -621,19 +661,19 @@ function AccountPractice({ user }: { user: User }) {
         throw new Error("Sign in to the account that completed this Practice to save its result.");
       }
       if (!storageWritableRef.current) {
-        storageWritableRef.current = readPracticeSession(user.id).writable;
+        storageWritableRef.current = readPracticeSession(user.id, owner).writable;
       }
       if (storageWritableRef.current) savedCopy = persistPracticeSession({
         userId: user.id, queueIds: wordQueue, direction, orderMode, allowReguess,
         correctCount, totalAttempts, mistakes, attemptedWordIds, unresolvedWordIds, hasChecked,
         completed: true, completedResult: result,
-      }, true);
+      }, owner, true);
       if (savedCopy === null) {
         setStorageWarning('Could not preserve the result before saving. Keep this tab open and retry when browser storage is available.');
         throw new Error('Could not checkpoint the Practice result. No History request was sent.');
       }
       setStorageWarning('');
-      setSaveOperation(savePracticeResult(result, savedCopy));
+      setSaveOperation(savePracticeResult(result, savedCopy, owner));
     } catch (error) {
       if (!mountedRef.current) return;
       console.error("Error saving history:", error);
@@ -644,6 +684,7 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const handleDiscardResult = () => {
+    if (!owner.canWrite()) return;
     if (saveStatusRef.current !== "error" || !showDiscardConfirm) return;
     saveStatusRef.current = "discarded";
     setSaveStatus("discarded");
@@ -655,23 +696,27 @@ function AccountPractice({ user }: { user: User }) {
   };
 
   const addInput = () => {
+    if (!owner.canWrite()) return;
     if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     setAnswerInputs((prev) => [...prev, ""]);
     setInputStatuses((prev) => [...prev, "idle"]);
   };
 
   const removeInput = (index: number) => {
+    if (!owner.canWrite()) return;
     if (presentationId !== presentationRef.current.id || presentationRef.current.scored || answerInputs.length === 1) return;
     setAnswerInputs((prev) => prev.filter((_, idx) => idx !== index));
     setInputStatuses((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleFinishRequest = () => {
+    if (!owner.canWrite()) return;
     if (totalAttempts === 0) return;
     setShowFinishConfirm(true);
   };
 
   const handleConfirmFinish = () => {
+    if (!owner.canWrite()) return;
     if (totalAttempts === 0) return;
     setShowFinishConfirm(false);
     setShowFinishModal(true);
@@ -707,6 +752,7 @@ function AccountPractice({ user }: { user: User }) {
   }, [answerInputs]);
 
   const handleReguessToggle = () => {
+    if (!owner.canWrite()) return;
     if (!allowReguess) {
       setWordQueue(prev => {
         const toAdd = unresolvedWordIds.filter(id => !prev.includes(id) && words.some(word => word.id === id));
@@ -1017,7 +1063,7 @@ function AccountPractice({ user }: { user: User }) {
                       value={value}
                       readOnly={hasChecked}
                       onChange={(e) => {
-                        if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
+                        if (!owner.canWrite() || presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
                         const newInputs = [...answerInputs];
                         newInputs[idx] = e.target.value;
                         setAnswerInputs(newInputs);
