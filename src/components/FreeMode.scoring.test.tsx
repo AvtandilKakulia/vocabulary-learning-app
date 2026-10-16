@@ -92,6 +92,125 @@ describe('Practice progress counter presentation', () => {
   });
 });
 
+describe('Practice manual Reset availability', () => {
+  it('keeps an untouched session disabled for mouse, keyboard and captured callbacks', async () => {
+    await start();
+    const reset = screen.getByRole('button', { name: 'Reset Progress' });
+    expectProgress(0, 0);
+    expect(reset).toBeDisabled();
+    const user = userEvent.setup();
+    await user.click(reset);
+    screen.getByText('Allow re-guessing wrong answers').parentElement!.querySelector('button')!.focus();
+    await user.tab();
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    reset.focus();
+    expect(reset).not.toHaveFocus();
+    fireEvent.keyDown(reset, { key: 'Enter' });
+    fireEvent.keyDown(reset, { key: ' ' });
+    act(() => clickHandler(reset)());
+    expect(screen.queryByRole('heading', { name: 'Reset Progress' })).not.toBeInTheDocument();
+    expectProgress(0, 0);
+  });
+
+  it('does not enable Reset or erase an unchecked draft', async () => {
+    await start();
+    fill('unfinished answer');
+    const reset = screen.getByRole('button', { name: 'Reset Progress' });
+    const before = stored();
+    expect(reset).toBeDisabled();
+    await userEvent.click(reset);
+    act(() => clickHandler(reset)());
+    expect(screen.queryByRole('heading', { name: 'Reset Progress' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('unfinished answer');
+    expect(stored()).toEqual(before);
+  });
+
+  it('stays disabled after order, direction and retry preference changes without scoring', async () => {
+    await start();
+    for (const name of ['Random', 'In database order', 'Georgian → English', 'English → Georgian']) {
+      await userEvent.click(screen.getByRole('button', { name }));
+      expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeDisabled();
+      expectProgress(0, 0);
+    }
+    for (let i = 0; i < 2; i++) {
+      await userEvent.click(screen.getByText('Allow re-guessing wrong answers').parentElement!.querySelector('button')!);
+      expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeDisabled();
+      expectProgress(0, 0);
+    }
+    expect(screen.queryByRole('heading', { name: 'Reset Progress' })).not.toBeInTheDocument();
+    expect(stored()).toMatchObject({ totalAttempts: 0, correctCount: 0, mistakes: [] });
+  });
+
+  it.each([
+    { answer: 'wrong', correct: 0 }, { answer: 'ვაშლი', correct: 1 },
+  ])('enables Reset after a checked answer ($correct / 1)', async ({ answer, correct }) => {
+    await start();
+    fill(answer);
+    await check();
+    expectProgress(correct, 1);
+    const reset = screen.getByRole('button', { name: 'Reset Progress' });
+    expect(reset).toBeEnabled();
+    await userEvent.click(reset);
+    expect(screen.getByRole('heading', { name: 'Reset Progress' })).toBeInTheDocument();
+  });
+
+  it.each(['wrong', 'ვაშლი'])('enables Reset after restoring scored progress (%s)', async answer => {
+    const view = await start();
+    fill(answer);
+    await check();
+    const before = stored();
+    view.unmount();
+    render(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findByRole('textbox');
+    await waitFor(() => expect(stored()).toEqual({ ...before, hasChecked: false, queueIds: ['b'] }));
+    expectProgress(before.correctCount, 1);
+    expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeEnabled();
+  });
+
+  it('disables Reset after confirmation and rejects stale open/confirm callbacks before and after commit', async () => {
+    await start();
+    fill('wrong');
+    await check();
+    const reset = screen.getByRole('button', { name: 'Reset Progress' });
+    const openReset = clickHandler(reset);
+    await userEvent.click(reset);
+    const confirmReset = clickHandler(screen.getAllByRole('button', { name: 'Reset Progress' }).at(-1)!);
+    act(() => { confirmReset(); openReset(); confirmReset(); });
+    expectProgress(0, 0);
+    expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeDisabled();
+    expect(screen.queryByRole('heading', { name: 'Reset Progress' })).not.toBeInTheDocument();
+    expect(stored()).toMatchObject({ totalAttempts: 0, correctCount: 0, mistakes: [], queueIds: ['a', 'b'] });
+    fill('new unchecked draft');
+    const before = stored();
+    act(() => { openReset(); confirmReset(); });
+    expect(screen.queryByRole('heading', { name: 'Reset Progress' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('new unchecked draft');
+    expect(stored()).toEqual(before);
+  });
+
+  it('still cleans up after History saving and leaves another account untouched', async () => {
+    seed(vocabulary, { userId: 'user-b' });
+    const bCopy = localStorage.getItem(practiceSessionKey('user-b'));
+    const { save } = await start();
+    fill('ვაშლი');
+    await check();
+    const openReset = clickHandler(screen.getByRole('button', { name: 'Reset Progress' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Finish' }).at(-1)!);
+    await userEvent.click(await screen.findByRole('button', { name: 'Close & Save' }));
+    await screen.findByText('Result saved to History');
+    expect(save.insert).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ user_id: 'user-a', total_words: 1, correct_count: 1 }));
+    expectProgress(0, 0);
+    expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeDisabled();
+    expect(screen.queryByRole('heading', { name: 'Practice Summary' })).not.toBeInTheDocument();
+    expect(localStorage.getItem(practiceSessionKey('user-a'))).toBeNull();
+    act(() => openReset());
+    expect(screen.queryByRole('heading', { name: 'Reset Progress' })).not.toBeInTheDocument();
+    expect(localStorage.getItem(practiceSessionKey('user-a'))).toBeNull();
+    expect(localStorage.getItem(practiceSessionKey('user-b'))).toBe(bCopy);
+  });
+});
+
 describe('Practice scores each question presentation once', () => {
   it.each([false, true])('cannot reopen a wrong answer by editing it (re-guessing: %s)', async allowReguess => {
     await start({ session: { allowReguess } });
@@ -266,6 +385,11 @@ describe('Practice scores each question presentation once', () => {
     }
     const input = await screen.findByRole('textbox');
     const userId = restore === 'account' ? 'user-b' : 'user-a';
+    // Capture the restored checkpoint after persistence, so its asynchronous
+    // Next transition cannot be mistaken for a response to the held Enter.
+    await waitFor(() => expect(stored(userId)).toMatchObject(restore === 'account'
+      ? { userId, queueIds: ['b-private'], hasChecked: false, totalAttempts: 0, correctCount: 0, mistakes: [] }
+      : { ...JSON.parse(aCopy!), queueIds: ['b', 'a'], hasChecked: false }));
     const before = stored(userId);
     fill(restore === 'account' ? 'B meaning' : 'მსხალი');
     input.focus();
@@ -307,6 +431,7 @@ describe('Practice scores each question presentation once', () => {
       fill(answer);
       await check();
       expectProgress(index, index + 1);
+      expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeEnabled();
       await next();
     }
     await screen.findByRole('heading', { name: 'Practice Summary' });
@@ -502,7 +627,7 @@ describe('Practice scores each question presentation once', () => {
       view.rerender(<StrictMode><FreeMode /></StrictMode>);
     }
     await screen.findByRole('textbox');
-    expect(stored()).toEqual({ ...submitted, hasChecked: false, queueIds: allowReguess ? ['b', 'a'] : ['b'] });
+    await waitFor(() => expect(stored()).toEqual({ ...submitted, hasChecked: false, queueIds: allowReguess ? ['b', 'a'] : ['b'] }));
     expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false);
     fill('მსხალი');
     await check();
@@ -523,6 +648,7 @@ describe('Practice scores each question presentation once', () => {
     const aSubmit = clickHandler(screen.getByRole('button', { name: 'Check Answer' }));
     await check();
     const aCopy = localStorage.getItem(practiceSessionKey('user-a'));
+    const aReset = clickHandler(screen.getByRole('button', { name: 'Reset Progress' }));
     const bWord = word({ id: 'b-private', user_id: 'user-b', english_word: 'B word', georgian_definitions: ['B meaning'] });
     seed([bWord], { userId: 'user-b' });
     supabaseMock.from.mockImplementation(() => query({ data: authMock.user?.id === 'user-a' ? vocabulary : [bWord], error: null }));
@@ -530,6 +656,9 @@ describe('Practice scores each question presentation once', () => {
     view.rerender(<StrictMode><FreeMode /></StrictMode>);
     await screen.findByRole('textbox');
     expect(stored('user-b')).toMatchObject({ totalAttempts: 0, hasChecked: false });
+    expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeDisabled();
+    act(() => aReset());
+    expect(screen.queryByRole('heading', { name: 'Reset Progress' })).not.toBeInTheDocument();
     fill('B meaning');
     await check();
     act(() => aSubmit());
@@ -539,7 +668,12 @@ describe('Practice scores each question presentation once', () => {
     authMock.user = { id: 'user-a' };
     view.rerender(<StrictMode><FreeMode /></StrictMode>);
     await screen.findByRole('textbox');
-    expect(stored()).toMatchObject({ queueIds: ['b', 'a'], totalAttempts: 1, correctCount: 0, unresolvedWordIds: ['a'] });
+    expect(screen.getByText('pear')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveProperty('readOnly', false);
+    // The restored UI can commit before vocabulary reconciliation allows the
+    // persistence effect to write its checkpoint. Wait for that observable write.
+    await waitFor(() => expect(stored()).toEqual({ ...JSON.parse(aCopy!), queueIds: ['b', 'a'], hasChecked: false }));
+    expect(screen.getByRole('button', { name: 'Reset Progress' })).toBeEnabled();
     fill('მსხალი');
     await check();
     expect(stored()).toMatchObject({ totalAttempts: 2, correctCount: 1 });

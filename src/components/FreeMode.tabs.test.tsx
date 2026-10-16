@@ -102,7 +102,7 @@ it('checkpoints the latest order/scores before takeover and rejects stale Check,
   await takeover(b);
   await b.ui.findByRole('textbox');
   expect(a.ui.queryByRole('textbox')).not.toBeInTheDocument();
-  expect(stored()).toEqual({ ...before, hasChecked: false, queueIds: [...before.queueIds.slice(1), 'a'] });
+  await waitFor(() => expect(stored()).toEqual({ ...before, hasChecked: false, queueIds: [...before.queueIds.slice(1), 'a'] }));
   const latest = localStorage.getItem(key);
   act(() => { check(); advance(); order(); direction(); reguess(); reset(); });
   expect(localStorage.getItem(key)).toBe(latest);

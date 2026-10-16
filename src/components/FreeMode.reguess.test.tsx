@@ -145,7 +145,7 @@ describe('Practice unresolved wrong-answer retries', () => {
       totalAttempts: 3, correctCount: 1, attemptedWordIds: ['a', 'c'], mistakes: [mistake('a'), mistake('c')] });
     render(<StrictMode><FreeMode /></StrictMode>);
     expect(await screen.findByRole('textbox')).toHaveValue('');
-    expect(stored()).toMatchObject({ queueIds: expected, totalAttempts: 3, correctCount: 1, hasChecked: false });
+    await waitFor(() => expect(stored()).toMatchObject({ queueIds: expected, totalAttempts: 3, correctCount: 1, hasChecked: false }));
     await toggle();
     if (allowReguess) await toggle();
     expect(stored().queueIds).toEqual(unresolvedWordIds?.includes('a') ? ['b', 'a'] : ['b']);
@@ -227,7 +227,7 @@ describe('Practice unresolved wrong-answer retries', () => {
       attemptedWordIds: ['a'], totalAttempts: 1, mistakes: [mistake('a')] });
     render(<StrictMode><FreeMode /></StrictMode>);
     await screen.findByRole('textbox');
-    expect(stored().queueIds).toEqual(['b', 'a', 'c']);
+    await waitFor(() => expect(stored().queueIds).toEqual(['b', 'a', 'c']));
     await toggle();
     expect(stored().queueIds).toEqual(['b', 'a', 'c']);
     await answer('meaning b');
