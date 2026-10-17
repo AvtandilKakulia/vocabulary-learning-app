@@ -75,7 +75,7 @@ describe('Practice ordering preserves the session', () => {
     await order('In database order');
     expect(stored().queueIds).toEqual(['d', 'a', 'b', 'c']);
     expect(screen.getByRole('textbox')).toHaveValue('draft d');
-    expect(read.select).toHaveBeenCalledWith('*');
+    expect(read.select).toHaveBeenCalledWith('*', { count: 'exact' });
     expect(read.eq).toHaveBeenCalledWith('user_id', 'user-a');
     expect(read.order.mock.calls).toEqual([['created_at', { ascending: true }], ['id', { ascending: true }]]);
   });
