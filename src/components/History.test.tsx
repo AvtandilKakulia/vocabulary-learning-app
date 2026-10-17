@@ -27,6 +27,8 @@ function rowAction(record: TestHistory, icon: 'trash-2' | 'square' | 'chevron-do
   return button!;
 }
 
+const deletedRows = (ids: string[]) => query({ data: ids.map(id => ({ id })), error: null });
+
 describe('History', () => {
   it('loads only the current user and renders saved prompts, legacy fallback, sanitized context, and answers', async () => {
     const record = historyRecord({ mistakes: [
@@ -80,20 +82,21 @@ describe('History', () => {
     const records = [historyRecord(), historyRecord({ id: 'history-2', test_date: '2026-01-02T10:00:00Z' }),
       historyRecord({ id: 'unselected', test_date: '2026-01-03T10:00:00Z' })];
     const { user } = await loadHistory(records);
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
     await user.click(rowAction(records[0], 'square'));
     await user.click(rowAction(records[1], 'square'));
-    const deletion = query({ error: fails ? { message: 'Offline' } : null });
+    const deletion = query({ data: fails ? null : records.slice(0, 2).map(({ id }) => ({ id })), error: fails ? { message: 'Offline' } : null });
     supabaseMock.from.mockReturnValueOnce(deletion)
-      .mockReturnValue(query({ data: [records[2]], error: null }));
+      .mockReturnValue(query({ data: fails ? records : [records[2]], error: null }));
     await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
     await user.click(screen.getByRole('button', { name: 'Delete 2 Records' }));
     expect(deletion.delete).toHaveBeenCalledOnce();
     expect(deletion.in).toHaveBeenCalledWith('id', ['history-1', 'history-2']);
     expect(deletion.eq.mock.calls).toEqual([['user_id', 'user-a']]);
     if (fails) {
-      expect(alert).toHaveBeenCalledExactlyOnceWith('Error deleting records: Offline');
-      expect(screen.getByRole('heading', { name: 'Delete 2 Records' })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 remain.'));
+      expect(screen.getByRole('status')).toHaveTextContent('Deletion stopped');
+      expect(screen.getByRole('status')).toHaveTextContent('The request may have reached the server.');
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
       expect(screen.getByText(new Date(records[0].test_date).toLocaleString())).toBeInTheDocument();
     } else {
@@ -106,7 +109,7 @@ describe('History', () => {
 
   it('replaces Clear All with selection and mandatory owner-scoped bulk confirmation', async () => {
     const { user } = await loadHistory([historyRecord()]);
-    const deletion = query();
+    const deletion = deletedRows(['history-1']);
     supabaseMock.from.mockReturnValueOnce(deletion)
       .mockReturnValue(query({ data: [], error: null }));
     expect(screen.queryByRole('button', { name: 'Clear All' })).not.toBeInTheDocument();
@@ -436,7 +439,7 @@ describe('History bulk selection safety', () => {
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
       expect(screen.queryByText(/^2 of \d+ visible records selected$/)).not.toBeInTheDocument();
-      const deletion = query();
+      const deletion = deletedRows(['geo-high']);
       supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
       await user.click(rowAction(variedRecords[3], 'square'));
       await user.click(screen.getByRole('button', { name: 'Delete Selected (1)' }));
@@ -457,7 +460,7 @@ describe('History bulk selection safety', () => {
     expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
     expect(load.delete).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Select All' }));
-    const deletion = query();
+    const deletion = deletedRows(['en-high', 'en-medium']);
     supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [variedRecords[1], variedRecords[3]], error: null }));
     await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
     const dialog = screen.getByRole('alertdialog');
@@ -479,7 +482,7 @@ describe('History bulk selection safety', () => {
     expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deselect All' })).toBeInTheDocument();
     expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 2 Records');
-    const deletion = query();
+    const deletion = deletedRows(['en-high', 'en-medium']);
     supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
     await user.click(screen.getByRole('button', { name: 'Delete 2 Records' }));
     expect(deletion.in).toHaveBeenCalledExactlyOnceWith('id', ['en-high', 'en-medium']);
@@ -496,7 +499,7 @@ describe('History bulk selection safety', () => {
     expect(screen.getByText(/^1 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Deselect All' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Select All' }));
-    const deletion = query();
+    const deletion = deletedRows(['en-high', 'en-medium']);
     supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
     await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
     await user.click(screen.getByRole('button', { name: 'Delete 2 Records' }));
@@ -514,7 +517,7 @@ describe('History bulk selection safety', () => {
     supabaseMock.from.mockReturnValue(query({ data: refreshed, error: null }));
     await user.selectOptions(control(2), 'score');
     await finishReload();
-    const deletion = query();
+    const deletion = deletedRows(['en-medium']);
     supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
     if (change === 'empty') {
       expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
@@ -545,7 +548,7 @@ describe('History bulk selection safety', () => {
     expect(load.delete).not.toHaveBeenCalled();
     if (change === 'add') {
       expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
-      const deletion = query();
+      const deletion = deletedRows(['en-high', 'en-medium']);
       supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));
       await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
       await user.click(screen.getByRole('button', { name: 'Delete 2 Records' }));
@@ -557,7 +560,6 @@ describe('History bulk selection safety', () => {
 
   it.each(['returned', 'thrown'] as const)('preserves safe selection on a %s error, guards rapid retry, and clears only selected records on success', async failureKind => {
     const { user } = await loadHistory(variedRecords);
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
     await user.click(rowAction(variedRecords[0], 'square'));
     await user.click(rowAction(variedRecords[2], 'square'));
     const failed = query({ error: { message: 'Offline' } });
@@ -565,13 +567,18 @@ describe('History bulk selection safety', () => {
     const pending = deferred<QueryResult>();
     const retry = query(pending.promise);
     const remaining = [variedRecords[1], variedRecords[3]];
-    supabaseMock.from.mockReturnValueOnce(failed).mockReturnValueOnce(retry)
+    supabaseMock.from.mockReturnValueOnce(failed)
+      .mockReturnValueOnce(query({ data: variedRecords, error: null })).mockReturnValueOnce(retry)
       .mockReturnValue(query({ data: remaining, error: null }));
     await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
     await user.click(screen.getByRole('button', { name: 'Delete 2 Records' }));
-    expect(alert).toHaveBeenCalledExactlyOnceWith('Error deleting records: Offline');
-    expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 2 Records');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 remain.'));
+    expect(screen.getByRole('status')).toHaveTextContent('Deletion stopped');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
+    expect(retry.delete).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 2 Records');
     const confirm = screen.getByRole('button', { name: 'Delete 2 Records' });
     act(() => { fireEvent.click(confirm); fireEvent.click(confirm); });
     expect(retry.delete).toHaveBeenCalledOnce();
@@ -581,7 +588,7 @@ describe('History bulk selection safety', () => {
     expect(control(0)).toBeDisabled();
     fireEvent.change(control(0), { target: { value: 'geo-to-en' } });
     expect(control(0)).toHaveValue('all');
-    await act(async () => { pending.resolve({ error: null }); });
+    await act(async () => { pending.resolve({ data: [{ id: 'en-high' }, { id: 'en-medium' }], error: null }); });
     await finishReload();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();

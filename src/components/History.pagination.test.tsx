@@ -50,8 +50,9 @@ function server(rows: TestHistory[], maxRows = 1000) {
       then: <T, U>(resolve?: (value: QueryResult) => T, reject?: (reason: unknown) => U) => {
         if (deleting) {
           state.deletions.push({ userId: read.userId, ids });
+          const deleted = state.rows.filter(row => row.user_id === read.userId && ids.includes(row.id)).map(row => ({ id: row.id }));
           if (!state.deleteError) state.rows = state.rows.filter(row => row.user_id !== read.userId || !ids.includes(row.id));
-          return Promise.resolve({ error: state.deleteError }).then(resolve, reject);
+          return Promise.resolve({ data: state.deleteError ? null : deleted, error: state.deleteError }).then(resolve, reject);
         }
         state.reads.push(read);
         const authorized = state.rows.filter(row => row.user_id === read.userId).sort((a, b) => {
@@ -428,12 +429,14 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     fireEvent.click(toolbar().getByRole('button', { name: 'Delete Selected (501)' }));
     expect(api.deletions).toEqual([]);
     fireEvent.click(confirmation().getByRole('button', { name: 'Delete 501 Records' }));
-    await waitFor(() => expect(window.alert).toHaveBeenCalledExactlyOnceWith('Error deleting records: 414 URI Too Long'));
-    expect(api.deletions).toEqual([{ userId: 'user-a', ids: [...rows].reverse().map(row => row.id) }]);
+    await waitFor(() => expect(document.body.textContent).toContain('501 remain.'));
+    expect(document.body.textContent).toContain('Deletion stopped');
+    expect(document.body.textContent).toContain('The request may have reached the server.');
+    expect(api.deletions).toEqual([{ userId: 'user-a', ids: [...rows].reverse().slice(0, 100).map(row => row.id) }]);
     expect(api.rows).toEqual(rows);
     expectStats(rows);
-    expect(document.querySelector('[role="alertdialog"]')).toHaveAccessibleName('Delete 501 Records');
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(toolbar().getByText('501 of 501 visible records selected')).toBeInTheDocument();
-    expect(api.reads).toHaveLength(2);
+    expect(api.reads).toHaveLength(4);
   });
 });
