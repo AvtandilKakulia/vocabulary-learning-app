@@ -14,12 +14,13 @@ const { build } = require(require.resolve('esbuild', { paths: [require.resolve('
 await mkdir(resolve('tmp'), { recursive: true });
 const folder = await mkdtemp(resolve('tmp/practice-tabs-'));
 const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
-  import React, { StrictMode } from 'react';
+  import React, { StrictMode, Profiler } from 'react';
   import { createRoot } from 'react-dom/client';
   import { flushSync } from 'react-dom';
   import FreeMode from './src/components/FreeMode';
   import { coordinatePractice } from './src/lib/practiceOwnership';
   import { persistPracticeSession } from './src/lib/practiceSessions';
+  import { findPracticeSave } from './src/lib/practiceSaves';
   const options = new URLSearchParams(location.search);
   if (options.has('unsupported')) Object.defineProperty(navigator, 'locks', {value: undefined});
   if (options.has('no-channel')) window.BroadcastChannel = undefined;
@@ -42,6 +43,8 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', 
     created_at: '2026-01-0'+(i+1)+'T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z'}));
   window.fetch = () => { throw new Error('Network forbidden in Practice fixture'); };
   window.inserts = []; window.holdSave = false;
+  window.wordReleases = [];
+  window.latestSave = () => window.inserts[0] && findPracticeSave(window.inserts[0]);
   window.snapshot = () => JSON.parse(localStorage.getItem('vocab_practice_session_state_v2:'+window.account));
   window.startCoordination = () => { window.controller = coordinatePractice(window.account, state => { window.ownership = state; }); };
   window.checkpoint = () => persistPracticeSession(window.snapshot(), window.ownership.owner, true);
@@ -49,10 +52,25 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', 
     userId: window.account, queueIds: ['a','b','c','d'], direction:'en-to-geo', orderMode:'db-order', allowReguess:true,
     totalAttempts:0, correctCount:0, mistakes:[], attemptedWordIds:[], unresolvedWordIds:[], hasChecked:false, completed:false, ...extra}));
   const root = createRoot(document.getElementById('root'));
-  window.mount = () => flushSync(() => root.render(<StrictMode><FreeMode /></StrictMode>));
+  window.mount = () => flushSync(() => root.render(<StrictMode><Profiler id="practice" onRender={() => window.afterRender?.()}><FreeMode /></Profiler></StrictMode>));
   window.leave = () => flushSync(() => root.render(<div>Words</div>));
   if (!options.has('idle')) window.mount();
 ` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"development"' },
+  banner: { js: `
+    // Control only React's host-task scheduling. Native locks/channel delivery
+    // remain real, so a save can finish while committed passive effects wait.
+    window.reactTasks=[]; window.pauseReactTasks=false; window.clockOffset=0;
+    const nativeNow=performance.now.bind(performance); performance.now=()=>nativeNow()+window.clockOffset;
+    const NativeMessageChannel=window.MessageChannel;
+    window.MessageChannel=class {
+      constructor(){const channel=new NativeMessageChannel();this.port2=channel.port2;
+        this.port1={set onmessage(fn){channel.port1.onmessage=event=>{
+          const task=()=>fn(event); if(window.pauseReactTasks)window.reactTasks.push(task);else task();
+        }}};
+      }
+    };
+    window.resumeReact=()=>{window.pauseReactTasks=false;window.reactTasks.splice(0).forEach(task=>task())};
+  ` },
   plugins: [{ name: 'isolated-boundaries', setup(b) {
     b.onResolve({ filter: /(?:^|\/)supabase$/ }, () => ({ path: 'supabase', namespace: 'fixture' }));
     b.onResolve({ filter: /contexts\/AuthContext$/ }, () => ({ path: 'auth', namespace: 'fixture' }));
@@ -79,7 +97,12 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', 
             const rows = table==='words' ? window.words.filter(word=>word.user_id===userId)
               .sort((a,b)=>{for(const key of orders){if(a[key]!==b[key])return a[key]<b[key]?-1:1}return 0})
               : [JSON.parse(localStorage.getItem('fixture-history:'+id))];
-            return Promise.resolve({data:rows.slice(from,Math.min(to+1,from+1000)),count:count==='exact'?rows.length:null,error:null}).then(resolve)
+            const response = {data:rows.slice(from,Math.min(to+1,from+1000)),count:count==='exact'?rows.length:null,error:null};
+            if (table==='words' && window.holdWords) return new Promise(done => {
+              window.wordReleases.push(()=>done(response));
+              window.finishWords=()=>{window.holdWords=false;window.wordReleases.splice(0).forEach(release=>release())};
+            }).then(resolve);
+            return Promise.resolve(response).then(resolve)
           }
         };
       }};` }));
@@ -204,6 +227,57 @@ try {
   assert.deepEqual(await d.evaluate('window.inserts[0]'), result);
   assert.equal(await state(d), null); checks++;
   await close(c); await close(d);
+
+  for (const scenario of [{ commit: 1 }, { commit: 2 }, { commit: 2, handoff: true }]) {
+    const { commit, handoff } = scenario;
+    const first = await page('?idle');
+    await first.evaluate("window.seed({queueIds:['a'],attemptedWordIds:['b','c','d']}); window.mount()");
+    await answer(first, 'meaning a'); await click(first, 'Finish Practice');
+    await first.evaluate('window.holdSave=true'); await click(first, 'Close & Save');
+    await until(() => first.evaluate('window.inserts.length===1'));
+    const second = await page('?idle');
+    await second.evaluate('window.holdWords=true; window.holdSave=true; window.mount()');
+    await takeover(second);
+    await until(async () => (await text(second)).includes('Retry Save'));
+    await click(second, 'Retry Save');
+    await first.evaluate('window.finishSave()');
+    await until(() => second.evaluate('typeof window.finishSave === "function"'));
+    await second.evaluate(`window.commits=0; window.afterRender=()=>{
+      if (document.body.textContent.includes('Total words in dictionary: 4') && ++window.commits===${commit}) {
+        window.pauseReactTasks=true; window.clockOffset+=100; window.finishSave();
+      }
+    }; window.finishWords()`);
+    await until(() => second.evaluate('window.reactTasks.length > 0 && window.latestSave()?.status === "saved"'));
+    // The server-confirmed result is already removed while the old effects wait.
+    assert.equal(await state(second), null);
+    const payload = await first.evaluate('window.inserts[0]');
+    assert.deepEqual(await second.evaluate('window.inserts'), [payload]);
+    let third;
+    if (handoff) {
+      third = await page(); await takeover(third);
+    }
+    await second.evaluate('window.resumeReact()');
+    if (third) {
+      await ready(third);
+      assert.deepEqual(await state(third), {userId:'user-a',queueIds:['a','b','c','d'],direction:'en-to-geo',orderMode:'db-order',allowReguess:true,
+        correctCount:0,totalAttempts:0,mistakes:[],attemptedWordIds:[],unresolvedWordIds:[],hasChecked:false,completed:false});
+      assert.equal(await third.evaluate('window.inserts.length'), 0);
+      await close(third);
+    } else {
+      await until(async () => (await text(second)).includes('Result saved to History'));
+      assert.equal(await state(second), null);
+      assert.doesNotMatch(await text(second), /Practice Summary/);
+      await second.evaluate('document.querySelector("input").focus()');
+      await second.call('Input.insertText', { text: 'new draft' });
+      assert.equal(await state(second), null); // Later interaction must not resurrect it.
+      await second.evaluate('window.leave(); window.mount()');
+      await ready(second);
+      assert.doesNotMatch(await text(second), /Practice Summary/);
+      assert.equal((await state(second)).completed, false);
+    }
+    console.log('Save cleanup scheduling check passed:', { commit, handoff: !!handoff });
+    await close(first); await close(second); checks++;
+  }
 
   // Crash/closure after the mocked server committed but before its response.
   const e = await page('?idle');
