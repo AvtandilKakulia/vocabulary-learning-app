@@ -7,6 +7,8 @@ import { useLatestRequest } from '../hooks/useLatestRequest';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import { Trash2, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 
+const HISTORY_BATCH_SIZE = 500;
+
 interface BulkConfirmation {
   ids: string[];
   userId: string;
@@ -49,16 +51,46 @@ export default function History() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('test_history')
-        .select('*')
-        .eq('user_id', userId)
-        .order('test_date', { ascending: false });
+      const records: TestHistory[] = [];
+      const seenIds = new Set<string>();
+      let expectedCount: number | undefined;
 
-      if (!isCurrent()) return;
-      if (error) throw error;
+      // A short page may reflect a server cap below our batch size. Advance by
+      // actual rows and use the authorized count, rather than page length, to finish.
+      do {
+        if (!isCurrent()) return;
+        const offset = records.length;
+        const { data, error, count } = await supabase
+          .from('test_history')
+          .select('*', offset === 0 ? { count: 'exact' } : {})
+          .eq('user_id', userId)
+          .order('test_date', { ascending: false })
+          .order('id', { ascending: false })
+          .range(offset, offset + HISTORY_BATCH_SIZE - 1);
+
+        if (!isCurrent()) return;
+        if (error) throw error;
+        if (expectedCount === undefined) {
+          if (count === null || !Number.isSafeInteger(count) || count < 0) {
+            throw new Error('Invalid history count');
+          }
+          expectedCount = count;
+        }
+        if (!Array.isArray(data) || data.length > HISTORY_BATCH_SIZE ||
+            offset + data.length > expectedCount || (data.length === 0 && offset < expectedCount)) {
+          throw new Error('Incomplete history response');
+        }
+        for (const record of data as TestHistory[]) {
+          if (!record || typeof record.id !== 'string' || !record.id || record.user_id !== userId || seenIds.has(record.id)) {
+            throw new Error('Invalid or overlapping history records');
+          }
+          seenIds.add(record.id);
+          records.push(record);
+        }
+      } while (records.length < expectedCount);
+
       readFailedRef.current = false;
-      setHistory(data || []);
+      setHistory(records);
     } catch (error: any) {
       if (!isCurrent()) return;
       console.error('Error loading history:', error);
