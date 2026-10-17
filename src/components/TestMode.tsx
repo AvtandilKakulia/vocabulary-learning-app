@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase, Word, TestHistory, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLatestRequest } from '../hooks/useLatestRequest';
 import { Check, X, RotateCcw, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import {
@@ -13,6 +14,8 @@ import {
 type HistorySaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 type TestDirection = TestHistory['test_direction'];
 type InputType = 'multiple' | 'text';
+
+const WORD_BATCH_SIZE = 500;
 
 interface TestSession {
   userId: string;
@@ -110,6 +113,7 @@ function AccountTestMode({ userId }: { userId: string }) {
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const mounted = useRef(true);
   const starting = useRef(false);
+  const beginVocabularyRead = useLatestRequest(userId);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
@@ -141,19 +145,46 @@ function AccountTestMode({ userId }: { userId: string }) {
 
   async function startTest() {
     if (testSessionRef.current || starting.current) return;
+    const isCurrent = beginVocabularyRead();
+    if (!isCurrent) return;
 
     starting.current = true;
     setLoading(true);
     try {
-      const { data: allWords, error } = await supabase
-        .from('words')
-        .select('*')
-        .eq('user_id', userId);
+      const allWords: Word[] = [];
+      const seenIds = new Set<string>();
+      let expectedCount: number | undefined;
+      do {
+        if (!isCurrent()) return;
+        const offset = allWords.length;
+        const { data, error, count } = await supabase.from('words')
+          .select('*', offset === 0 ? { count: 'exact' } : {})
+          .eq('user_id', userId)
+          .order('created_at', { ascending: true }).order('id', { ascending: true })
+          .range(offset, offset + WORD_BATCH_SIZE - 1);
+        if (!isCurrent()) return;
+        if (error) throw error;
+        if (expectedCount === undefined) {
+          if (count === null || !Number.isSafeInteger(count) || count < 0) {
+            throw new Error('Unable to determine the complete vocabulary size. Please try again.');
+          }
+          expectedCount = count;
+        }
+        // Count bounds the read. Advance by rows actually received even when
+        // the server's cap is lower than our batch size; a short page isn't EOF.
+        if (!Array.isArray(data) || data.length > WORD_BATCH_SIZE || offset + data.length > expectedCount ||
+            (data.length === 0 && offset < expectedCount)) {
+          throw new Error('Vocabulary changed or returned an incomplete page. Please try again.');
+        }
+        for (const word of data as Word[]) {
+          if (seenIds.has(word.id)) throw new Error('Vocabulary pages overlapped. Please try again.');
+          seenIds.add(word.id);
+          allWords.push(word);
+        }
+      } while (allWords.length < expectedCount);
 
-      if (!mounted.current) return;
-      if (error) throw error;
-
-      if (!allWords || allWords.length === 0) {
+      // Never create or persist a test from a partial vocabulary.
+      if (allWords.length === 0) {
         alert('No words available. Add some words first!');
         return;
       }
@@ -200,11 +231,14 @@ function AccountTestMode({ userId }: { userId: string }) {
 
       setStage('testing');
     } catch (err: any) {
+      if (!isCurrent()) return;
       console.error('Error starting test:', err);
       alert('Error starting test: ' + err.message);
     } finally {
-      starting.current = false;
-      setLoading(false);
+      if (isCurrent()) {
+        starting.current = false;
+        setLoading(false);
+      }
     }
   }
 
