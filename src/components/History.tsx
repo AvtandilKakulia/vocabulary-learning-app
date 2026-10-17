@@ -1,19 +1,39 @@
 // --- CODE BLOCK START ---
 
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
 import { supabase, TestHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLatestRequest } from '../hooks/useLatestRequest';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
+import { beginHistoryDeletion, getHistoryDeletionState, subscribeHistoryDeletion } from '../lib/historyDeletion';
 import { Trash2, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 
 const HISTORY_BATCH_SIZE = 500;
+// 100 UUIDs keep the encoded filter near 4 KB, well below the previous 19 KB
+// request for 500 IDs. Never send a second batch before the first has settled.
+const DELETE_BATCH_SIZE = 100;
 
 interface BulkConfirmation {
   ids: string[];
   userId: string;
   direction: string;
   score: string;
+}
+
+interface BulkOutcome {
+  userId: string;
+  ids: string[];
+  stopped: boolean;
+  remaining: string[] | null;
+}
+
+interface SelectionView {
+  userId: string | undefined;
+  direction: string;
+  score: string;
+  loading: boolean;
+  selected: Set<string>;
+  visible: Set<string>;
 }
 
 export default function History() {
@@ -31,18 +51,37 @@ export default function History() {
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [bulkConfirmation, setBulkConfirmation] = useState<BulkConfirmation | null>(null);
   const bulkConfirmationRef = useRef<BulkConfirmation | null>(null);
-  const bulkDeletingRef = useRef(false);
-  const [deleting, setDeleting] = useState(false);
+  const [bulkOutcome, setBulkOutcome] = useState<BulkOutcome | null>(null);
+  const bulkOutcomeRef = useRef<BulkOutcome | null>(null);
+  const selectionView = useRef<SelectionView | null>(null);
   const userId = user?.id;
+  const deletionState = useSyncExternalStore(subscribeHistoryDeletion, () => getHistoryDeletionState(userId));
+  const deleting = deletionState.busy;
+  const deletionVersion = deletionState.version;
+  const loadedDeletionVersion = useRef<number | null>(null);
+  const startedRead = useRef<(() => Promise<void>) | null>(null);
+  useLayoutEffect(() => () => { startedRead.current = null; }, []);
+  const beginMutation = useLatestRequest(userId);
   const beginRead = useLatestRequest(JSON.stringify([userId, sortBy, sortOrder]));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setHistory([]);
+    setLoading(true);
+    setReadError(null);
+    setSelectedIds(new Set());
+    bulkConfirmationRef.current = null;
+    setBulkConfirmation(null);
+    bulkOutcomeRef.current = null;
+    setBulkOutcome(null);
+    setShowDeleteModal(null);
+    loadedDeletionVersion.current = null;
   }, [userId]);
 
   const loadHistoryForContext = useCallback(async () => {
-    const isCurrent = beginRead();
-    if (!isCurrent) return;
+    if (getHistoryDeletionState(userId).busy) return;
+    const isLatest = beginRead();
+    if (!isLatest) return;
+    const isCurrent = () => isLatest() && getHistoryDeletionState(userId).version === deletionVersion;
     setReadError(null);
     if (!userId) {
       setLoading(false);
@@ -90,7 +129,18 @@ export default function History() {
       } while (records.length < expectedCount);
 
       readFailedRef.current = false;
+      loadedDeletionVersion.current = deletionVersion;
       setHistory(records);
+      const outcome = bulkOutcomeRef.current;
+      if (outcome?.userId === userId && outcome.remaining === null) {
+        const present = new Set(records.map(record => record.id));
+        const verified = { ...outcome, remaining: outcome.ids.filter(id => present.has(id)) };
+        bulkOutcomeRef.current = verified;
+        setBulkOutcome(verified);
+        // Retain only the original confirmed IDs still authorized by this read.
+        // A retry requires a fresh click and confirmation; new rows never join it.
+        setSelectedIds(new Set(verified.remaining));
+      }
     } catch (error: any) {
       if (!isCurrent()) return;
       console.error('Error loading history:', error);
@@ -104,10 +154,10 @@ export default function History() {
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [beginRead, userId]);
+  }, [beginRead, userId, deletionVersion]);
 
-  // Deletion may settle after the read context changes; refresh its owner's
-  // current view, without allowing an old account's callback to start a read.
+  // Retry uses the latest committed read context without allowing an old
+  // account's callback to start a read for the current account.
   const latestRead = useRef({ userId, load: loadHistoryForContext });
   useLayoutEffect(() => {
     latestRead.current = { userId, load: loadHistoryForContext };
@@ -117,11 +167,13 @@ export default function History() {
   }, [userId]);
 
   useEffect(() => {
+    if (deleting || startedRead.current === loadHistoryForContext) return;
+    startedRead.current = loadHistoryForContext;
     void loadHistoryForContext();
-  }, [loadHistoryForContext]);
+  }, [loadHistoryForContext, deleting]);
 
   function toggleSelect(id: string) {
-    if (bulkDeletingRef.current || !visibleIds.has(id)) return;
+    if (getHistoryDeletionState(userId).busy || !visibleIds.has(id)) return;
     const newSelected = new Set(eligibleIds);
     if (newSelected.has(id)) {
       newSelected.delete(id);
@@ -142,22 +194,30 @@ export default function History() {
   }
 
   function changeSelection(ids: Set<string>) {
-    if (bulkDeletingRef.current) return;
+    if (getHistoryDeletionState(userId).busy) return;
     closeBulkConfirmation();
     setSelectedIds(ids);
   }
 
   function confirmBulkDelete() {
-    if (!user || readFailedRef.current || loading || deleting || bulkDeletingRef.current || eligibleIds.length === 0) return;
-    const confirmation = { ids: [...eligibleIds], userId: user.id, direction: filterDirection, score: filterScore };
+    const view = selectionView.current;
+    if (!user || !view || view.userId !== user.id || readFailedRef.current || view.loading || getHistoryDeletionState(userId).busy ||
+        loadedDeletionVersion.current !== getHistoryDeletionState(userId).version) return;
+    const ids = [...view.selected].filter(id => view.visible.has(id));
+    if (ids.length === 0) return;
+    const confirmation = { ids, userId: user.id, direction: view.direction, score: view.score };
     bulkConfirmationRef.current = confirmation;
     setBulkConfirmation(confirmation);
   }
 
   async function deleteHistory(id: string) {
-    if (!user || readFailedRef.current) return;
+    if (!user || readFailedRef.current || getHistoryDeletionState(userId).busy) return;
+    const isCurrent = beginMutation();
+    if (!isCurrent) return;
+    const release = beginHistoryDeletion(user.id);
+    if (!release) return;
 
-    setDeleting(true);
+    let deleted = false;
     try {
       const { error } = await supabase
         .from('test_history')
@@ -165,6 +225,8 @@ export default function History() {
         .eq('id', id)
         .eq('user_id', user.id);
 
+      deleted = !error;
+      if (!isCurrent()) return;
       if (error) throw error;
 
       setShowDeleteModal(null);
@@ -173,47 +235,66 @@ export default function History() {
         s.delete(id);
         return s;
       });
-      loadHistory();
     } catch (error: any) {
-      alert('Error deleting record: ' + error.message);
+      if (isCurrent()) alert('Error deleting record: ' + error.message);
     } finally {
-      setDeleting(false);
+      release(deleted);
     }
   }
 
-  async function bulkDeleteHistory() {
-    const confirmation = bulkConfirmationRef.current;
-    if (!user || readFailedRef.current || !confirmation || loading || deleting || bulkDeletingRef.current) return;
-    if (confirmation.userId !== user.id || confirmation.direction !== filterDirection || confirmation.score !== filterScore) {
+  async function bulkDeleteHistory(confirmation: BulkConfirmation) {
+    const view = selectionView.current;
+    if (!user || !view || view.userId !== user.id || readFailedRef.current || bulkConfirmationRef.current !== confirmation || view.loading ||
+        getHistoryDeletionState(userId).busy || loadedDeletionVersion.current !== getHistoryDeletionState(userId).version) return;
+    if (confirmation.userId !== user.id || confirmation.direction !== view.direction || confirmation.score !== view.score) {
       closeBulkConfirmation();
       return;
     }
     // Never expand the confirmed scope. Recheck selection AND visibility at send time.
-    const ids = confirmation.ids.filter(id => selectedIds.has(id) && visibleIds.has(id));
+    const ids = confirmation.ids.filter(id => view.selected.has(id) && view.visible.has(id));
     if (ids.length === 0) {
       closeBulkConfirmation();
       return;
     }
 
-    bulkDeletingRef.current = true;
-    setDeleting(true);
+    const isCurrent = beginMutation();
+    if (!isCurrent) return;
+    const release = beginHistoryDeletion(user.id);
+    if (!release) return;
+    beginRead(); // Supersede any pre-mutation response before it can publish stale rows.
+    // Consume this confirmation synchronously; queued/stale callbacks cannot retry.
+    bulkConfirmationRef.current = null;
+    bulkOutcomeRef.current = null;
+    setBulkOutcome(null);
+    let stopped = false;
     try {
-      const { error } = await supabase
-        .from('test_history')
-        .delete()
-        .in('id', ids)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      setSelectedIds(new Set());
-      closeBulkConfirmation();
-      loadHistory();
-    } catch (error: any) {
-      alert('Error deleting records: ' + error.message);
+      for (let offset = 0; offset < ids.length; offset += DELETE_BATCH_SIZE) {
+        if (!isCurrent()) return;
+        const batch = ids.slice(offset, offset + DELETE_BATCH_SIZE);
+        const { data, error } = await supabase.from('test_history').delete()
+          .in('id', batch).eq('user_id', user.id).select('id');
+        if (!isCurrent()) return;
+        if (error) throw error;
+        // A successful HTTP response alone does not prove every requested row
+        // was deleted (RLS, missing rows, or a truncated/malformed response).
+        if (!Array.isArray(data) || data.length !== batch.length ||
+            new Set(data.map(row => row?.id)).size !== batch.length ||
+            data.some(row => !row || !batch.includes(row.id))) {
+          throw new Error('Could not verify the deleted batch');
+        }
+      }
+    } catch {
+      stopped = true; // A lost/error response cannot prove whether the server committed.
     } finally {
-      bulkDeletingRef.current = false;
-      setDeleting(false);
+      if (isCurrent()) {
+        const outcome = { userId: user.id, ids, stopped, remaining: null };
+        bulkOutcomeRef.current = outcome;
+        setBulkOutcome(outcome);
+        closeBulkConfirmation();
+      }
+      // Release invalidates reads and triggers one authoritative, paginated reload.
+      // No optimistic removal and no automatic retry of destructive requests.
+      release();
     }
   }
 
@@ -271,6 +352,10 @@ export default function History() {
   const eligibleIds = [...selectedIds].filter(id => visibleIds.has(id));
   const allSelected = filteredHistory.length > 0 && filteredHistory.every(record => selectedIds.has(record.id));
   const confirmedIds = bulkConfirmation?.ids.filter(id => selectedIds.has(id) && visibleIds.has(id)) ?? [];
+  useLayoutEffect(() => {
+    selectionView.current = { userId, direction: filterDirection, score: filterScore, loading, selected: selectedIds, visible: visibleIds };
+    return () => { selectionView.current = null; };
+  });
 
   return (
     <div className="space-y-8">
@@ -361,7 +446,7 @@ export default function History() {
               value={filterDirection}
               disabled={deleting}
               onChange={(e) => {
-                if (bulkDeletingRef.current) return;
+                if (getHistoryDeletionState(userId).busy) return;
                 changeSelection(new Set());
                 setFilterDirection(e.target.value as any);
               }}
@@ -381,7 +466,7 @@ export default function History() {
               value={filterScore}
               disabled={deleting}
               onChange={(e) => {
-                if (bulkDeletingRef.current) return;
+                if (getHistoryDeletionState(userId).busy) return;
                 changeSelection(new Set());
                 setFilterScore(e.target.value as any);
               }}
@@ -401,9 +486,7 @@ export default function History() {
             <select
               value={sortBy}
               disabled={deleting}
-              onChange={(e) =>
-                setSortBy(e.target.value as any)
-              }
+              onChange={(e) => { if (!getHistoryDeletionState(userId).busy) setSortBy(e.target.value as any); }}
               className="w-full px-4 py-3 rounded-xl border"
             >
               <option value="date">Date</option>
@@ -418,9 +501,7 @@ export default function History() {
             <select
               value={sortOrder}
               disabled={deleting}
-              onChange={(e) =>
-                setSortOrder(e.target.value as any)
-              }
+              onChange={(e) => { if (!getHistoryDeletionState(userId).busy) setSortOrder(e.target.value as any); }}
               className="w-full px-4 py-3 rounded-xl border"
             >
               <option value="desc">Newest First</option>
@@ -429,6 +510,21 @@ export default function History() {
           </div>
         </div>
       </div>
+
+      {bulkOutcome && bulkOutcome.userId === userId && (
+        <div role="status" aria-live="polite" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-100">
+          {bulkOutcome.stopped && <p>Deletion stopped after an unsuccessful request. The request may have reached the server.</p>}
+          {bulkOutcome.remaining === null ? (
+            <p>{readError
+              ? 'History could not be refreshed. Some records may have been deleted; the remaining records are unknown. Retry loading History before confirming another deletion.'
+              : 'Refreshing History to verify the outcome. Some records may already have been deleted.'}</p>
+          ) : bulkOutcome.remaining.length === 0 ? (
+            <p>History refreshed: all {bulkOutcome.ids.length} confirmed records are no longer in your History.</p>
+          ) : (
+            <p>History refreshed: {bulkOutcome.ids.length - bulkOutcome.remaining.length} of {bulkOutcome.ids.length} confirmed records are no longer in your History; {bulkOutcome.remaining.length} remain. Review the remaining selection and confirm Delete Selected to retry.</p>
+          )}
+        </div>
+      )}
 
       {/* HISTORY LIST */}
       <div className="bg-white/80 dark:bg-gray-800/80 rounded-3xl shadow-xl overflow-hidden">
@@ -516,7 +612,8 @@ export default function History() {
                       )}
 
                       <button
-                        onClick={() => setShowDeleteModal(record.id)}
+                        onClick={() => { if (!getHistoryDeletionState(userId).busy) setShowDeleteModal(record.id); }}
+                        disabled={deleting}
                         className="p-2 text-red-600"
                       >
                         <Trash2 size={18} />
@@ -658,7 +755,7 @@ export default function History() {
               </button>
 
               <button
-                onClick={bulkDeleteHistory}
+                onClick={() => { void bulkDeleteHistory(bulkConfirmation); }}
                 disabled={deleting || loading || confirmedIds.length === 0}
                 className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl"
               >
