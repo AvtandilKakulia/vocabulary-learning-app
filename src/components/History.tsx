@@ -62,7 +62,9 @@ export default function History() {
   const startedRead = useRef<(() => Promise<void>) | null>(null);
   useLayoutEffect(() => () => { startedRead.current = null; }, []);
   const beginMutation = useLatestRequest(userId);
-  const beginRead = useLatestRequest(JSON.stringify([userId, sortBy, sortOrder]));
+  // Sorting only presents the loaded collection; it must not restart or cancel
+  // an authoritative read. Account and deletion-version guards still apply.
+  const beginRead = useLatestRequest(userId);
 
   useLayoutEffect(() => {
     setHistory([]);

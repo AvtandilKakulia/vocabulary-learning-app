@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { authMock, deferred, supabaseMock, type QueryResult } from '../test/mocks';
 import { historyRecord } from '../test/fixtures';
 import type { TestHistory } from '../lib/supabase';
+import { beginHistoryDeletion } from '../lib/historyDeletion';
 import History from './History';
+
+function refreshAfterDeletion() {
+  act(() => { const release = beginHistoryDeletion('user-a'); expect(release).not.toBeNull(); release!(); });
+}
 
 const id = (index: number, userId = 'user-a') => `${userId}-${String(index).padStart(4, '0')}`;
 // Unique denominators make each rendered record identifiable even with tied dates.
@@ -175,6 +180,7 @@ describe('History loads the complete authorized collection', () => {
     await finishLoading();
     expect(renderedTotals()).toEqual([10, 20, 30]);
     expectStats(rows.slice(0, 3));
+    expect(api.reads).toHaveLength(3);
   });
 
   it('preserves saved prompts, descriptions, definitions and legacy mistakes beyond the first batch', async () => {
@@ -232,10 +238,15 @@ describe('History loads the complete authorized collection', () => {
     expectNoPartialHistory();
     expect(document.body.textContent).not.toContain('No results found.');
     expect(api.reads.map(read => read.from)).toEqual([0, 500]);
+    control(2, 'score');
+    control(3, 'asc');
+    expect(api.reads.map(read => read.from)).toEqual([0, 500]);
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     api.respond = (_read, response) => response;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await finishLoading();
-    expect(renderedTotals()).toEqual([...rows].reverse().map(row => row.total_words));
+    expect(renderedTotals()).toEqual([...rows].reverse().sort((a, b) =>
+      a.correct_count / a.total_words - b.correct_count / b.total_words).map(row => row.total_words));
     expectStats(rows);
     expect(api.reads.map(read => read.from)).toEqual([0, 500, 0, 500, 1000]);
     expect(api.deletions).toEqual([]);
@@ -273,8 +284,87 @@ describe('History loads the complete authorized collection', () => {
     });
 });
 
+describe('History sorting is presentation only', () => {
+  const sortCases = [100, 1001, 2001].flatMap(size =>
+    ['date', 'score'].flatMap(by => ['asc', 'desc'].map(order => ({ size, by, order }))));
+  const withDates = (size: number) => history(size).map((row, index) => ({ ...row,
+    test_date: new Date(Date.UTC(2026, 0, 1) + Math.floor(index / 7) * 1000).toISOString(),
+  }));
+  const expectedOrder = (rows: TestHistory[], by: string, order: string) => [...rows].reverse().sort((a, b) => {
+    const delta = by === 'date' ? Date.parse(a.test_date) - Date.parse(b.test_date)
+      : a.correct_count / a.total_words - b.correct_count / b.total_words;
+    return order === 'asc' ? delta : -delta;
+  }).map(row => row.total_words);
+
+  it.each(sortCases)('sorts $size records $by $order with stable ties and zero additional reads', async ({ size, by, order }) => {
+    const rows = withDates(size);
+    const api = server([...rows, ...history(3, 'user-b')]);
+    render(<History />);
+    await finishLoading();
+    const reads = api.reads.length;
+    // Also exercise a transition back to the default date/desc ordering.
+    if (by === 'date' && order === 'desc') control(3, 'asc');
+    act(() => { control(2, by); control(3, order); });
+    expect(document.body.textContent).not.toContain('Loading...');
+    expect(renderedTotals()).toEqual(expectedOrder(rows, by, order));
+    expectStats(rows);
+    await act(async () => {}); // Settle queued mock requests before asserting zero new reads.
+    expect(api.reads).toHaveLength(reads);
+    expect(reads).toBe(Math.ceil(size / 500));
+    expect(api.deletions).toEqual([]);
+  });
+
+  it('keeps expanded details, filtered statistics and selected IDs through rapid sort changes', async () => {
+    const rows = withDates(100);
+    rows[3].mistakes = [{ english_word: 'saved prompt', correct_definitions: ['განმარტება'], user_answer: 'attempt' }];
+    const api = server(rows);
+    render(<History />); await finishLoading();
+    control(1, 'high');
+    fireEvent.click(rowAction(rows[3], 'chevron-down'));
+    fireEvent.click(rowAction(rows[3], 'square'));
+    fireEvent.click(toolbar().getByRole('button', { name: 'Delete Selected (1)' }));
+    const dialog = document.querySelector('[role="alertdialog"]');
+    act(() => {
+      for (let i = 0; i < 5; i++) {
+        control(2, 'score'); control(3, 'asc'); control(2, 'date'); control(3, 'desc');
+      }
+      control(2, 'score'); control(3, 'asc');
+    });
+    const visible = rows.filter(row => row.correct_count / row.total_words >= .8);
+    expect(renderedTotals()).toEqual(expectedOrder(visible, 'score', 'asc'));
+    expectStats(visible);
+    expect(screen.getByText('saved prompt')).toBeInTheDocument();
+    expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
+    expect(toolbar().getByText(`1 of ${visible.length} visible records selected`)).toBeInTheDocument();
+    expect(api.reads).toHaveLength(1);
+    fireEvent.click(confirmation().getByRole('button', { name: 'Delete 1 Record' }));
+    await finishLoading();
+    expect(api.deletions).toEqual([{ userId: 'user-a', ids: [rows[3].id] }]);
+  });
+
+  it.each([500, 1000])('keeps the same paginated read alive when sorting during the page at offset %i', async offset => {
+    const rows = withDates(1001), api = server(rows);
+    const pending = deferred<QueryResult>();
+    let page!: QueryResult;
+    api.respond = (read, response) => {
+      if (read.from === offset) { page = response; return pending.promise; }
+      return response;
+    };
+    render(<History />);
+    await waitFor(() => expect(api.reads).toHaveLength(offset / 500 + 1));
+    control(3, 'asc'); control(2, 'score'); control(3, 'desc');
+    expectNoPartialHistory();
+    expect(api.reads.map(read => read.from)).toEqual(offset === 500 ? [0, 500] : [0, 500, 1000]);
+    await act(async () => pending.resolve(page));
+    await finishLoading();
+    expect(renderedTotals()).toEqual(expectedOrder(rows, 'score', 'desc'));
+    expectStats(rows);
+    expect(api.reads.map(read => read.from)).toEqual([0, 500, 1000]);
+  });
+});
+
 describe('History pagination preserves lifecycle and selection safety', () => {
-  it.each(['success', 'failure'])('ignores obsolete sort-context page %s and stops its pagination', async outcome => {
+  it.each(['success', 'failure'])('ignores obsolete deletion-version page %s and stops its pagination', async outcome => {
     const rows = history(1001);
     const api = server(rows);
     const pending = deferred<QueryResult>();
@@ -286,7 +376,7 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     render(<History />);
     await waitFor(() => expect(api.reads).toHaveLength(2));
     api.respond = (_read, response) => response;
-    control(2, 'score');
+    refreshAfterDeletion();
     await finishLoading();
     const before = renderedTotals();
     await act(async () => {
@@ -312,6 +402,8 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     const view = render(<StrictMode><History /></StrictMode>);
     await waitFor(() => expect(api.reads.some(read => read.from === 500)).toBe(true));
     expectNoPartialHistory();
+    control(2, 'score');
+    control(3, 'asc');
     authMock.user = { id: 'user-b' };
     view.rerender(<StrictMode><History /></StrictMode>);
     await finishLoading();
@@ -364,7 +456,7 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     fireEvent.click(rowAction(rows[1], 'square'));
     fireEvent.click(toolbar().getByRole('button', { name: 'Delete Selected (2)' }));
     api.rows = rows.slice(1);
-    control(3, 'asc');
+    refreshAfterDeletion();
     await finishLoading();
     expect(toolbar().getByText('1 of 6 visible records selected')).toBeInTheDocument();
     fireEvent.click(confirmation().getByRole('button', { name: 'Delete 1 Record' }));
@@ -416,6 +508,12 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     expect(renderedTotals()).toEqual(rows.slice(removed).reverse().map(row => row.total_words));
     expectStats(rows.slice(removed));
     expect(api.rows.filter(row => row.user_id === 'user-b')).toEqual(other);
+    expect(api.reads.map(read => read.from)).toEqual([0, 500, 0, 500]);
+    control(2, 'score');
+    control(3, 'asc');
+    expect(renderedTotals()).toEqual(rows.slice(removed).reverse().sort((a, b) =>
+      a.correct_count / a.total_words - b.correct_count / b.total_words).map(row => row.total_words));
+    expectStats(rows.slice(removed));
     expect(api.reads.map(read => read.from)).toEqual([0, 500, 0, 500]);
   });
 
