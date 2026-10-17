@@ -24,6 +24,8 @@ type InputStatus = "idle" | "correct" | "incorrect";
 type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error" | "discarded";
 type MistakeWithId = PracticeMistake;
 
+const WORD_BATCH_SIZE = 500;
+
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -237,11 +239,40 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
     try {
       // Keep canonical DB order independently of the session's queue preference.
       // Switching order is local and must not restart this account-scoped read.
-      const { data, error } = await supabase.from("words").select("*").eq("user_id", userId)
-        .order("created_at", { ascending: true }).order("id", { ascending: true });
-      if (!isCurrent() || !owner.canWrite()) return;
-      if (error) throw error;
-      const fetched = data || [];
+      const fetched: Word[] = [];
+      const seenIds = new Set<string>();
+      let expectedCount: number | undefined;
+      do {
+        if (!isCurrent() || !owner.canWrite()) return;
+        const offset = fetched.length;
+        const { data, error, count } = await supabase.from("words")
+          .select("*", offset === 0 ? { count: "exact" } : {})
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true }).order("id", { ascending: true })
+          .range(offset, offset + WORD_BATCH_SIZE - 1);
+        if (!isCurrent() || !owner.canWrite()) return;
+        if (error) throw error;
+        if (expectedCount === undefined) {
+          if (count === null || !Number.isSafeInteger(count) || count < 0) {
+            throw new Error("Unable to determine the complete vocabulary size.");
+          }
+          expectedCount = count;
+        }
+        // Count bounds the read, even if the server caps pages below our batch
+        // size. Advance by rows actually received; a short page isn't EOF.
+        if (!data || data.length > WORD_BATCH_SIZE || offset + data.length > expectedCount ||
+            (data.length === 0 && offset < expectedCount)) {
+          throw new Error("Vocabulary changed or returned an incomplete page. Retry loading.");
+        }
+        for (const word of data as Word[]) {
+          if (seenIds.has(word.id)) {
+            throw new Error("Vocabulary pages overlapped. Retry loading.");
+          }
+          seenIds.add(word.id);
+          fetched.push(word);
+        }
+      } while (fetched.length < expectedCount);
+      // Reconcile and persist only once the entire account-scoped read succeeds.
       setWords(fetched);
     } catch (error) {
       if (!isCurrent() || !owner.canWrite()) return;

@@ -31,10 +31,15 @@ export interface QueryResult {
   count?: number | null;
 }
 
-// Only records the fluent query contract; it deliberately does not emulate a DB.
+// Records the fluent contract. Array fixtures represent the complete result;
+// supply an explicit count for partial pages (range-aware tests use a server mock).
 export function query(result: QueryResult | Promise<QueryResult> = { error: null }) {
+  let exactCount = false;
   const chain = {
-    select: vi.fn().mockReturnThis(),
+    select: vi.fn().mockImplementation((_columns?: string, options?: { count?: string }) => {
+      exactCount = options?.count === 'exact';
+      return chain;
+    }),
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
@@ -45,7 +50,11 @@ export function query(result: QueryResult | Promise<QueryResult> = { error: null
     maybeSingle: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
     then: <T, U>(resolve?: (value: QueryResult) => T, reject?: (reason: unknown) => U) =>
-      Promise.resolve(result).then(resolve, reject),
+      Promise.resolve(result).then(value => {
+        const response = exactCount && value.count === undefined && Array.isArray(value.data)
+          ? { ...value, count: value.data.length } : value;
+        return resolve ? resolve(response) : response;
+      }, reject),
   };
   return chain;
 }

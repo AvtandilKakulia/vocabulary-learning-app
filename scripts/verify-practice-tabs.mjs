@@ -60,7 +60,10 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', 
       ? 'export const useAuth = () => ({user: {id: window.account}});'
       : `export const supabase = {from(table) {
         if (!['words','test_history'].includes(table)) throw new Error('Unexpected table');
-        let id; return {select(){return this}, eq(key,value){if(key==='id')id=value;return this}, order(){return this},
+        let id, userId, count, from = 0, to = 999; const orders = [];
+        return {select(_columns,options){count=options?.count;return this},
+          eq(key,value){if(key==='id')id=value;if(key==='user_id')userId=value;return this},
+          order(key){orders.push(key);return this}, range(start,end){from=start;to=end;return this},
           insert(data){
             window.inserts.push(data);
             const key = 'fixture-history:'+data.id;
@@ -72,7 +75,12 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', 
             if (window.holdSave) return new Promise(resolve => {window.finishSave = () => resolve(result)});
             return Promise.resolve(result);
           },
-          then(resolve){return Promise.resolve({data:table==='words'?window.words:[JSON.parse(localStorage.getItem('fixture-history:'+id))],error:null}).then(resolve)}
+          then(resolve){
+            const rows = table==='words' ? window.words.filter(word=>word.user_id===userId)
+              .sort((a,b)=>{for(const key of orders){if(a[key]!==b[key])return a[key]<b[key]?-1:1}return 0})
+              : [JSON.parse(localStorage.getItem('fixture-history:'+id))];
+            return Promise.resolve({data:rows.slice(from,Math.min(to+1,from+1000)),count:count==='exact'?rows.length:null,error:null}).then(resolve)
+          }
         };
       }};` }));
   } }] });
