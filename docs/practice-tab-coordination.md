@@ -86,6 +86,47 @@ Separate intentional sessions continue to get separate IDs. Copies from before
 stable result IDs were introduced retain their existing recovery limitation:
 an earlier committed result with no recorded ID cannot be identified reliably.
 
+### Save completion versus pending React effects
+
+The intermittent takeover cleanup failure was an application race, reproduced
+with native Chrome Web Locks/BroadcastChannel as well as deferred-promise React
+tests, with and without StrictMode. Waiting longer did not remove the replacement
+checkpoint. The ordering was:
+
+1. The new owner restored a completed result while its vocabulary was loading.
+2. Vocabulary reconciliation committed a render with the old nonzero counters
+   and empty queue, but that render's passive effects were still pending.
+3. The History save succeeded. Its callback cleared the completed-result ref,
+   marked cleanup complete, removed the exact checkpoint, and queued a reset.
+4. Before the reset render committed, the older persistence effect saw the now
+   empty result ref but its old nonzero attempt count. It cleared the cleanup
+   guard and rewrote the old session. The older finish effect reopened Summary.
+5. The reset render then persisted a zero-attempt `completed: true` checkpoint
+   while displaying **Result saved to History**.
+
+The existing presentation ID already advances synchronously when reset starts.
+Persistence, automatic completion and handoff checkpoint effects now compare
+their captured presentation ID with its live ref. Effects from the retired
+presentation return without writing, reopening Summary or releasing ownership
+with obsolete progress. The new render can checkpoint a valid handoff, and new
+scored work resumes normal persistence. Save identity, exact-copy removal,
+account checks and browser locks are unchanged.
+
+`FreeMode.cleanup.test.tsx` deterministically ends a scheduler frame at the
+vocabulary-reconciliation commit and resolves the deferred save before passive
+effects. It checks immediate and settled storage, Summary closure, another
+account's untouched data, failure/retry identity, and a distinct subsequent
+session. It does not sleep, relax the original null assertion or raise timeouts.
+The native harness also gates React host tasks at this boundary while real
+browser lock-completion tasks run; this controls event ordering without mocking
+locks or inserting test hooks into application code.
+
+Against base commit `9d5d721`, the commit/effect regression failed in both
+StrictMode configurations in each of three runs (six failures), including the
+assertion after flushing subsequent effects. Chrome also failed at the second
+commit with the same zero-attempt completed checkpoint. The fix passes both
+regressions; the original takeover test and its null-storage assertion are intact.
+
 ## Browser scope and limitations
 
 - Web Locks requires a supported browser and a secure context (HTTPS, or localhost
@@ -147,13 +188,17 @@ It starts a localhost-only server and a fresh headless browser profile under
 ignored `tmp/`, runs the actual Practice UI in independent pages with native Web
 Locks/BroadcastChannel/storage, and closes its own browser/server. Auth and History
 are mocked; CSP blocks connections. It neither loads Supabase credentials nor
-contacts a database. Twelve checks cover passive startup/drafts, focus, explicit
+contacts a database. Fifteen checks cover passive startup/drafts, focus, explicit
 handoff/stale handlers/order, owner closure, reload, pending same-ID save,
 server-commit/lost-response recovery, unsupported locks and missing messaging.
 They also invoke a captured Cancel callback inside the real native grant callback
 before React commits, test rapid Continue/Cancel/Continue and third-tab recovery,
 and deliberately delay a separate coordinator's checkpoint to test withdrawal
 before handoff completion.
+Three of these checks resolve a save before queued vocabulary effects,
+including a third-tab handoff in that window. They verify that the removed copy
+stays removed, Summary does not return, and reload/new ownership restores only
+fresh zero-attempt progress.
 
 ## Manual Preview checks (separate owner review)
 
@@ -174,8 +219,10 @@ the same test account. Do not use Production records for this verification.
 5. With network throttling on a disposable test account, save a completed result
    and take over while the response is pending. Retry in the new tab; verify the
    same result is recovered exactly once. Also test a rejected request and owner
-   closure before the response. Save operations here intentionally create History
-   records, so perform this only in an approved test setup.
+   closure before the response. After **Result saved to History**, Summary must
+   close and the account's completed checkpoint must stay removed; navigating away
+   and back must not restore the completed result. Save operations here intentionally
+   create History records, so perform this only in an approved test setup.
 6. Check a different account in an independent test context: its local snapshot
    must not be changed by the first account's handoff/save/cleanup.
 7. Repeat Continue/Cancel/Continue quickly. If Cancel wins before the grant, that

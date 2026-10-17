@@ -392,6 +392,9 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
 
   useEffect(() => {
     if (!owner.canWrite() || !sessionInitialized || !user || loading || readError || reconciledWords !== words) return;
+    // Save completion resets the presentation before React commits its new state.
+    // An older render's pending effect must not recreate the cleared checkpoint.
+    if (presentationId !== presentationRef.current.id) return;
     if (completedResultRef.current) return;
     // Completion cleanup must not immediately persist an empty replacement session.
     if (clearedCompletedSessionRef.current && totalAttempts === 0) return;
@@ -432,12 +435,14 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
     reconciledWords,
     words,
     owner,
+    presentationId,
   ]);
 
   // The boundary synchronously commits pending React updates when a handoff is
   // requested. Checkpoint that committed state before relinquishing the lock.
   useEffect(() => {
     if (!handoffRequested || !owner.canWrite()) return;
+    if (presentationId !== presentationRef.current.id) return;
     if (!sessionInitialized || loading || readError || reconciledWords !== words) {
       owner.finishHandoff(); // No editable question during initialization/read failure.
       return;
@@ -456,10 +461,11 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
     }
   }, [handoffRequested, owner, sessionInitialized, loading, readError, reconciledWords, words,
     user.id, wordQueue, direction, orderMode, allowReguess, correctCount, totalAttempts,
-    mistakes, attemptedWordIds, unresolvedWordIds, hasChecked, showFinishModal]);
+    mistakes, attemptedWordIds, unresolvedWordIds, hasChecked, showFinishModal, presentationId]);
 
   useEffect(() => {
     if (!owner.canWrite() || !sessionInitialized || loading || readError || reconciledWords !== words) return;
+    if (presentationId !== presentationRef.current.id) return;
     if (wordQueue.length === 0 && words.length > 0 && totalAttempts > 0) {
       setShowFinishModal(true);
     }
@@ -473,6 +479,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
     reconciledWords,
     words,
     owner,
+    presentationId,
   ]);
 
   const handleDirectionChange = (newDirection: Direction) => {
