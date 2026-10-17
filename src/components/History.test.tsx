@@ -13,7 +13,7 @@ async function loadHistory(records: TestHistory[]) {
   await screen.findByRole('group', { name: 'History selection toolbar' });
   await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
   expect(supabaseMock.from).toHaveBeenCalledWith('test_history');
-  expect(load.select).toHaveBeenCalledWith('*');
+  expect(load.select).toHaveBeenCalledWith('*', { count: 'exact' });
   expect(load.eq).toHaveBeenCalledWith('user_id', 'user-a');
   return { ...view, load, user: userEvent.setup() };
 }
