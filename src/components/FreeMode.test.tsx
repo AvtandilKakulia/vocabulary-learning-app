@@ -160,7 +160,11 @@ describe('Practice account storage isolation', () => {
     view.rerender(<StrictMode><FreeMode /></StrictMode>);
     await screen.findByRole('textbox');
     expect(localStorage.getItem(legacyPracticeKey)).toBeNull();
-    expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject(progress());
+    // The editor can render before the persistence effect upgrades the migrated
+    // legacy JSON with current defaults. Capture the committed checkpoint below.
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual({
+      ...progress(), unresolvedWordIds: [], completed: false,
+    }));
     expect(writes.mock.calls.filter(([key]) => key === storageKey).every(([, raw]) => JSON.parse(raw).totalAttempts === 3)).toBe(true);
     const copy = localStorage.getItem(storageKey);
     view.unmount();
