@@ -45,6 +45,19 @@ Supabase-like auth/role fixtures. This checks SQL and application contracts, but
 does not replace a Supabase CLI/PostgREST/Auth integration test. No production
 connection or migration-ledger adoption is part of this bootstrap work.
 
+## R4-SEC-01: isolated authorization verification
+
+The [authorization runner](tests/authorization/run.mjs) applies this complete,
+unchanged chain to a new local PostgreSQL 17 cluster and tests anon/authenticated
+access through a non-bypassing gateway connection. See the
+[Georgian report and authorization matrix](../docs/r4-sec-01-authorization-report.md)
+for reproducible commands, findings, limitations and validation results.
+The separate word-version runner below remains unchanged. Neither runner accepts
+a hosted connection URL; neither proves Production matches the repository.
+The [metadata-only SQL](tests/authorization/production-metadata-readonly.sql) is
+prepared for separately approved owner inspection, not automatic execution on
+Production. This adds no migration, remediation, deployment or CI changes.
+
 ## R3-A01: word version migration and deployment review
 
 **Prepared for separate Production deployment review; not deployed.** The owner
