@@ -537,19 +537,27 @@ describe('FreeMode save lifecycle', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const pending = deferred<QueryResult>();
     const save = query(pending.promise);
-    const { user, rerender } = await completePractice({ save });
+    const { user, rerender, current } = await completePractice({ save });
     await user.click(screen.getByRole('button', { name: 'Close & Save' }));
     const snapshot = structuredClone(save.insert.mock.calls[0][0]);
+    let bCopy: string | null = null;
     if (route === 'account switch') {
       authMock.user = { id: 'user-b' };
       rerender(<FreeMode />);
       await screen.findByRole('textbox');
+      // Capture B only after its initialization effect persists the complete checkpoint.
+      await waitFor(() => expect(JSON.parse(localStorage.getItem(practiceSessionKey('user-b'))!)).toEqual({
+        userId: 'user-b', queueIds: [current.id], direction: 'en-to-geo', orderMode: 'random',
+        allowReguess: false, correctCount: 0, totalAttempts: 0, mistakes: [],
+        attemptedWordIds: [], unresolvedWordIds: [], hasChecked: false, completed: false,
+      }));
+      bCopy = localStorage.getItem(practiceSessionKey('user-b'));
       authMock.user = { id: 'user-a' };
     } else {
       // App unmounts Practice when the Words view is selected.
       rerender(<div>Words</div>);
+      expect(localStorage.getItem(practiceSessionKey('user-b'))).toBeNull();
     }
-    const bCopy = localStorage.getItem(practiceSessionKey('user-b'));
     rerender(<FreeMode />);
     expect(screen.queryByText('Failed to save result')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry Save' })).not.toBeInTheDocument();
@@ -564,6 +572,7 @@ describe('FreeMode save lifecycle', () => {
     if (outcome === 'failure') {
       expect(await screen.findByText('Failed to save result')).toBeInTheDocument();
       expect(JSON.parse(localStorage.getItem(storageKey)!).completedResult).toEqual(snapshot);
+      expect(localStorage.getItem(practiceSessionKey('user-b'))).toBe(bCopy);
       save.insert.mockResolvedValueOnce({ error: null });
       await user.click(screen.getByRole('button', { name: 'Retry Save' }));
       expect(save.insert).toHaveBeenCalledTimes(2);

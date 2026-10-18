@@ -305,7 +305,12 @@ describe('Practice unresolved wrong-answer retries', () => {
       totalAttempts: 3, correctCount: 2, attemptedWordIds: ['a', 'b', 'c'], mistakes: [mistake('a')] });
     render(<StrictMode><FreeMode /></StrictMode>);
     await screen.findByRole('textbox');
-    expect(stored()).toMatchObject({ queueIds: ['a'], hasChecked: false, totalAttempts: 3, correctCount: 2 });
+    // The textbox can commit before the restored checkpoint's persistence effect.
+    await waitFor(() => expect(stored()).toEqual({
+      userId: 'user-a', queueIds: ['a'], direction: 'en-to-geo', orderMode: 'db-order',
+      allowReguess: true, correctCount: 2, totalAttempts: 3, mistakes: [mistake('a')],
+      attemptedWordIds: ['a', 'b', 'c'], unresolvedWordIds: ['a'], hasChecked: false, completed: false,
+    }));
     await answer('meaning a');
     await next();
     await screen.findByRole('heading', { name: 'Practice Summary' });
