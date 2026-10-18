@@ -78,7 +78,7 @@ function server(rows: TestHistory[]) {
 const toolbar = () => within(document.querySelector<HTMLElement>('[role="group"]')!);
 const dialog = () => within(document.querySelector<HTMLElement>('[role="alertdialog"]')!);
 const ready = () => waitFor(() => expect(document.body.textContent).not.toContain('Loading...'));
-const selectAll = () => fireEvent.click(toolbar().getByRole('button', { name: 'Select All' }));
+const selectAll = () => fireEvent.click(toolbar().getByRole('button', { name: /^Select All \d+ Filtered Records$/ }));
 const openConfirmation = (count: number) => fireEvent.click(toolbar().getByRole('button', { name: `Delete Selected (${count})` }));
 const confirm = (count: number) => fireEvent.click(dialog().getByRole('button', { name: `Delete ${count} Record${count === 1 ? '' : 's'}` }));
 const renderedDates = () => Array.from(document.querySelectorAll('.border-b .text-gray-500'), element => element.textContent);
@@ -122,10 +122,10 @@ describe('History sequential confirmed deletion', () => {
     expect(api.rows).toEqual([...other, added]);
     expect(renderedDates()).toEqual([new Date(added.test_date).toLocaleString()]);
     expectStatistics([added]);
-    expect(toolbar().getByText('0 of 1 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('0 of 1 matching records selected across all pages')).toBeInTheDocument();
     expect(api.reads).toHaveLength(Math.ceil(size / 500) + 1);
-  // This exercises full rendering, selection, confirmation and removal of up to
-  // 2,001 real rows. Budget for DOM work; no sleeps or relaxed assertions.
+  // Preserve the original budget for full-collection loading, selection,
+  // confirmation and removal of up to 2,001 IDs, now across UI pages.
   }, 15000);
 
   it.each([1, 2])('stops at failed batch %i, refreshes partial progress, and requires fresh confirmation of remaining IDs', async failedBatch => {
@@ -135,17 +135,23 @@ describe('History sequential confirmed deletion', () => {
       if (api.deletions.length === failedBatch) return { error: { message: 'Network error' } };
       return api.remove(request);
     };
-    render(<History />); await ready(); selectAll(); openConfirmation(201);
+    render(<History />); await ready();
+    const top = () => within(screen.getByRole('navigation', { name: 'History pagination (top)' }));
+    for (let page = 0; page < 8; page++) fireEvent.click(top().getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Showing 201–201 of 201 records')).toBeInTheDocument();
+    selectAll(); openConfirmation(201);
     const stale = handler(dialog().getByRole('button', { name: 'Delete 201 Records' }));
     confirm(201);
     await waitFor(() => expect(document.body.textContent).toContain('History refreshed:'));
     const remaining = api.rows.filter(row => row.user_id === accountA);
     expect(remaining).toHaveLength(201 - (failedBatch - 1) * 100);
+    const firstVisible = Math.floor((remaining.length - 1) / 25) * 25 + 1;
+    expect(screen.getByText(`Showing ${firstVisible}–${remaining.length} of ${remaining.length} records`)).toBeInTheDocument();
     expect(api.deletions).toHaveLength(failedBatch);
     expect(document.body.textContent).toContain('The request may have reached the server.');
     expect(document.body.textContent).toContain(`${remaining.length} remain.`);
     expectStatistics(remaining);
-    expect(toolbar().getByText(`${remaining.length} of ${remaining.length} visible records selected`)).toBeInTheDocument();
+    expect(toolbar().getByText(`${remaining.length} of ${remaining.length} matching records selected across all pages`)).toBeInTheDocument();
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     await act(async () => stale());
     expect(api.deletions).toHaveLength(failedBatch);
@@ -157,6 +163,7 @@ describe('History sequential confirmed deletion', () => {
     await waitFor(() => expect(document.body.textContent).toContain(`all ${remaining.length} confirmed records are no longer`));
     expect(api.deletions.slice(failedBatch).flatMap(request => request.ids)).toEqual([...remaining].reverse().map(row => row.id));
     expect(api.rows).toEqual(other);
+    expect(screen.getByText('Showing 0–0 of 0 records')).toBeInTheDocument();
   });
 
   it('does not overlap delayed batches or accept duplicate confirmations, filters, sorting or single-delete callbacks', async () => {
@@ -169,6 +176,8 @@ describe('History sequential confirmed deletion', () => {
     };
     render(<History />); await ready();
     const single = handler(document.querySelector('.border-b .lucide-trash2')!.closest('button')!);
+    const navigation = within(screen.getByRole('navigation', { name: 'History pagination (top)' }));
+    const staleNext = handler(navigation.getByRole('button', { name: 'Next' }));
     selectAll(); openConfirmation(201);
     const stale = handler(dialog().getByRole('button', { name: 'Delete 201 Records' }));
     await act(async () => { stale(); stale(); });
@@ -177,6 +186,11 @@ describe('History sequential confirmed deletion', () => {
     fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'asc' } });
     expect(document.querySelectorAll('select')[0]).toHaveValue('all');
     expect(document.querySelectorAll('select')[3]).toHaveValue('desc');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Records per page' }), { target: { value: '100' } });
+    act(() => staleNext());
+    expect(screen.getByRole('combobox', { name: 'Records per page' })).toHaveValue('25');
+    expect(screen.getByText('Showing 1–25 of 201 records')).toBeInTheDocument();
+    expect(navigation.getByRole('button', { name: 'Next' })).toBeDisabled();
     act(() => single());
     expect(screen.queryByText('Delete Test Record')).not.toBeInTheDocument();
     expect(api.deletions).toHaveLength(1);
@@ -198,13 +212,13 @@ describe('History sequential confirmed deletion', () => {
     expect(api.deletions).toHaveLength(1);
     const remaining = committed ? 101 : 201;
     expect(document.body.textContent).toContain(`${remaining} remain.`);
-    expect(toolbar().getByText(`${remaining} of ${remaining} visible records selected`)).toBeInTheDocument();
+    expect(toolbar().getByText(`${remaining} of ${remaining} matching records selected across all pages`)).toBeInTheDocument();
     expectStatistics(api.rows);
     const reads = api.reads.length;
     fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'asc' } });
     expect(api.reads).toHaveLength(reads);
     expect(api.deletions).toHaveLength(1);
-    expect(toolbar().getByText(`${remaining} of ${remaining} visible records selected`)).toBeInTheDocument();
+    expect(toolbar().getByText(`${remaining} of ${remaining} matching records selected across all pages`)).toBeInTheDocument();
     expectStatistics(api.rows);
   });
 
@@ -243,7 +257,7 @@ describe('History sequential confirmed deletion', () => {
     const added = records(1, accountA, 9000)[0]; api.rows.push(added);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(document.body.textContent).toContain('101 remain.'));
-    expect(toolbar().getByText('101 of 102 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('101 of 102 matching records selected across all pages')).toBeInTheDocument();
     expect(api.deletions).toHaveLength(1); expectStatistics(api.rows);
     api.deleteResponse = request => api.remove(request);
     openConfirmation(101); confirm(101);
@@ -278,7 +292,7 @@ describe('History sequential confirmed deletion', () => {
     const reads = api.reads.length;
     await act(async () => pending.reject(new Error('Old account offline')));
     expect(api.deletions).toHaveLength(1); expect(api.reads).toHaveLength(reads);
-    expect(toolbar().getByText('2 of 2 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('2 of 2 matching records selected across all pages')).toBeInTheDocument();
     expect(dialog().getByRole('button', { name: 'Delete 2 Records' })).toBeEnabled();
     expect(document.body.textContent).not.toContain('Deletion stopped');
     expect(api.rows).toEqual([...rows, ...other]);
@@ -297,7 +311,7 @@ describe('History sequential confirmed deletion', () => {
     const a = within(first.container), b = within(second.container);
     for (const { container } of [first, second]) {
       const controls = within(container.querySelector<HTMLElement>('[role="group"]')!);
-      fireEvent.click(controls.getByRole('button', { name: 'Select All' }));
+      fireEvent.click(controls.getByRole('button', { name: /^Select All \d+ Filtered Records$/ }));
       fireEvent.click(controls.getByRole('button', { name: 'Delete Selected (101)' }));
     }
     const confirmA = within(first.container.querySelector<HTMLElement>('[role="alertdialog"]')!).getByRole('button', { name: 'Delete 101 Records' });
@@ -342,13 +356,13 @@ describe('History sequential confirmed deletion', () => {
     await waitFor(() => expect(document.body.textContent).toContain('451 remain.'));
     const visible = api.rows.filter(row => row.test_direction === 'en-to-geo');
     expectStatistics(visible);
-    expect(toolbar().getByText('451 of 451 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('451 of 451 matching records selected across all pages')).toBeInTheDocument();
     const reads = api.reads.length;
     fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'desc' } });
     expect(api.reads).toHaveLength(reads);
-    expect(toolbar().getByText('451 of 451 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('451 of 451 matching records selected across all pages')).toBeInTheDocument();
     fireEvent.change(document.querySelectorAll('select')[1], { target: { value: 'high' } });
-    expect(toolbar().getByText('0 of 0 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('0 of 0 matching records selected across all pages')).toBeInTheDocument();
     expect(api.deletions).toHaveLength(2);
   });
 

@@ -8,17 +8,17 @@ const root = createRoot(document.getElementById('root'));
 const rows = () => document.querySelector('#root .overflow-hidden > div');
 const rowCount = () => rows()?.firstElementChild?.classList.contains('border-b') ? rows().childElementCount : 0;
 const toolbar = () => document.querySelector('[aria-label="History selection toolbar"]');
-const button = name => [...toolbar().querySelectorAll('button')].find(b => b.textContent.trim() === name);
+const button = name => [...toolbar().querySelectorAll('button')].find(b => b.textContent.trim() === name ||
+  (name === 'Select All' && /^Select All \d+ Filtered Records$/.test(b.textContent.trim())));
 const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
 const check = (ok, message) => { if (!ok) throw new Error(message); };
-// Measurement only: React's keyed host nodes identify tied rows without adding
-// attributes to product markup or changing the synthetic payload. Fail closed
-// if this React 18 internal changes; never infer identity from non-unique text.
+// New rows expose their ID. The immutable, pre-pagination baseline still needs
+// React 18's keyed host node; never infer identity from non-unique visible text.
 function renderedIds() {
   const children = [...(rows()?.children ?? [])];
   const fiber = children[0] && Object.keys(children[0]).find(key => key.startsWith('__reactFiber$'));
   check(fiber, 'Cannot inspect rendered row keys with this React version');
-  return children.map(row => { const id = row[fiber]?.key; check(typeof id === 'string', 'Missing rendered row key'); return id; });
+  return children.map(row => { const id = row.dataset.historyId ?? row[fiber]?.key; check(typeof id === 'string', 'Missing rendered row key'); return id; });
 }
 const longTasks = [];
 let scrolling = false, scrollFrames = [], lastScrollFrame, scrollStarted;
@@ -41,7 +41,7 @@ async function painted(predicate) {
 
 window.benchmark = {
   rowCount,
-  async action(kind, value, expectedIds) {
+  async action(kind, value, expectedIds, expectedCount, pagination) {
     const expectedRows = expectedIds.length;
     const start = performance.now();
     const requestStart = window.auditRequests.length;
@@ -51,6 +51,11 @@ window.benchmark = {
       check(control && control.value !== value.value, 'Select must change');
       control.value = value.value;
       control.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (kind === 'page') {
+      const control = [...document.querySelectorAll(`[aria-label="History pagination (${value.position})"] button`)]
+        .find(button => button.textContent === value.direction);
+      check(control && !control.disabled, 'Page action must be available');
+      control.click();
     } else if (kind === 'selection') button(value).click();
     else if (kind === 'expand') rows().querySelector('.lucide-chevron-down').closest('button').click();
     else if (kind === 'collapse') rows().querySelector('.lucide-chevron-up').closest('button').click();
@@ -58,6 +63,20 @@ window.benchmark = {
     await painted(() => {
       if (rowCount() !== expectedRows) return false;
       if (!renderedIds().every((id, index) => id === expectedIds[index])) return false;
+      if (pagination) {
+        const { page, size, totalPages } = pagination;
+        const controls = document.querySelector('[aria-label="History display controls"]');
+        if (!controls?.textContent.includes(`Showing ${page * size + 1}–${Math.min((page + 1) * size, expectedCount)} of ${expectedCount} records`)) return false;
+        const navigation = [...document.querySelectorAll('nav[aria-label^="History pagination"]')];
+        check(navigation.length === (totalPages > 1 ? 2 : 0), 'Top/bottom navigation mismatch');
+        for (const nav of navigation) {
+          if (!nav.textContent.includes(`Page ${page + 1} of ${totalPages}`)) return false;
+          const buttons = nav.querySelectorAll('button');
+          check(buttons[0].disabled === (page === 0) && buttons[1].disabled === (page === totalPages - 1), 'Incorrect navigation boundaries');
+        }
+        if (totalPages === 1) check(controls.textContent.includes('Page 1 of 1'), 'Missing single-page indicator');
+        check(rowCount() <= size && rowCount() <= 100, 'Unbounded rendered list');
+      }
       if (kind === 'selection') return !!button(value === 'Select All' ? 'Deselect All' : 'Select All');
       if (kind === 'expand') return !!rows().querySelector('.lucide-chevron-up');
       if (kind === 'collapse') return !rows().querySelector('.lucide-chevron-up');
@@ -76,7 +95,7 @@ window.benchmark = {
     const networkEnd = resources.length ? Math.max(...resources.map(r => r.responseEnd)) : null;
     const bodyEnd = requests.length ? Math.max(...requests.map(r => r.bodyEnd)) : null;
     const stats = [...document.querySelectorAll('.text-4xl')].map(el => el.textContent);
-    check(Number(stats[0]) === expectedRows, 'Statistics/visible rows mismatch');
+    check(Number(stats[0]) === expectedCount, 'Statistics/full filtered collection mismatch');
     return {
       start, end, duration: end - start, requestCount: requests.length,
       retrieval: networkEnd === null ? 0 : networkEnd - requests[0].start,
@@ -88,6 +107,30 @@ window.benchmark = {
     };
   },
   async leave() { root.render(null); await painted(() => !document.querySelector('#root').firstChild); },
+  // Complete page coverage belongs in a real browser too. This unmeasured walk
+  // checks every ID, full statistics, boundaries and range, even at 5,000 rows.
+  async visitAllPages(expectedIds) {
+    const size = Number(document.querySelectorAll('select')[4].value);
+    const pages = Math.ceil(expectedIds.length / size);
+    const stats = [...document.querySelectorAll('.text-4xl')].map(el => el.textContent);
+    const requestCount = window.auditRequests.length;
+    for (let page = 0; page < pages; page++) {
+      const slice = expectedIds.slice(page * size, (page + 1) * size);
+      await painted(() => rowCount() === slice.length && renderedIds().every((id, index) => id === slice[index]));
+      check(JSON.stringify([...document.querySelectorAll('.text-4xl')].map(el => el.textContent)) === JSON.stringify(stats), 'Page changed full statistics');
+      check(document.querySelector('[aria-label="History display controls"]').textContent.includes(
+        `Showing ${page * size + 1}–${Math.min((page + 1) * size, expectedIds.length)} of ${expectedIds.length} records`), 'Wrong range during full page walk');
+      for (const position of ['top', 'bottom']) {
+        const nav = document.querySelector(`[aria-label="History pagination (${position})"]`);
+        check(nav.textContent.includes(`Page ${page + 1} of ${pages}`), 'Wrong page number');
+        check(nav.querySelectorAll('button')[0].disabled === (page === 0), 'Wrong Previous boundary');
+        check(nav.querySelectorAll('button')[1].disabled === (page === pages - 1), 'Wrong Next boundary');
+      }
+      if (page < pages - 1) document.querySelector('[aria-label="History pagination (top)"]').querySelectorAll('button')[1].click();
+    }
+    check(window.auditRequests.length === requestCount, 'Page walk refetched History');
+    return { pages, checkedIds: expectedIds.length, size, reads: 0 };
+  },
   async startScroll() {
     window.scrollTo(0, 0); await frame(); await frame();
     scrolling = true; scrollFrames = []; lastScrollFrame = scrollStarted = performance.now();

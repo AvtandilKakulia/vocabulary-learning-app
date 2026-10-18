@@ -4,9 +4,11 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallba
 import { supabase, TestHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLatestRequest } from '../hooks/useLatestRequest';
-import { sanitizeDescription } from '../lib/sanitizeDescription';
+import HistoryRows from './history/HistoryRows';
+import HistoryPagination from './history/HistoryPagination';
+import { HISTORY_PAGE_SIZES, readHistoryPageSize, rememberHistoryPageSize } from '../lib/historyPreferences';
 import { beginHistoryDeletion, getHistoryDeletionState, subscribeHistoryDeletion } from '../lib/historyDeletion';
-import { Trash2, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 const HISTORY_BATCH_SIZE = 500;
 // 100 UUIDs keep the encoded filter near 4 KB, well below the previous 19 KB
@@ -42,7 +44,10 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [readError, setReadError] = useState<string | null>(null);
   const readFailedRef = useRef(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [pageSize, setPageSize] = useState(readHistoryPageSize);
+  const [page, setPage] = useState(0);
+  const listHeading = useRef<HTMLHeadingElement>(null);
+  const scrollToList = useRef(false);
   const [filterDirection, setFilterDirection] = useState<'all' | 'en-to-geo' | 'geo-to-en'>('all');
   const [filterScore, setFilterScore] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'score'>('date');
@@ -68,6 +73,8 @@ export default function History() {
 
   useLayoutEffect(() => {
     setHistory([]);
+    setPage(0);
+    scrollToList.current = false;
     setLoading(true);
     setReadError(null);
     setSelectedIds(new Set());
@@ -359,6 +366,40 @@ export default function History() {
     return () => { selectionView.current = null; };
   });
 
+  // Selection and statistics above use ALL matching records. Only rendering is
+  // paginated; page changes never enter the authoritative read context.
+  const totalPages = Math.max(1, Math.ceil(totalTests / pageSize));
+  const currentPage = Math.min(page, totalPages - 1);
+  const offset = currentPage * pageSize;
+  const pageHistory = filteredHistory.slice(offset, offset + pageSize);
+  useEffect(() => {
+    if (!loading && !readError) setPage(previous => Math.min(previous, totalPages - 1));
+  }, [loading, readError, totalPages]);
+
+  function changePage(nextPage: number) {
+    const view = selectionView.current;
+    if (!view || view.userId !== userId || view.loading || readFailedRef.current ||
+        getHistoryDeletionState(userId).busy || nextPage < 0 || nextPage >= totalPages || nextPage === currentPage) return;
+    scrollToList.current = true;
+    setPage(nextPage);
+  }
+
+  function changePageSize(value: string) {
+    const nextSize = HISTORY_PAGE_SIZES.find(size => String(size) === value);
+    if (!nextSize || selectionView.current?.userId !== userId || getHistoryDeletionState(userId).busy) return;
+    // Keep the old first visible record inside the new page, then clamp.
+    setPage(Math.min(Math.floor(offset / nextSize), Math.max(0, Math.ceil(totalTests / nextSize) - 1)));
+    setPageSize(nextSize);
+    rememberHistoryPageSize(nextSize);
+  }
+
+  useLayoutEffect(() => {
+    if (!scrollToList.current) return;
+    scrollToList.current = false;
+    listHeading.current?.focus({ preventScroll: true });
+    listHeading.current?.scrollIntoView?.({ block: 'start' });
+  }, [currentPage]);
+
   return (
     <div className="space-y-8">
       {/* HEADER */}
@@ -375,7 +416,7 @@ export default function History() {
       <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-xl p-6">
         <div role="group" aria-label="History selection toolbar" className="mb-6 space-y-3">
           <p aria-live="polite" className="min-h-12 text-sm font-semibold text-blue-700 dark:text-blue-300 sm:min-h-6">
-            {eligibleIds.length} of {visibleIds.size} visible records selected
+            {eligibleIds.length} of {visibleIds.size} matching records selected across all pages
           </p>
           <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3">
             <button
@@ -383,7 +424,7 @@ export default function History() {
               disabled={deleting || loading || visibleIds.size === 0}
               className="min-h-16 min-w-0 break-words rounded-xl border px-3 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {allSelected ? 'Deselect All' : 'Select All'}
+              {allSelected ? 'Deselect All' : `Select All ${visibleIds.size} Filtered Records`}
             </button>
             {/* A non-interactive slot reserves space without a hidden focus target. */}
             <div className="min-h-16 min-w-0">
@@ -451,6 +492,7 @@ export default function History() {
                 if (getHistoryDeletionState(userId).busy) return;
                 changeSelection(new Set());
                 setFilterDirection(e.target.value as any);
+                setPage(0);
               }}
               className="w-full px-4 py-3 rounded-xl border"
             >
@@ -471,6 +513,7 @@ export default function History() {
                 if (getHistoryDeletionState(userId).busy) return;
                 changeSelection(new Set());
                 setFilterScore(e.target.value as any);
+                setPage(0);
               }}
               className="w-full px-4 py-3 rounded-xl border"
             >
@@ -488,7 +531,7 @@ export default function History() {
             <select
               value={sortBy}
               disabled={deleting}
-              onChange={(e) => { if (!getHistoryDeletionState(userId).busy) setSortBy(e.target.value as any); }}
+              onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortBy(e.target.value as any); setPage(0); } }}
               className="w-full px-4 py-3 rounded-xl border"
             >
               <option value="date">Date</option>
@@ -503,7 +546,7 @@ export default function History() {
             <select
               value={sortOrder}
               disabled={deleting}
-              onChange={(e) => { if (!getHistoryDeletionState(userId).busy) setSortOrder(e.target.value as any); }}
+              onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortOrder(e.target.value as any); setPage(0); } }}
               className="w-full px-4 py-3 rounded-xl border"
             >
               <option value="desc">Newest First</option>
@@ -529,6 +572,24 @@ export default function History() {
       )}
 
       {/* HISTORY LIST */}
+      <section aria-label="History display controls" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 ref={listHeading} tabIndex={-1} className="text-xl font-semibold scroll-mt-4 focus-visible:outline-blue-500">History records</h2>
+          {!loading && !readError && <p aria-live="polite" className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {totalTests ? offset + 1 : 0}–{Math.min(offset + pageSize, totalTests)} of {totalTests} records
+          </p>}
+          {!loading && !readError && totalPages === 1 && <p className="text-sm text-gray-600 dark:text-gray-400">Page 1 of 1</p>}
+        </div>
+        <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
+          Records per page
+          <select value={pageSize} onChange={event => changePageSize(event.target.value)} disabled={deleting}
+            className="px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">
+            {HISTORY_PAGE_SIZES.map(size => <option key={size} value={size}>{size} records</option>)}
+          </select>
+        </label>
+      </section>
+      {!loading && !readError && totalPages > 1 && <HistoryPagination position="top" page={currentPage}
+        totalPages={totalPages} disabled={deleting} onPageChange={changePage} />}
       <div className="bg-white/80 dark:bg-gray-800/80 rounded-3xl shadow-xl overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">Loading...</div>
@@ -544,133 +605,14 @@ export default function History() {
             No results found.
           </div>
         ) : (
-          <div>
-            {filteredHistory.map(record => {
-              const percent = Math.round(
-                (record.correct_count / record.total_words) * 100
-              );
-              const expanded = expandedId === record.id;
-
-              return (
-                <div
-                  key={record.id}
-                  className={`p-6 border-b hover:bg-blue-50/40 ${
-                    selectedIds.has(record.id)
-                      ? 'bg-blue-50/60'
-                      : ''
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4 flex-1">
-                      <button
-                        onClick={() => toggleSelect(record.id)}
-                        disabled={deleting}
-                        className="p-1"
-                      >
-                        {selectedIds.has(record.id) ? (
-                          <CheckSquare size={20} className="text-blue-600" />
-                        ) : (
-                          <Square size={20} />
-                        )}
-                      </button>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4 mb-2">
-                          <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                            {percent}%
-                          </div>
-                          <div className="text-lg font-semibold">
-                            ({record.correct_count}/{record.total_words}){' '}
-                            {getScoreEmoji(percent)}
-                          </div>
-
-                          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
-                            {record.test_direction === 'en-to-geo'
-                              ? 'English → Georgian'
-                              : 'Georgian → English'}
-                          </span>
-                        </div>
-
-                        <div className="text-sm text-gray-500">
-                          {new Date(record.test_date).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {record.mistakes.length > 0 && (
-                        <button
-                          onClick={() =>
-                            setExpandedId(expanded ? null : record.id)
-                          }
-                          className="p-2"
-                        >
-                          {expanded ? (
-                            <ChevronUp size={20} />
-                          ) : (
-                            <ChevronDown size={20} />
-                          )}
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => { if (!getHistoryDeletionState(userId).busy) setShowDeleteModal(record.id); }}
-                        disabled={deleting}
-                        className="p-2 text-red-600"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {expanded && record.mistakes.length > 0 && (
-                    <div className="mt-6 pt-6 border-t">
-                      <div className="text-lg font-semibold mb-4">
-                        Mistakes ({record.mistakes.length}):
-                      </div>
-
-                      <div className="grid gap-4">
-                        {record.mistakes.map((m, idx) => (
-                          <div
-                            key={idx}
-                            className="p-4 bg-red-50 border border-red-200 rounded-xl"
-                          >
-                            <div className="font-bold text-lg mb-2">
-                              {m.question_prompt ?? m.english_word}
-                            </div>
-                            {m.description?.trim() && (
-                              <div
-                                className="text-sm text-gray-600 mb-2 break-words"
-                                dangerouslySetInnerHTML={{
-                                  __html: sanitizeDescription(m.description),
-                                }}
-                              />
-                            )}
-
-                            <div className="text-sm mb-1">
-                              Your answer:{' '}
-                              <span className="font-semibold text-red-700">
-                                {m.user_answer || '(empty)'}
-                              </span>
-                            </div>
-
-                            <div className="text-sm">
-                              Correct:{' '}
-                              <span className="font-semibold text-green-700">
-                                {m.correct_definitions.join(', ')}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <HistoryRows key={userId} records={pageHistory} selectedIds={selectedIds} disabled={deleting}
+            onSelect={toggleSelect} scoreEmoji={getScoreEmoji}
+            onDelete={id => { if (!getHistoryDeletionState(userId).busy) setShowDeleteModal(id); }} />
         )}
       </div>
+
+      {!loading && !readError && totalPages > 1 && <HistoryPagination position="bottom" page={currentPage}
+        totalPages={totalPages} disabled={deleting} onPageChange={changePage} />}
 
       {/* DELETE MODAL */}
       {showDeleteModal && (
