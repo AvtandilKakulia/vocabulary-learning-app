@@ -768,7 +768,9 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
 
   // A same-word retry is a fresh presentation too; unrelated renders keep feedback.
   const currentWordId = currentWord?.id;
-  useEffect(() => {
+  // Initialize before the committed textbox becomes interactive. A passive reset
+  // can run after the first input event and overwrite that new presentation's draft.
+  useLayoutEffect(() => {
     if (presentationId !== presentationRef.current.id || presentationRef.current.scored) return;
     if (!currentWordId || !sessionInitialized) {
       setAnswerInputs([""]);
