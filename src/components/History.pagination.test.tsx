@@ -123,6 +123,7 @@ describe('History loads the complete authorized collection', () => {
     await finishLoading();
     const allRows = allHistoryRows();
     expect(allRows).toHaveLength(size);
+    expect(allRows.map(row => row.id)).toEqual([...rows].reverse().map(row => row.id));
     expect(renderedRows().length).toBeLessThanOrEqual(25);
     expect(allRows.map(row => Number(row.textContent?.match(/\(\d+\/(\d+)\)/)?.[1])))
       .toEqual([...rows].reverse().map(row => row.total_words));
@@ -300,7 +301,13 @@ describe('History sorting is presentation only', () => {
     const delta = by === 'date' ? Date.parse(a.test_date) - Date.parse(b.test_date)
       : a.correct_count / a.total_words - b.correct_count / b.total_words;
     return order === 'asc' ? delta : -delta;
-  }).map(row => row.total_words);
+  });
+  function expectRenderedOrder(expected: TestHistory[]) {
+    const snapshots = allHistoryRows();
+    expect(snapshots.map(row => row.id)).toEqual(expected.map(row => row.id));
+    expect(snapshots.map(row => Number(row.textContent.match(/\(\d+\/(\d+)\)/)?.[1])))
+      .toEqual(expected.map(row => row.total_words));
+  }
 
   it.each(sortCases)('sorts $size records $by $order with stable ties and zero additional reads', async ({ size, by, order }) => {
     const rows = withDates(size);
@@ -312,7 +319,7 @@ describe('History sorting is presentation only', () => {
     if (by === 'date' && order === 'desc') control(3, 'asc');
     act(() => { control(2, by); control(3, order); });
     expect(document.body.textContent).not.toContain('Loading...');
-    expect(renderedTotals()).toEqual(expectedOrder(rows, by, order));
+    expectRenderedOrder(expectedOrder(rows, by, order));
     expectStats(rows);
     await act(async () => {}); // Settle queued mock requests before asserting zero new reads.
     expect(api.reads).toHaveLength(reads);
@@ -337,7 +344,7 @@ describe('History sorting is presentation only', () => {
       control(2, 'score'); control(3, 'asc');
     });
     const visible = rows.filter(row => row.correct_count / row.total_words >= .8);
-    expect(renderedTotals()).toEqual(expectedOrder(visible, 'score', 'asc'));
+    expectRenderedOrder(expectedOrder(visible, 'score', 'asc'));
     expectStats(visible);
     findHistoryRow(rows[3].id);
     expect(screen.getByText('saved prompt')).toBeInTheDocument();
@@ -364,7 +371,7 @@ describe('History sorting is presentation only', () => {
     expect(api.reads.map(read => read.from)).toEqual(offset === 500 ? [0, 500] : [0, 500, 1000]);
     await act(async () => pending.resolve(page));
     await finishLoading();
-    expect(renderedTotals()).toEqual(expectedOrder(rows, 'score', 'desc'));
+    expectRenderedOrder(expectedOrder(rows, 'score', 'desc'));
     expectStats(rows);
     expect(api.reads.map(read => read.from)).toEqual([0, 500, 1000]);
   });
@@ -385,12 +392,12 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     api.respond = (_read, response) => response;
     refreshAfterDeletion();
     await finishLoading();
-    const before = renderedTotals();
+    const before = allHistoryRows();
     await act(async () => {
       if (outcome === 'success') pending.resolve(oldResponse);
       else pending.reject(new Error('Obsolete page failure'));
     });
-    expect(renderedTotals()).toEqual(before);
+    expect(allHistoryRows()).toEqual(before);
     expectStats(rows);
     expect(document.querySelector('[role="alert"]')).toBeNull();
     expect(api.reads.map(read => read.from)).toEqual([0, 500, 0, 500, 1000]);
@@ -556,6 +563,40 @@ describe('History display pagination', () => {
   const previous = () => fireEvent.click(nav().getByRole('button', { name: 'Previous' }));
   const expectRange = (from: number, to: number, count: number) =>
     expect(screen.getByText(`Showing ${from}–${to} of ${count} records`)).toBeInTheDocument();
+
+  it.each([0, 4, 8])('collects independent row snapshots starting at display page offset %i', async start => {
+    const rows = history(205), api = server(rows);
+    render(<History />); await finishLoading();
+    for (let page = 0; page < start; page++) next();
+    const snapshots = allHistoryRows();
+    expect(snapshots.map(row => row.id)).toEqual([...rows].reverse().map(row => row.id));
+    expect(snapshots.map(row => Number(row.textContent.match(/\(\d+\/(\d+)\)/)?.[1])))
+      .toEqual([...rows].reverse().map(row => row.total_words));
+    for (const snapshot of snapshots) {
+      expect(snapshot).toEqual({ id: expect.any(String), textContent: expect.any(String) });
+    }
+    expect(pageSize()).toHaveValue('25');
+    // A second traversal starts where the previous one ended, not necessarily
+    // page one. No cached fixture data or detached DOM nodes may supply it.
+    expect(allHistoryRows()).toEqual(snapshots);
+    expect(pageSize()).toHaveValue('25');
+    expect(api.reads).toHaveLength(1); expect(api.deletions).toEqual([]); expectStats(rows);
+  });
+
+  it('finds a live action row after restoring the original page size', async () => {
+    const rows = history(205), api = server(rows);
+    render(<History />); await finishLoading();
+    const target = findHistoryRow(rows[50].id)!;
+    expect(target).toBeInTheDocument();
+    expect(pageSize()).toHaveValue('25');
+    expectRange(151, 175, 205);
+    fireEvent.click(within(target).getByRole('button', { name: /^Select record from/ }));
+    expect(toolbar().getByText('1 of 205 matching records selected across all pages')).toBeInTheDocument();
+    expect(findHistoryRow(rows[204].id)).toBeInTheDocument();
+    expectRange(1, 25, 205);
+    expect(pageSize()).toHaveValue('25');
+    expect(api.reads).toHaveLength(1); expect(api.deletions).toEqual([]); expectStats(rows);
+  });
 
   it.each([0, 1, 10, 25, 26, 49, 50, 51, 100, 101, 1001, 2001, 5000])('renders bounded pages and exact ranges for %i authorized records', async count => {
     const rows = history(count), api = server([...rows, ...history(2, 'user-b')]);
