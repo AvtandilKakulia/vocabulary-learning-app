@@ -11,6 +11,15 @@ const toolbar = () => document.querySelector('[aria-label="History selection too
 const button = name => [...toolbar().querySelectorAll('button')].find(b => b.textContent.trim() === name);
 const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
 const check = (ok, message) => { if (!ok) throw new Error(message); };
+// Measurement only: React's keyed host nodes identify tied rows without adding
+// attributes to product markup or changing the synthetic payload. Fail closed
+// if this React 18 internal changes; never infer identity from non-unique text.
+function renderedIds() {
+  const children = [...(rows()?.children ?? [])];
+  const fiber = children[0] && Object.keys(children[0]).find(key => key.startsWith('__reactFiber$'));
+  check(fiber, 'Cannot inspect rendered row keys with this React version');
+  return children.map(row => { const id = row[fiber]?.key; check(typeof id === 'string', 'Missing rendered row key'); return id; });
+}
 const longTasks = [];
 let scrolling = false, scrollFrames = [], lastScrollFrame, scrollStarted;
 new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => ({ start: e.startTime, duration: e.duration }))))
@@ -18,17 +27,22 @@ new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => ({ 
 
 async function painted(predicate) {
   const deadline = performance.now() + 60000;
-  while (!predicate()) {
+  for (;;) {
     check(performance.now() < deadline, 'UI completion deadline exceeded');
+    if (predicate()) {
+      // Recheck after paint: the baseline can briefly sort its old list before
+      // an effect starts the refetch. That intermediate render is not completion.
+      await frame(); await frame();
+      if (predicate()) return;
+    }
     await frame();
   }
-  // One intervening paint, then another frame where the main thread is available.
-  await frame(); await frame();
 }
 
 window.benchmark = {
   rowCount,
-  async action(kind, value, expectedRows) {
+  async action(kind, value, expectedIds) {
+    const expectedRows = expectedIds.length;
     const start = performance.now();
     const requestStart = window.auditRequests.length;
     if (kind === 'open') root.render(<History />);
@@ -43,16 +57,20 @@ window.benchmark = {
     else throw new Error('Unknown benchmark action');
     await painted(() => {
       if (rowCount() !== expectedRows) return false;
+      if (!renderedIds().every((id, index) => id === expectedIds[index])) return false;
       if (kind === 'selection') return !!button(value === 'Select All' ? 'Deselect All' : 'Select All');
       if (kind === 'expand') return !!rows().querySelector('.lucide-chevron-up');
       if (kind === 'collapse') return !rows().querySelector('.lucide-chevron-up');
-      if (kind === 'open' || (kind === 'select' && value.index >= 2)) {
+      if (kind === 'open') {
         const requests = window.auditRequests.slice(requestStart);
         return requests.length > 0 && requests.every(r => r.bodyEnd) && !button('Select All')?.disabled;
       }
+      if (kind === 'select' && value.index >= 2)
+        return window.auditRequests.slice(requestStart).every(r => r.bodyEnd) && !button('Select All')?.disabled;
       return true;
     });
     const end = performance.now();
+    check(renderedIds().every((id, index) => id === expectedIds[index]), 'Rendered order changed before completion');
     const requests = window.auditRequests.slice(requestStart);
     const resources = performance.getEntriesByType('resource').filter(r => r.startTime >= start && r.name.includes('/rest/v1/'));
     const networkEnd = resources.length ? Math.max(...resources.map(r => r.responseEnd)) : null;

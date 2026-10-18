@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import { createRequire } from 'node:module';
 import { build } from 'vite';
@@ -21,6 +22,13 @@ const sizes = option('--sizes', '100,500,1000,2000,5000').split(',').map(Number)
 const cap = Number(option('--cap', 500)), latency = Number(option('--latency', 50)), mbps = Number(option('--mbps', 10));
 const label = option('--label', 'baseline');
 const profiling = process.argv.includes('--profile');
+// Re-measure an immutable baseline with the SAME readiness checks and fixtures.
+const historyRef = option('--history-ref', null);
+if (historyRef) assert.match(historyRef, /^[a-f0-9]{40}$/);
+const historySource = historyRef
+  ? execFileSync('git', ['show', `${historyRef}:src/components/History.tsx`], { encoding: 'utf8' }) : null;
+const expectSortReads = process.argv.includes('--expect-sort-reads');
+const sourceHash = createHash('sha256').update((historySource ?? await readFile(resolve('src/components/History.tsx'), 'utf8')).replaceAll('\r\n', '\n')).digest('hex');
 assert.match(label, /^[a-z0-9-]+$/);
 assert.ok(Number.isSafeInteger(runs) && runs > 0 && runs <= 30);
 assert.ok(sizes.every(n => Number.isSafeInteger(n) && n > 0 && n <= 10000));
@@ -35,6 +43,7 @@ const output = await build({ configFile: false, envDir: folder, plugins: [
       if (id.endsWith('/contexts/AuthContext')) return '\0audit-auth';
     },
     load(id) {
+      if (historySource && id.replaceAll('\\', '/').endsWith('/src/components/History.tsx')) return historySource;
       if (id === '\0audit-auth') return `export const useAuth = () => ({ user: { id: '${account}' } });`;
       if (id === '\0audit-supabase') return `
         import { createClient } from '@supabase/supabase-js';
@@ -163,9 +172,9 @@ try {
   const environment = { date: new Date().toISOString(), base: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     node: process.version, os: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0].model,
     logicalCPUs: os.cpus().length, ramGiB: os.totalmem() / 2 ** 30, browser: await manager.call('Browser.getVersion'),
-    runs, sizes, cap, latencyMs: latency, megabitsPerSecond: mbps, cpuThrottling: 1, label, profiling,
+    runs, sizes, cap, latencyMs: latency, megabitsPerSecond: mbps, cpuThrottling: 1, label, profiling, historyRef, sourceHash, expectSortReads,
     networkModel: 'Server delays each GET by latency + gzip bytes / throughput; no CDP network throttling; localhost burst delivery',
-    build: 'Vite production, minified React 18; unchanged History + real CSS + installed Supabase SDK; fixture auth/local GET API',
+    build: 'Vite production, minified React 18; History + real CSS + installed Supabase SDK; fixture auth/local GET API',
   };
   console.log(JSON.stringify(environment));
   for (let repeat = 0; repeat < runs; repeat++) {
@@ -185,24 +194,34 @@ try {
       await until(() => page.evaluate('!!window.benchmark'));
       const metrics = async () => Object.fromEntries((await page.call('Performance.getMetrics')).metrics.map(m => [m.name, m.value]));
       const trial = { size, repeat, idleFrames: await page.evaluate('benchmark.frames()'), actions: [] };
-      let direction = 'all', score = 'all';
+      let direction = 'all', score = 'all', sortBy = 'date', sortOrder = 'desc';
       async function action(name, kind, value = null, expected = size) {
-        const profileThis = profiling && ['cold-open', 'select-all', 'expand'].includes(name);
-        if (profileThis) { await page.call('Profiler.enable'); await page.call('Profiler.start'); }
-        const before = await metrics(), requestStart = requests.length;
-        const result = await page.evaluate(`benchmark.action(${JSON.stringify(kind)},${JSON.stringify(value)},${expected})`);
-        const after = await metrics();
-        const profile = profileThis ? (await page.call('Profiler.stop')).profile : null;
         if (kind === 'select' && value.index === 0) direction = value.value;
         if (kind === 'select' && value.index === 1) score = value.value;
-        const visible = fixtures(size).filter(row => (direction === 'all' || row.test_direction === direction) &&
+        if (kind === 'select' && value.index === 2) sortBy = value.value;
+        if (kind === 'select' && value.index === 3) sortOrder = value.value;
+        const visible = ordered(fixtures(size)).filter(row => (direction === 'all' || row.test_direction === direction) &&
           (score === 'all' || (score === 'high' ? row.correct_count / row.total_words >= .8 :
             score === 'medium' ? row.correct_count / row.total_words >= .5 && row.correct_count / row.total_words < .8 :
               row.correct_count / row.total_words < .5)));
+        visible.sort((a, b) => {
+          const delta = sortBy === 'date' ? Date.parse(a.test_date) - Date.parse(b.test_date)
+            : a.correct_count / a.total_words - b.correct_count / b.total_words;
+          return sortOrder === 'asc' ? delta : -delta;
+        });
+        assert.equal(visible.length, expected);
+        const profileThis = profiling && ['cold-open', 'select-all', 'expand'].includes(name);
+        if (profileThis) { await page.call('Profiler.enable'); await page.call('Profiler.start'); }
+        const before = await metrics(), requestStart = requests.length;
+        const result = await page.evaluate(`benchmark.action(${JSON.stringify(kind)},${JSON.stringify(value)},${JSON.stringify(visible.map(row => row.id))})`);
+        const after = await metrics();
+        const profile = profileThis ? (await page.call('Profiler.stop')).profile : null;
         assert.equal(Number.parseInt(result.stats[1]), Math.round(visible.reduce((sum, row) => sum + row.correct_count / row.total_words * 100, 0) / visible.length));
         assert.equal(Number(result.stats[2]), visible.reduce((sum, row) => sum + row.total_words, 0));
         const readRequests = requests.slice(requestStart);
         assert.equal(result.requestCount, readRequests.length);
+        assert.equal(readRequests.length, kind === 'open' || (expectSortReads && kind === 'select' && value.index >= 2)
+          ? Math.ceil(size / Math.min(500, cap)) : 0, 'Unexpected read count for this interaction');
         if (readRequests.length) {
           assert.deepEqual(readRequests.flatMap(r => r.ids), ordered(fixtures(size)).map(r => r.id));
           assert.equal(readRequests.length, Math.ceil(size / Math.min(500, cap)));

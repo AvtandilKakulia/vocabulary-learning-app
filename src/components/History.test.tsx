@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { authMock, deferred, query, supabaseMock, type QueryResult } from '@/test/mocks';
 import { historyRecord } from '@/test/fixtures';
 import type { TestHistory } from '@/lib/supabase';
+import { beginHistoryDeletion } from '@/lib/historyDeletion';
 import History from './History';
+
+// Simulate another mounted History view completing a coordinated deletion.
+// A deletion-version change, unlike a presentation sort, requires a fresh read.
+function refreshAfterDeletion() {
+  act(() => { const release = beginHistoryDeletion('user-a'); expect(release).not.toBeNull(); release!(); });
+}
 
 async function loadHistory(records: TestHistory[]) {
   const load = query({ data: records, error: null });
@@ -156,10 +163,10 @@ describe('History read errors', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load your history. Please try again.');
     expect(screen.queryByText('No results found.')).not.toBeInTheDocument();
     expect(screen.queryByText('private details')).not.toBeInTheDocument();
-    // Sort remains usable after failure; its failed read can also be retried.
-    supabaseMock.from.mockReturnValueOnce(query({ error: { message: 'still unavailable' } }));
+    // Sort remains usable after failure but only explicit Retry may read again.
     fireEvent.change(control(3), { target: { value: 'asc' } });
-    await screen.findByRole('alert');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(supabaseMock.from).toHaveBeenCalledOnce();
     const pending = deferred<QueryResult>();
     const retry = query(pending.promise);
     supabaseMock.from.mockReturnValue(retry);
@@ -191,7 +198,7 @@ describe('History read errors', () => {
     const confirm = screen.getByRole('button', { name: kind === 'single' ? 'Delete' : 'Delete 1 Record' });
     const failedRead = query({ error: { message: 'read failed' } });
     supabaseMock.from.mockReturnValue(failedRead);
-    await user.selectOptions(control(3), 'asc');
+    refreshAfterDeletion();
     await screen.findByRole('alert');
     expect(screen.queryByText(new Date(record.test_date).toLocaleString())).not.toBeInTheDocument();
     expect(screen.queryByText('Total Tests')).not.toBeInTheDocument();
@@ -213,7 +220,7 @@ describe('History read errors', () => {
     const old = deferred<QueryResult>();
     supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValueOnce(query({ error: { message: 'new error' } }));
     render(<History />);
-    fireEvent.change(control(3), { target: { value: 'asc' } });
+    refreshAfterDeletion();
     await screen.findByRole('alert');
     await act(async () => old.resolve({ data: variedRecords, error: null }));
     expect(screen.getByRole('alert')).toBeInTheDocument();
@@ -234,7 +241,8 @@ describe('History read errors', () => {
     expect(current.eq).toHaveBeenCalledWith('user_id', 'user-b');
     const pending = deferred<QueryResult>();
     supabaseMock.from.mockReturnValueOnce(query(pending.promise));
-    fireEvent.change(control(3), { target: { value: 'asc' } });
+    authMock.user = { id: 'user-a' };
+    rerender(<History />);
     unmount();
     await act(async () => pending.reject(new Error('unmounted')));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -242,7 +250,7 @@ describe('History read errors', () => {
 });
 
 describe('History read races', () => {
-  it('does not restore a deleted record when an older sorting read finishes after the deletion refresh', async () => {
+  it('does not restore a deleted record when an older deletion-version read finishes after the deletion refresh', async () => {
     const record = historyRecord();
     const { user } = await loadHistory([record]);
     await user.click(rowAction(record, 'trash-2'));
@@ -251,7 +259,7 @@ describe('History read races', () => {
     const deletion = query();
     supabaseMock.from.mockReturnValueOnce(query(old.promise))
       .mockReturnValueOnce(deletion).mockReturnValueOnce(query(fresh.promise));
-    await user.selectOptions(control(3), 'asc');
+    refreshAfterDeletion();
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     expect(deletion.eq.mock.calls).toEqual([['id', record.id], ['user_id', 'user-a']]);
     await act(async () => fresh.resolve({ data: [], error: null }));
@@ -261,12 +269,12 @@ describe('History read races', () => {
     expect(screen.queryByText(new Date(record.test_date).toLocaleString())).not.toBeInTheDocument();
   });
 
-  it('keeps loading until the newest sorting read completes', async () => {
+  it('keeps loading until the newest deletion-version read completes', async () => {
     const old = deferred<QueryResult>();
     const current = deferred<QueryResult>();
     supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValueOnce(query(current.promise));
     render(<History />);
-    fireEvent.change(control(3), { target: { value: 'asc' } });
+    refreshAfterDeletion();
     await act(async () => old.resolve({ data: [historyRecord()], error: null }));
     expect(screen.getByText('Loading...')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select All' })).toBeDisabled();
@@ -280,7 +288,7 @@ describe('History read races', () => {
     const current = historyRecord();
     supabaseMock.from.mockReturnValueOnce(query(old.promise)).mockReturnValue(query({ data: [current], error: null }));
     render(<History />);
-    fireEvent.change(control(2), { target: { value: 'score' } });
+    refreshAfterDeletion();
     await finishReload();
     await act(async () => {
       if (kind === 'returned') old.resolve({ error: { message: 'Old failure' } });
@@ -478,7 +486,8 @@ describe('History bulk selection safety', () => {
     await user.click(rowAction(variedRecords[2], 'square'));
     await user.click(screen.getByRole('button', { name: 'Delete Selected (2)' }));
     await user.selectOptions(control(index), value);
-    await finishReload();
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(supabaseMock.from).toHaveBeenCalledOnce();
     expect(screen.getByText(/^2 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deselect All' })).toBeInTheDocument();
     expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Delete 2 Records');
@@ -495,6 +504,8 @@ describe('History bulk selection safety', () => {
     // Two selected IDs, two visible records, but only one ID is shared.
     supabaseMock.from.mockReturnValue(query({ data: [variedRecords[0], variedRecords[2]], error: null }));
     await user.selectOptions(control(2), 'score');
+    expect(supabaseMock.from).toHaveBeenCalledOnce();
+    refreshAfterDeletion();
     await finishReload();
     expect(screen.getByText(/^1 of \d+ visible records selected$/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Deselect All' })).not.toBeInTheDocument();
@@ -515,7 +526,7 @@ describe('History bulk selection safety', () => {
     const refreshed = change === 'empty' ? [] : [variedRecords[2],
       ...(change === 'hidden' ? [{ ...variedRecords[0], test_direction: 'geo-to-en' as const }] : []), variedRecords[3]];
     supabaseMock.from.mockReturnValue(query({ data: refreshed, error: null }));
-    await user.selectOptions(control(2), 'score');
+    refreshAfterDeletion();
     await finishReload();
     const deletion = deletedRows(['en-medium']);
     supabaseMock.from.mockReturnValueOnce(deletion).mockReturnValue(query({ data: [], error: null }));

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { authMock, deferred, supabaseMock, type QueryResult } from '../test/mocks';
 import { historyRecord } from '../test/fixtures';
 import type { TestHistory } from '../lib/supabase';
+import { beginHistoryDeletion } from '../lib/historyDeletion';
 import History from './History';
 
 const accountA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -199,6 +200,12 @@ describe('History sequential confirmed deletion', () => {
     expect(document.body.textContent).toContain(`${remaining} remain.`);
     expect(toolbar().getByText(`${remaining} of ${remaining} visible records selected`)).toBeInTheDocument();
     expectStatistics(api.rows);
+    const reads = api.reads.length;
+    fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'asc' } });
+    expect(api.reads).toHaveLength(reads);
+    expect(api.deletions).toHaveLength(1);
+    expect(toolbar().getByText(`${remaining} of ${remaining} visible records selected`)).toBeInTheDocument();
+    expectStatistics(api.rows);
   });
 
   it.each(['missing', 'zero', 'partial', 'duplicate', 'foreign'] as const)('stops and verifies an uncertain successful response: %s', async response => {
@@ -225,6 +232,12 @@ describe('History sequential confirmed deletion', () => {
     expect(document.body.textContent).not.toContain('History refreshed:');
     expectStatistics([]); expect(api.deletions).toHaveLength(1);
     expect(toolbar().getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
+    const reads = api.reads.length;
+    fireEvent.change(document.querySelectorAll('select')[2], { target: { value: 'score' } });
+    fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'asc' } });
+    expect(api.reads).toHaveLength(reads);
+    expect(document.body.textContent).toContain('the remaining records are unknown');
+    expectStatistics([]);
     api.readResponse = (_request, response) => response;
     // New records are visible after Retry but are not included in the retry selection.
     const added = records(1, accountA, 9000)[0]; api.rows.push(added);
@@ -244,7 +257,8 @@ describe('History sequential confirmed deletion', () => {
     selectAll(); openConfirmation(3);
     const stale = handler(dialog().getByRole('button', { name: 'Delete 3 Records' }));
     api.rows = [rows[1], added];
-    fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'asc' } });
+    // Another view's completed deletion requires an authoritative membership read.
+    act(() => { const release = beginHistoryDeletion(accountA); expect(release).not.toBeNull(); release!(); });
     await ready();
     expect(dialog().getByRole('button', { name: 'Delete 1 Record' })).toBeEnabled();
     await act(async () => stale());
@@ -319,10 +333,19 @@ describe('History sequential confirmed deletion', () => {
     expect(document.body.textContent).toContain('Refreshing History to verify');
     expect(document.body.textContent).not.toContain('History refreshed:');
     expectStatistics([]);
+    fireEvent.change(document.querySelectorAll('select')[2], { target: { value: 'score' } });
+    fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'asc' } });
+    expect(api.reads).toHaveLength(5);
+    expect(document.body.textContent).toContain('Refreshing History to verify');
+    expectStatistics([]);
     await act(async () => refresh.resolve(lastPage!));
     await waitFor(() => expect(document.body.textContent).toContain('451 remain.'));
     const visible = api.rows.filter(row => row.test_direction === 'en-to-geo');
     expectStatistics(visible);
+    expect(toolbar().getByText('451 of 451 visible records selected')).toBeInTheDocument();
+    const reads = api.reads.length;
+    fireEvent.change(document.querySelectorAll('select')[3], { target: { value: 'desc' } });
+    expect(api.reads).toHaveLength(reads);
     expect(toolbar().getByText('451 of 451 visible records selected')).toBeInTheDocument();
     fireEvent.change(document.querySelectorAll('select')[1], { target: { value: 'high' } });
     expect(toolbar().getByText('0 of 0 visible records selected')).toBeInTheDocument();

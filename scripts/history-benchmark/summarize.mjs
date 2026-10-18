@@ -1,6 +1,9 @@
 // node scripts/history-benchmark/summarize.mjs tmp/history-perf-controlled.json
 import { readFile } from 'node:fs/promises';
-const input = JSON.parse(await readFile(process.argv[2], 'utf8'));
+import assert from 'node:assert/strict';
+const document = JSON.parse(await readFile(process.argv[2], 'utf8'));
+// Optional third argument selects before/after from the published comparison.
+const input = process.argv[3] ? document[process.argv[3]] : document;
 const median = values => {
   const sorted = [...values].sort((a, b) => a - b), middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
@@ -12,6 +15,9 @@ const results = input.environment.sizes.map(size => {
   const trials = input.trials.filter(t => t.size === size);
   const actions = Object.fromEntries(trials[0].actions.map(({ name }) => {
     const samples = trials.map(t => t.actions.find(a => a.name === name));
+    // Report request/byte counts only if every repetition agrees, including zero.
+    for (const key of ['requestCount', 'jsonBytes', 'gzipBytes'])
+      assert.ok(samples.every(sample => sample[key] === samples[0][key]), `${size}/${name}: inconsistent ${key}`);
     return [name, {
       duration: stats(samples.map(a => a.duration)), retrieval: stats(samples.map(a => a.retrieval)),
       postNetwork: samples[0].postNetwork === null ? null : stats(samples.map(a => a.postNetwork)),
