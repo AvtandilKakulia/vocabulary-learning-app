@@ -4,6 +4,9 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { normalizeEnglishWord } from "../../lib/normalizeEnglishWord";
 import { useLatestRequest } from "../../hooks/useLatestRequest";
+import { readWordsPageSize, readWordsSort, type SortOption } from "../../lib/wordsPreferences";
+
+export { pageSizeOptions, type SortOption } from "../../lib/wordsPreferences";
 
 export interface WordFormData {
   englishWord: string;
@@ -50,10 +53,6 @@ async function verifyWordMutation(
   throw new Error("The deletion result could not be confirmed. Review the refreshed list before selecting again.");
 }
 
-export const pageSizeOptions = [10, 25, 50, 100];
-
-export type SortOption = "alpha-asc" | "alpha-desc" | "recent";
-
 export function useWords() {
   const { user } = useAuth();
   const [words, setWords] = useState<Word[]>([]);
@@ -63,9 +62,9 @@ export function useWords() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(readWordsPageSize);
   const [totalCount, setTotalCount] = useState(0);
-  const [sortOption, setSortOption] = useState<SortOption>("alpha-asc");
+  const [sortOption, setSortOption] = useState<SortOption>(readWordsSort);
   const prevSearchTermRef = useRef(debouncedSearchTerm);
   const userId = user?.id;
   const beginRead = useLatestRequest(JSON.stringify([userId, debouncedSearchTerm, page, pageSize, sortOption]));

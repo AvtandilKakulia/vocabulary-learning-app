@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Sparkles, Layers, CheckSquare } from "lucide-react";
 import { Word } from "../lib/supabase";
+import { rememberWordsPageSize, rememberWordsSort } from "../lib/wordsPreferences";
 
 import WordToolbar from "./words/WordToolbar";
 import WordTable from "./words/WordTable";
@@ -257,12 +258,18 @@ export default function WordManagement() {
           setPage(0);
         }}
         pageSize={pageSize}
-        onPageSizeChange={setPageSize}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          rememberWordsPageSize(size);
+        }}
         pageSizeMenuOpen={pageSizeMenuOpen}
         setPageSizeMenuOpen={setPageSizeMenuOpen}
         setPage={setPage}
         sortOption={sortOption}
-        onSortChange={(value) => setSortOption(value as SortOption)}
+        onSortChange={(value) => {
+          setSortOption(value as SortOption);
+          rememberWordsSort(value as SortOption);
+        }}
         someSelected={someSelected}
         selectedCount={selectedIds.size}
         onClearSelection={() => setSelectedIds(new Set())}
