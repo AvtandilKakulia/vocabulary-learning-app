@@ -1,4 +1,6 @@
 import { StrictMode } from 'react';
+import userEvent from '@testing-library/user-event';
+import { HISTORY_PAGE_SIZE_KEY } from '../lib/historyPreferences';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { authMock, deferred, supabaseMock, type QueryResult } from '../test/mocks';
@@ -6,6 +8,7 @@ import { historyRecord } from '../test/fixtures';
 import type { TestHistory } from '../lib/supabase';
 import { beginHistoryDeletion } from '../lib/historyDeletion';
 import History from './History';
+import { allHistoryRows, findHistoryRow } from '../test/historyPagination';
 
 function refreshAfterDeletion() {
   act(() => { const release = beginHistoryDeletion('user-a'); expect(release).not.toBeNull(); release!(); });
@@ -79,16 +82,16 @@ function server(rows: TestHistory[], maxRows = 1000) {
 }
 
 const renderedRows = () => Array.from(document.querySelectorAll<HTMLElement>('.border-b'));
-const renderedTotals = () => renderedRows().map(row => Number(row.textContent?.match(/\(\d+\/(\d+)\)/)?.[1]));
+const renderedTotals = () => allHistoryRows().map(row => Number(row.textContent?.match(/\(\d+\/(\d+)\)/)?.[1]));
 const finishLoading = () => waitFor(() => expect(document.body.textContent).not.toContain('Loading...'));
 const control = (index: number, value: string) => fireEvent.change(document.querySelectorAll('select')[index], { target: { value } });
 // Scope queries before searching thousands of row buttons; keep assertions on
 // the real rendered list without spending the timeout traversing unrelated rows.
 const toolbar = () => within(document.querySelector<HTMLElement>('[role="group"]')!);
 const confirmation = () => within(document.querySelector<HTMLElement>('.fixed')!);
-const selectAll = () => fireEvent.click(toolbar().getByRole('button', { name: 'Select All' }));
+const selectAll = () => fireEvent.click(toolbar().getByRole('button', { name: /^Select All \d+ Filtered Records$/ }));
 function rowAction(record: TestHistory, icon: string) {
-  const row = renderedRows().find(row => row.textContent?.includes(`(${record.correct_count}/${record.total_words})`));
+  const row = findHistoryRow(record.id);
   const button = row?.querySelector(`.lucide-${icon}`)?.closest('button');
   expect(button).toBeInstanceOf(HTMLButtonElement);
   return button!;
@@ -118,8 +121,11 @@ describe('History loads the complete authorized collection', () => {
     const api = server([...rows, ...history(7, 'user-b')]);
     render(<History />);
     await finishLoading();
-    expect(renderedRows()).toHaveLength(size);
-    expect(renderedTotals()).toEqual([...rows].reverse().map(row => row.total_words));
+    const allRows = allHistoryRows();
+    expect(allRows).toHaveLength(size);
+    expect(renderedRows().length).toBeLessThanOrEqual(25);
+    expect(allRows.map(row => Number(row.textContent?.match(/\(\d+\/(\d+)\)/)?.[1])))
+      .toEqual([...rows].reverse().map(row => row.total_words));
     expectStats(rows);
     expect(api.reads).toHaveLength(Math.max(1, Math.ceil(size / 500)));
     api.reads.forEach((read, index) => expect(read).toEqual({
@@ -333,9 +339,10 @@ describe('History sorting is presentation only', () => {
     const visible = rows.filter(row => row.correct_count / row.total_words >= .8);
     expect(renderedTotals()).toEqual(expectedOrder(visible, 'score', 'asc'));
     expectStats(visible);
+    findHistoryRow(rows[3].id);
     expect(screen.getByText('saved prompt')).toBeInTheDocument();
     expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
-    expect(toolbar().getByText(`1 of ${visible.length} visible records selected`)).toBeInTheDocument();
+    expect(toolbar().getByText(`1 of ${visible.length} matching records selected across all pages`)).toBeInTheDocument();
     expect(api.reads).toHaveLength(1);
     fireEvent.click(confirmation().getByRole('button', { name: 'Delete 1 Record' }));
     await finishLoading();
@@ -458,7 +465,7 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     api.rows = rows.slice(1);
     refreshAfterDeletion();
     await finishLoading();
-    expect(toolbar().getByText('1 of 6 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('1 of 6 matching records selected across all pages')).toBeInTheDocument();
     fireEvent.click(confirmation().getByRole('button', { name: 'Delete 1 Record' }));
     await finishLoading();
     expect(api.deletions).toEqual([{ userId: 'user-a', ids: [rows[1].id] }]);
@@ -534,7 +541,256 @@ describe('History pagination preserves lifecycle and selection safety', () => {
     expect(api.rows).toEqual(rows);
     expectStats(rows);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-    expect(toolbar().getByText('501 of 501 visible records selected')).toBeInTheDocument();
+    expect(toolbar().getByText('501 of 501 matching records selected across all pages')).toBeInTheDocument();
     expect(api.reads).toHaveLength(4);
+  });
+});
+
+
+describe('History display pagination', () => {
+  const mountedIds = () => Array.from(document.querySelectorAll<HTMLElement>('[data-history-id]'), row => row.dataset.historyId);
+  const nav = (position = 'top') => within(screen.getByRole('navigation', { name: `History pagination (${position})` }));
+  const pageSize = () => screen.getByRole('combobox', { name: 'Records per page' });
+  const sizeTo = (size: number) => fireEvent.change(pageSize(), { target: { value: String(size) } });
+  const next = () => fireEvent.click(nav().getByRole('button', { name: 'Next' }));
+  const previous = () => fireEvent.click(nav().getByRole('button', { name: 'Previous' }));
+  const expectRange = (from: number, to: number, count: number) =>
+    expect(screen.getByText(`Showing ${from}–${to} of ${count} records`)).toBeInTheDocument();
+
+  it.each([0, 1, 10, 25, 26, 49, 50, 51, 100, 101, 1001, 2001, 5000])('renders bounded pages and exact ranges for %i authorized records', async count => {
+    const rows = history(count), api = server([...rows, ...history(2, 'user-b')]);
+    render(<History />); await finishLoading();
+    expect(pageSize()).toHaveValue('25');
+    expect(within(pageSize()).getAllByRole('option').map(option => option.getAttribute('value'))).toEqual(['10', '25', '50', '100']);
+    expect(mountedIds()).toEqual([...rows].reverse().slice(0, 25).map(row => row.id));
+    expectRange(count ? 1 : 0, Math.min(25, count), count);
+    expectStats(rows);
+    const pages = Math.max(1, Math.ceil(count / 25));
+    if (pages === 1) {
+      expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    } else {
+      expect(screen.getAllByText(`Page 1 of ${pages}`)).toHaveLength(2);
+      for (const position of ['top', 'bottom']) expect(nav(position).getByRole('button', { name: 'Previous' })).toBeDisabled();
+      next();
+      expect(mountedIds()).toEqual([...rows].reverse().slice(25, 50).map(row => row.id));
+      expectRange(26, Math.min(50, count), count);
+      previous(); expectRange(1, 25, count);
+    }
+    expect(api.reads).toHaveLength(Math.max(1, Math.ceil(count / 500)));
+    expect(api.deletions).toEqual([]);
+  });
+
+  // Native Chrome also walks every page of all benchmark sizes, including
+  // 5,000 records. Keep jsdom's final-page cases below its unchanged 5s budget.
+  it.each([26, 49, 50, 51, 100, 101, 1001, 2001])('shows the exact short/full final page for %i records', async count => {
+    const rows = history(count), api = server(rows);
+    render(<History />); await finishLoading();
+    const pages = Math.ceil(count / 25);
+    // Reach the tail through the supported 100-row UI, then verify the exact
+    // default-size final page. Avoid 200 redundant jsdom toolbar rerenders.
+    sizeTo(100); findHistoryRow(rows[0].id); sizeTo(25);
+    const last = findHistoryRow(rows[0].id);
+    expect(last).toBeInTheDocument();
+    expect(mountedIds()).toEqual([...rows].reverse().slice((pages - 1) * 25).map(row => row.id));
+    expectRange((pages - 1) * 25 + 1, count, count);
+    for (const position of ['top', 'bottom']) expect(nav(position).getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(screen.getAllByText(`Page ${pages} of ${pages}`)).toHaveLength(2);
+    expect(api.reads).toHaveLength(Math.ceil(count / 500));
+    expectStats(rows);
+  });
+
+  it.each([10, 25, 50, 100])('remembers only page size %i across navigation and a fresh browser-state read', async size => {
+    const api = server(history(101));
+    const view = render(<History />); await finishLoading();
+    sizeTo(size);
+    expect(pageSize()).toHaveValue(String(size));
+    expect(mountedIds()).toHaveLength(size);
+    expect(api.reads).toHaveLength(1);
+    expect(localStorage.length).toBe(1);
+    expect(localStorage.getItem(HISTORY_PAGE_SIZE_KEY)).toBe(String(size));
+    view.unmount();
+    // A new component reads storage, just as after navigating back or a reload.
+    const returned = render(<History />); await finishLoading();
+    expect(pageSize()).toHaveValue(String(size));
+    returned.unmount();
+    localStorage.clear(); localStorage.setItem(HISTORY_PAGE_SIZE_KEY, String(size));
+    render(<StrictMode><History /></StrictMode>); await finishLoading();
+    expect(pageSize()).toHaveValue(String(size));
+    expect(mountedIds()).toHaveLength(size);
+  });
+
+  it.each(['', '0', '26', '-1', '1000', 'NaN', '5e1', ' 50 ', '{"size":50}'])('defaults to 25 for invalid stored preference %s', async invalid => {
+    localStorage.setItem(HISTORY_PAGE_SIZE_KEY, invalid);
+    server(history(101)); render(<History />); await finishLoading();
+    expect(pageSize()).toHaveValue('25'); expect(mountedIds()).toHaveLength(25);
+  });
+
+  it('uses 25 when reading storage fails and keeps pagination usable when writing fails', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+    const api = server(history(101)); render(<History />); await finishLoading();
+    expect(pageSize()).toHaveValue('25');
+    sizeTo(50); next();
+    expectRange(51, 100, 101);
+    expect(api.reads).toHaveLength(1);
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('retains the old first visible record when changing sizes, including a short last page', async () => {
+    const rows = history(101), api = server(rows);
+    render(<History />); await finishLoading();
+    next(); next(); expectRange(51, 75, 101);
+    const first = mountedIds()[0];
+    sizeTo(50); expectRange(51, 100, 101); expect(mountedIds()).toContain(first);
+    sizeTo(10); expectRange(51, 60, 101); expect(mountedIds()[0]).toBe(first);
+    sizeTo(100); expectRange(1, 100, 101); expect(mountedIds()).toContain(first);
+    next(); expectRange(101, 101, 101);
+    for (const size of [25, 50, 10, 100]) {
+      sizeTo(size); expectRange(101, 101, 101); expect(mountedIds()).toEqual([rows[0].id]);
+    }
+    expect(api.reads).toHaveLength(1); expectStats(rows);
+  });
+
+  it('supports keyboard navigation, scrolls only on page navigation, and ignores disabled callbacks', async () => {
+    const scroll = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+    const rows = history(51), api = server(rows);
+    render(<History />); await finishLoading();
+    expect(scroll).not.toHaveBeenCalled();
+    const user = userEvent.setup();
+    nav('bottom').getByRole('button', { name: 'Next' }).focus();
+    await user.keyboard('{Enter}');
+    expectRange(26, 50, 51);
+    expect(screen.getByRole('heading', { name: 'History records' })).toHaveFocus();
+    expect(scroll).toHaveBeenCalledOnce();
+    next(); expectRange(51, 51, 51);
+    const finalNext = nav().getByRole('button', { name: 'Next' });
+    fireEvent.click(finalNext); expectRange(51, 51, 51);
+    previous(); expectRange(26, 50, 51);
+    const calls = scroll.mock.calls.length;
+    sizeTo(50); control(2, 'score'); control(1, 'high');
+    expect(scroll).toHaveBeenCalledTimes(calls);
+    expect(api.reads).toHaveLength(1);
+    delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it.each([[0, 'geo-to-en'], [1, 'high'], [2, 'score'], [3, 'asc']] as const)('resets to page 1 for control %i and keeps full filtered statistics', async (index, value) => {
+    const rows = history(101).map((row, i) => ({ ...row, test_direction: i % 2 ? 'en-to-geo' as const : 'geo-to-en' as const }));
+    const api = server(rows); render(<History />); await finishLoading();
+    next(); next();
+    control(index, value);
+    const matching = rows.filter(row => index === 0 ? row.test_direction === value : index === 1 ? row.correct_count / row.total_words >= .8 : true);
+    expectRange(1, Math.min(25, matching.length), matching.length);
+    expectStats(matching); expect(api.reads).toHaveLength(1);
+  });
+
+  it('keeps per-ID selections across pages, size and sort changes and deletes only the confirmed scope', async () => {
+    const rows = history(101), api = server(rows);
+    render(<History />); await finishLoading();
+    fireEvent.click(rowAction(rows[100], 'square'));
+    next(); fireEvent.click(rowAction(rows[75], 'square'));
+    next(); fireEvent.click(rowAction(rows[50], 'square'));
+    sizeTo(50); control(2, 'score');
+    expect(toolbar().getByText('3 of 101 matching records selected across all pages')).toBeInTheDocument();
+    fireEvent.click(toolbar().getByRole('button', { name: 'Delete Selected (3)' }));
+    fireEvent.click(confirmation().getByRole('button', { name: 'Cancel' }));
+    expect(api.deletions).toEqual([]);
+    fireEvent.click(toolbar().getByRole('button', { name: 'Delete Selected (3)' }));
+    // A new server row is outside the snapshot confirmed by the user.
+    const added = historyRecord({ id: 'new-row', total_words: 888 }); api.rows.push(added);
+    fireEvent.click(confirmation().getByRole('button', { name: 'Delete 3 Records' }));
+    await waitFor(() => expect(document.body.textContent).toContain('all 3 confirmed records are no longer'));
+    expect(api.deletions).toEqual([{ userId: 'user-a', ids: [rows[100].id, rows[75].id, rows[50].id] }]);
+    expect(api.rows).toContain(added); expectStats(api.rows);
+    expect(toolbar().getByText('0 of 99 matching records selected across all pages')).toBeInTheDocument();
+  });
+
+  it('Select All covers every filtered page; page changes preserve confirmation and filter changes clear it', async () => {
+    const rows = history(101), api = server(rows);
+    render(<History />); await finishLoading(); control(1, 'high');
+    const matching = rows.filter(row => row.correct_count / row.total_words >= .8);
+    selectAll(); next(); sizeTo(10);
+    expect(toolbar().getByRole('button', { name: 'Deselect All' })).toBeEnabled();
+    fireEvent.click(toolbar().getByRole('button', { name: `Delete Selected (${matching.length})` }));
+    previous(); sizeTo(100);
+    expect(confirmation().getByRole('button', { name: `Delete ${matching.length} Records` })).toBeEnabled();
+    control(1, 'low');
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(toolbar().getByRole('button', { name: 'Delete Selected (0)' })).toBeDisabled();
+    expect(api.deletions).toEqual([]); expect(api.reads).toHaveLength(1);
+  });
+
+  it.each(['single', 'bulk'])('clamps the final page after a confirmed %s deletion and retains a still-valid page on refresh', async kind => {
+    const rows = history(51), api = server(rows);
+    render(<History />); await finishLoading(); next(); next();
+    expectRange(51, 51, 51);
+    if (kind === 'single') {
+      fireEvent.click(rowAction(rows[0], 'trash2'));
+      fireEvent.click(confirmation().getByRole('button', { name: 'Delete' }));
+    } else {
+      fireEvent.click(rowAction(rows[0], 'square'));
+      fireEvent.click(toolbar().getByRole('button', { name: 'Delete Selected (1)' }));
+      fireEvent.click(confirmation().getByRole('button', { name: 'Delete 1 Record' }));
+    }
+    await waitFor(() => expect(api.reads).toHaveLength(2)); await finishLoading();
+    expectRange(26, 50, 50); expectStats(rows.slice(1));
+    refreshAfterDeletion(); await finishLoading(); expectRange(26, 50, 50);
+    api.rows = []; refreshAfterDeletion(); await finishLoading();
+    expectRange(0, 0, 0); expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
+  });
+
+  it('keeps size changes local during delayed reads and errors, and applies them after explicit Retry', async () => {
+    const api = server(history(1001)), pending = deferred<QueryResult>();
+    api.respond = (read, response) => read.from === 500 ? pending.promise : response;
+    render(<History />); await waitFor(() => expect(api.reads).toHaveLength(2));
+    sizeTo(100); control(3, 'asc'); expectNoPartialHistory();
+    expect(api.reads).toHaveLength(2);
+    await act(async () => pending.resolve({ error: { message: 'offline' } }));
+    sizeTo(10); control(2, 'score');
+    expect(api.reads).toHaveLength(2); expectNoPartialHistory();
+    api.respond = (_read, response) => response;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' })); await finishLoading();
+    expectRange(1, 10, 1001); expectStats(history(1001));
+    expect(api.reads.map(read => read.from)).toEqual([0, 500, 0, 500, 1000]);
+  });
+
+  it('resets pagination across accounts under StrictMode and ignores stale page callbacks after sign-out', async () => {
+    const rows = history(51), other = history(26, 'user-b'), api = server([...rows, ...other]);
+    const view = render(<StrictMode><History /></StrictMode>); await finishLoading(); next();
+    const button = nav().getByRole('button', { name: 'Next' });
+    const key = Object.keys(button).find(key => key.startsWith('__reactProps$'))!;
+    const stale = (Reflect.get(button, key) as { onClick: () => void }).onClick;
+    authMock.user = { id: 'user-b' }; view.rerender(<StrictMode><History /></StrictMode>); await finishLoading();
+    act(() => stale()); expectRange(1, 25, 26);
+    expect(mountedIds()).toEqual([...other].reverse().slice(0, 25).map(row => row.id));
+    next(); authMock.user = { id: 'user-a' }; view.rerender(<StrictMode><History /></StrictMode>); await finishLoading();
+    expectRange(1, 25, 51);
+    authMock.user = null; view.rerender(<StrictMode><History /></StrictMode>); act(() => stale());
+    expectRange(0, 0, 0); expect(mountedIds()).toEqual([]);
+    expect(api.deletions).toEqual([]);
+  });
+
+  it('keeps saved mistake details associated with their ID when paging and sorting', async () => {
+    const rows = history(51);
+    rows[50].mistakes = [{ english_word: 'first', question_prompt: 'First saved prompt', user_answer: 'wrong', correct_definitions: ['პირველი'], description: '<strong>First description</strong>' }];
+    rows[0].mistakes = [{ english_word: 'last', question_prompt: 'Last saved prompt', user_answer: 'wrong', correct_definitions: ['ბოლო'] }];
+    server(rows); render(<History />); await finishLoading();
+    const dateFormatting = vi.spyOn(Date.prototype, 'toLocaleString');
+    fireEvent.click(rowAction(rows[50], 'chevron-down'));
+    // Only the expanded row rerenders, not the other 24 mounted records.
+    expect(dateFormatting).toHaveBeenCalledOnce();
+    expect(screen.getByText('First description')).toBeInTheDocument();
+    next(); next();
+    expect(screen.queryByText('First saved prompt')).not.toBeInTheDocument();
+    fireEvent.click(rowAction(rows[0], 'chevron-down'));
+    expect(screen.getByText('Last saved prompt')).toBeInTheDocument();
+    previous(); previous();
+    expect(screen.queryByText('Last saved prompt')).not.toBeInTheDocument();
+    expect(screen.queryByText('First saved prompt')).not.toBeInTheDocument();
+    fireEvent.click(rowAction(rows[50], 'chevron-down')); control(2, 'score');
+    findHistoryRow(rows[50].id);
+    expect(screen.getByText('First saved prompt')).toBeInTheDocument();
+    expect(screen.queryByText('Last saved prompt')).not.toBeInTheDocument();
   });
 });

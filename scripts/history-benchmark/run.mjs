@@ -22,12 +22,15 @@ const sizes = option('--sizes', '100,500,1000,2000,5000').split(',').map(Number)
 const cap = Number(option('--cap', 500)), latency = Number(option('--latency', 50)), mbps = Number(option('--mbps', 10));
 const label = option('--label', 'baseline');
 const profiling = process.argv.includes('--profile');
+const screenshots = process.argv.includes('--screenshots');
 // Re-measure an immutable baseline with the SAME readiness checks and fixtures.
 const historyRef = option('--history-ref', null);
 if (historyRef) assert.match(historyRef, /^[a-f0-9]{40}$/);
 const historySource = historyRef
   ? execFileSync('git', ['show', `${historyRef}:src/components/History.tsx`], { encoding: 'utf8' }) : null;
 const expectSortReads = process.argv.includes('--expect-sort-reads');
+// Explicit flag keeps immutable PR #35/all-row baselines reproducible.
+const pagination = !process.argv.includes('--all-rows');
 const sourceHash = createHash('sha256').update((historySource ?? await readFile(resolve('src/components/History.tsx'), 'utf8')).replaceAll('\r\n', '\n')).digest('hex');
 assert.match(label, /^[a-z0-9-]+$/);
 assert.ok(Number.isSafeInteger(runs) && runs > 0 && runs <= 30);
@@ -172,7 +175,7 @@ try {
   const environment = { date: new Date().toISOString(), base: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     node: process.version, os: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0].model,
     logicalCPUs: os.cpus().length, ramGiB: os.totalmem() / 2 ** 30, browser: await manager.call('Browser.getVersion'),
-    runs, sizes, cap, latencyMs: latency, megabitsPerSecond: mbps, cpuThrottling: 1, label, profiling, historyRef, sourceHash, expectSortReads,
+    runs, sizes, cap, latencyMs: latency, megabitsPerSecond: mbps, cpuThrottling: 1, label, profiling, historyRef, sourceHash, expectSortReads, pagination,
     networkModel: 'Server delays each GET by latency + gzip bytes / throughput; no CDP network throttling; localhost burst delivery',
     build: 'Vite production, minified React 18; History + real CSS + installed Supabase SDK; fixture auth/local GET API',
   };
@@ -195,6 +198,7 @@ try {
       const metrics = async () => Object.fromEntries((await page.call('Performance.getMetrics')).metrics.map(m => [m.name, m.value]));
       const trial = { size, repeat, idleFrames: await page.evaluate('benchmark.frames()'), actions: [] };
       let direction = 'all', score = 'all', sortBy = 'date', sortOrder = 'desc';
+      let displayPage = 0, pageSize = 25;
       async function action(name, kind, value = null, expected = size) {
         if (kind === 'select' && value.index === 0) direction = value.value;
         if (kind === 'select' && value.index === 1) score = value.value;
@@ -210,10 +214,20 @@ try {
           return sortOrder === 'asc' ? delta : -delta;
         });
         assert.equal(visible.length, expected);
+        if (kind === 'open' || (kind === 'select' && value.index < 4)) displayPage = 0;
+        if (kind === 'page') displayPage += value.direction === 'Next' ? 1 : -1;
+        if (kind === 'select' && value.index === 4) {
+          displayPage = Math.floor(displayPage * pageSize / Number(value.value));
+          pageSize = Number(value.value);
+        }
+        const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+        displayPage = Math.min(displayPage, totalPages - 1);
+        const rendered = pagination ? visible.slice(displayPage * pageSize, (displayPage + 1) * pageSize) : visible;
+        const expectedPagination = pagination ? { page: displayPage, size: pageSize, totalPages } : null;
         const profileThis = profiling && ['cold-open', 'select-all', 'expand'].includes(name);
         if (profileThis) { await page.call('Profiler.enable'); await page.call('Profiler.start'); }
         const before = await metrics(), requestStart = requests.length;
-        const result = await page.evaluate(`benchmark.action(${JSON.stringify(kind)},${JSON.stringify(value)},${JSON.stringify(visible.map(row => row.id))})`);
+        const result = await page.evaluate(`benchmark.action(${JSON.stringify(kind)},${JSON.stringify(value)},${JSON.stringify(rendered.map(row => row.id))},${visible.length},${JSON.stringify(expectedPagination)})`);
         const after = await metrics();
         const profile = profileThis ? (await page.call('Profiler.stop')).profile : null;
         assert.equal(Number.parseInt(result.stats[1]), Math.round(visible.reduce((sum, row) => sum + row.correct_count / row.total_words * 100, 0) / visible.length));
@@ -237,13 +251,36 @@ try {
       }
       await action('cold-open', 'open');
       trial.dom = await page.evaluate('benchmark.inspect()');
-      assert.equal(trial.dom.rows, size); assert.ok(trial.dom.rowHeight > 80, 'Real CSS must be applied');
+      assert.equal(trial.dom.rows, pagination ? Math.min(size, 25) : size); assert.ok(trial.dom.rowHeight > 80, 'Real CSS must be applied');
       await page.call('HeapProfiler.collectGarbage');
       trial.loadedHeap = await page.call('Runtime.getHeapUsage');
       await page.evaluate('benchmark.leave()');
       await page.call('HeapProfiler.collectGarbage');
       trial.unmountedHeap = await page.call('Runtime.getHeapUsage');
       await action('warm-open', 'open');
+      if (screenshots && repeat === 0) {
+        trial.layoutChecks = [];
+        for (const width of [1440, 390]) {
+          await page.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+          await page.evaluate(`document.querySelector('[aria-label="History display controls"]')?.scrollIntoView()`);
+          const dimensions = await page.evaluate('({ width: innerWidth, contentWidth: document.documentElement.scrollWidth })');
+          assert.ok(dimensions.contentWidth <= dimensions.width, 'Horizontal overflow');
+          trial.layoutChecks.push(dimensions);
+          const shot = await page.call('Page.captureScreenshot', { format: 'png' });
+          await writeFile(resolve(`tmp/history-perf-${label}-${size}-${width}.png`), Buffer.from(shot.data, 'base64'));
+        }
+        await page.call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        await page.evaluate('window.scrollTo(0,0)');
+      }
+      if (pagination) {
+        await action('next-top', 'page', { position: 'top', direction: 'Next' });
+        await action('next-bottom', 'page', { position: 'bottom', direction: 'Next' });
+        await action('previous-bottom', 'page', { position: 'bottom', direction: 'Previous' });
+        await action('previous-top', 'page', { position: 'top', direction: 'Previous' });
+        await action('position-next-1', 'page', { position: 'top', direction: 'Next' });
+        await action('position-next-2', 'page', { position: 'top', direction: 'Next' });
+        for (const size of [50, 10, 100, 25]) await action(`page-size-${size}`, 'select', { index: 4, value: String(size) });
+      }
       const expected = (direction = 'all', score = 'all') => fixtures(size).filter(r =>
         (direction === 'all' || r.test_direction === direction) && (score === 'all' ||
         (score === 'high' ? r.correct_count / r.total_words >= .8 : score === 'medium' ? r.correct_count / r.total_words >= .5 && r.correct_count / r.total_words < .8 : r.correct_count / r.total_words < .5))).length;
@@ -259,10 +296,15 @@ try {
       await action('deselect-all', 'selection', 'Deselect All');
       await action('expand', 'expand'); await action('collapse', 'collapse');
       await page.evaluate('benchmark.startScroll()');
-      await page.call('Input.synthesizeScrollGesture', { x: 1000, y: 600, yDistance: -3000, speed: 1500, gestureSourceType: 'mouse' });
+      // Same distance fits both the default 25-row list and the baseline.
+      await page.call('Input.synthesizeScrollGesture', { x: 1000, y: 600, yDistance: -1000, speed: 1500, gestureSourceType: 'mouse' });
       trial.scroll = await page.evaluate('benchmark.endScroll()');
       await page.call('HeapProfiler.collectGarbage');
       trial.finalHeap = await page.call('Runtime.getHeapUsage');
+      if (pagination) {
+        const allIds = ordered(fixtures(size)).sort((a, b) => a.correct_count / a.total_words - b.correct_count / b.total_words).map(row => row.id);
+        trial.pageCoverage = await page.evaluate(`benchmark.visitAllPages(${JSON.stringify(allIds)})`);
+      }
       await page.evaluate('benchmark.leave()');
       await page.call('HeapProfiler.collectGarbage');
       trial.finalUnmountedHeap = await page.call('Runtime.getHeapUsage');
