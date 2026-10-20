@@ -56,7 +56,57 @@ The separate word-version runner below remains unchanged. Neither runner accepts
 a hosted connection URL; neither proves Production matches the repository.
 The [metadata-only SQL](tests/authorization/production-metadata-readonly.sql) is
 prepared for separately approved owner inspection, not automatic execution on
-Production. This adds no migration, remediation, deployment or CI changes.
+Production. The original audit added no migration, remediation or deployment.
+
+## R4-SEC-03: PostgreSQL tests in CI
+
+The [Quality workflow](../.github/workflows/quality.yml) runs the independent
+`PostgreSQL integration` check on every pull request and push to `main`, alongside
+the unchanged frontend `quality` job. It uses GitHub-hosted `ubuntu-24.04`,
+Node.js 24, and explicitly installs `postgresql-17` / `postgresql-client-17` from
+the [official PostgreSQL APT repository](https://www.postgresql.org/download/linux/ubuntu/).
+It checks and prints the versions of `initdb`, `pg_ctl`, and `psql` in
+`/usr/lib/postgresql/17/bin`; a missing binary or a different major version fails
+the job. PostgreSQL 17 patch releases follow PGDG updates; the exact installed
+version is recorded in each run's logs, including the actual server version.
+
+The two dependency-free runners execute sequentially, as the regular runner OS
+user (not root), without an npm install or the Supabase CLI:
+
+```sh
+node supabase/tests/authorization/run.mjs --pg-bin /usr/lib/postgresql/17/bin
+node supabase/tests/word-version/run.mjs --pg-bin /usr/lib/postgresql/17/bin
+```
+
+CI requires both a successful process exit and the complete **200 authorization**
+and **30 word-version** check summaries. Bash `errexit` and `pipefail` preserve
+errors through log capture. Setup errors, failed assertions, missing completion
+summaries, cleanup errors and unexpected process termination cannot pass the
+check; the job has a 15-minute limit. When intentionally adding tests, update
+the expected total in the workflow together with the suite. No failure is
+optional. Making this check a merge requirement is a separate repository
+branch-protection/ruleset setting; this workflow does not change those settings.
+
+Authorization coverage includes owner/cross-account/anonymous access, RLS,
+privileges, RPCs, account deletion, preserved data and negative controls that
+deliberately weaken isolated fixtures. Word-version coverage includes timestamp
+advancement, real concurrent transactions, stale-write rejection, normalization,
+unchanged profiles behavior, schema-drift rejection and rollback/recovery.
+
+Each runner creates its own fresh cluster under the OS temporary directory on a
+random `127.0.0.1` port, disables Unix sockets, sanitizes inherited PostgreSQL
+environment variables and accepts only a binary-directory argument. Tests apply
+repository SQL solely to synthetic databases inside that cluster. Normal exit
+stops the cluster; success removes its directory and failure retains stopped
+diagnostics. A forced job cancellation may interrupt cleanup; GitHub discards
+the disposable hosted runner. Local trust authentication is confined to this
+temporary, single-job environment.
+
+No hosted database connection, Supabase credentials, database passwords,
+service-role keys or GitHub secrets are used. These tests exercise real
+PostgreSQL with synthetic Supabase auth/role fixtures, **not** hosted Supabase
+Auth/JWT validation, PostgREST, extensions or Production configuration/drift.
+They neither deploy migrations nor create/repair a hosted migration ledger.
 
 ## R3-A01: word version migration and deployment review
 
@@ -215,8 +265,8 @@ These are actual PostgreSQL tests, not JavaScript response mocks. They do not
 test the hosted Supabase Auth service, PostgREST HTTP transport, Production
 configuration, extensions, infrastructure or Production-scale lock duration.
 The separate frontend suite covers the installed SDK's serialization/count
-contract with a local transport. The standalone PostgreSQL runner is not part of
-the existing GitHub Actions workflow. Neither suite substitutes for the target preflight.
+contract with a local transport. Both PostgreSQL runners now run in the separate
+CI job described above. Neither suite substitutes for the target preflight.
 
 ### Separately approved deployment and verification
 

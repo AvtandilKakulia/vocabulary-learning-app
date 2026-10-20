@@ -34,3 +34,43 @@ jobs:
         run: pnpm exec vitest run
       - name: Build
         run: pnpm exec vite build
+
+  postgres:
+    name: PostgreSQL integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      PG_BIN: /usr/lib/postgresql/17/bin
+      LC_ALL: C
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install PostgreSQL 17 from the official PGDG repository
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends postgresql-common ca-certificates
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install --yes --no-install-recommends postgresql-17 postgresql-client-17
+      - name: Verify explicit PostgreSQL 17 binaries
+        run: |
+          for executable in initdb pg_ctl psql; do
+            test -x "$PG_BIN/$executable"
+            version="$("$PG_BIN/$executable" --version)"
+            printf '%s\n' "$version"
+            grep -E "^${executable} \(PostgreSQL\) 17\." <<< "$version"
+          done
+      # Explicit bash enables errexit + pipefail: tee cannot mask a failed runner.
+      # Require the final totals as well, so a premature exit cannot pass CI.
+      - name: Authorization regression (200 checks)
+        run: |
+          node supabase/tests/authorization/run.mjs --pg-bin "$PG_BIN" 2>&1 | tee "$RUNNER_TEMP/authorization.log"
+          grep -Fx 'PASS: 200 authorization checks; all application probes used non-bypassing roles.' "$RUNNER_TEMP/authorization.log"
+      - name: Word-version regression (30 checks)
+        run: |
+          node supabase/tests/word-version/run.mjs --pg-bin "$PG_BIN" 2>&1 | tee "$RUNNER_TEMP/word-version.log"
+          grep -Fx 'PASS: 30 integration checks (SQL assertion groups contain multiple cases).' "$RUNNER_TEMP/word-version.log"
