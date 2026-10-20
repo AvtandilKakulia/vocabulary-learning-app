@@ -87,7 +87,7 @@ export function verifyAuthorization({ admin, probe, clone, check, succeeded }) {
       assert.equal(f.public, false);
       assert.equal(f.grantable, false);
       assert.equal(f.authenticated, ['search_words', 'search_words_count', 'delete_user_account'].includes(f.name));
-      assert.deepEqual(f.config, ['set_english_word_norm', 'update_updated_at_column'].includes(f.name) ? null : ['search_path=""']);
+      assert.deepEqual(f.config, ['search_path=""']);
     }
     assert.equal(functions.find(f => f.name === 'delete_user_account').args, 'delete_user_account()');
     assert.equal(functions.find(f => f.name === 'search_words').args, 'search_words(uuid,text,integer,integer,text)');
