@@ -279,7 +279,7 @@ export async function auditAccountDeletion({ admin, probe, clone, check, succeed
   };
   check('late auth.users trigger failure rolls back all three preceding application deletes', () => {
     const db = clone();
-    admin(db, `CREATE FUNCTION public.audit_block_delete() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN RAISE EXCEPTION 'audit-only late failure'; END $;
+    admin(db, `CREATE FUNCTION public.audit_block_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit-only late failure'; END; $$;
       CREATE TRIGGER audit_block_delete BEFORE DELETE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.audit_block_delete()`);
     const before = snapshot(db);
     denied(probe(db, { sub: A }, 'SELECT public.delete_user_account()', true), 'P0001');
