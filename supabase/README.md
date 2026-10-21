@@ -17,6 +17,7 @@ before using the application:
 5. `20261006190000_search_words_integrity_sorting.sql`
 6. `20261007234000_security_schema_reconciliation.sql`
 7. `20261013211615_advance_word_updated_at.sql`
+8. `20261020175702_harden_trigger_function_search_paths.sql`
 
 The baseline creates prerequisites only. Later migrations introduce normalization,
 remove temporary normalized uniqueness to allow independent meanings, evolve
@@ -107,6 +108,120 @@ service-role keys or GitHub secrets are used. These tests exercise real
 PostgreSQL with synthetic Supabase auth/role fixtures, **not** hosted Supabase
 Auth/JWT validation, PostgREST, extensions or Production configuration/drift.
 They neither deploy migrations nor create/repair a hosted migration ledger.
+
+## R4-SEC-04: fixed trigger-function search paths (not deployed)
+
+**Prepared for separate Production deployment approval only.** This work does
+not connect to hosted Supabase or establish a Production migration ledger.
+The owner reports PostgreSQL 17.11 and two postgres-owned SECURITY INVOKER
+functions with NULL `proconfig` and no anon/authenticated execution rights.
+
+[Forward migration](migrations/20261020175702_harden_trigger_function_search_paths.sql)
+addresses Advisor `0011_function_search_path_mutable` for exactly:
+
+```sql
+ALTER FUNCTION public.set_english_word_norm() SET search_path = '';
+ALTER FUNCTION public.update_updated_at_column() SET search_path = '';
+```
+
+The file was generated with `pnpm dlx supabase@2.120.0 migration new
+harden_trigger_function_search_paths` after inspecting `migration new --help`.
+No function/trigger is recreated; no body, owner, ACL, dependency, policy, row or
+table definition is changed. The only persistent metadata delta is
+`proconfig: NULL -> ARRAY['search_path=""']` on these two existing function OIDs.
+Built-ins still resolve through implicit `pg_catalog`; normalization keeps its
+collapse-whitespace/trim/lowercase rule and the profile trigger retains its
+existing transaction-start timestamp expression, including timezone semantics.
+The dedicated `advance_word_updated_at()` words-version trigger stays unchanged.
+See [ALTER FUNCTION](https://www.postgresql.org/docs/17/sql-alterfunction.html)
+and [schema search paths](https://www.postgresql.org/docs/17/ddl-schemas.html).
+
+### Preflight and deployment prerequisites
+
+After separate owner approval, verify the target/backup and save metadata,
+function definitions and the migration hash. The trusted operator must inspect
+the actual bodies: they must implement the reviewed normalization/profile
+expressions using built-ins; any new relation or user-defined function reference
+requires review for schema qualification before setting an empty path.
+The automated preflight validates metadata/bindings, not arbitrary body semantics.
+Do not run concurrent privileged function/schema DDL during deployment.
+
+The following are **owner-run read-only inspection queries**, not commands this
+task executes against Production. Capture them before and after deployment:
+
+```sql
+BEGIN READ ONLY;
+SET LOCAL statement_timeout = '30s';
+SELECT version(), current_user, current_setting('session_replication_role');
+SELECT p.oid, p.oid::regprocedure AS identity, p.proowner::regrole AS owner,
+       l.lanname, p.prokind, p.prorettype::regtype, p.prosecdef, p.proconfig,
+       p.proacl, pg_get_functiondef(p.oid) AS definition,
+       has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_execute,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_execute
+FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang
+WHERE p.pronamespace='public'::regnamespace
+  AND p.proname IN ('set_english_word_norm','update_updated_at_column');
+SELECT t.oid, t.tgrelid::regclass, t.tgfoid, t.tgenabled, pg_get_triggerdef(t.oid)
+FROM pg_trigger t WHERE t.tgfoid IN (
+  'public.set_english_word_norm()'::regprocedure,
+  'public.update_updated_at_column()'::regprocedure);
+ROLLBACK;
+```
+
+Require exactly the two zero-argument PL/pgSQL trigger functions, postgres
+ownership, SECURITY INVOKER, NULL configuration, and no effective
+anon/authenticated/PUBLIC EXECUTE. Expected uses are only the enabled
+`trg_set_english_word_norm` (BEFORE INSERT OR UPDATE OF english_word, ROW, words)
+and `update_profiles_updated_at` (BEFORE UPDATE, ROW, profiles), with no trigger
+arguments or WHEN condition. The migration repeats these checks transactionally;
+missing/overloaded functions, different owners/configuration/privileges/bindings,
+partial prior hardening and reruns fail closed without repair.
+
+After approval, apply **only this forward file** as postgres, in origin
+replication mode, with an error-stopping client (`psql -X -v ON_ERROR_STOP=1`).
+The file owns BEGIN/COMMIT; do not wrap it in another transaction. Do not run
+`db push`, `db reset`, replay historical files or create/repair a hosted ledger.
+Verify COMMIT, both exact empty-path configurations, and unchanged OIDs,
+definitions apart from SET search_path, owners, ACLs and trigger definitions.
+No existing record or timestamp should change from this migration.
+Then the owner can rerun Advisor: these two mutable-search-path warnings should
+disappear. This task has not run hosted Advisor or claimed that result.
+
+### Locking, verification and recovery
+
+The transaction takes SHARE UPDATE EXCLUSIVE locks on words/profiles to stabilize
+trigger bindings. Ordinary SELECT/INSERT/UPDATE/DELETE locks are compatible, but
+DDL, VACUUM/ANALYZE and other maintenance can contend. There is no row scan or
+rewrite. Lock timeout is 5s, statement timeout 30s per statement, and idle
+transaction timeout 60s. Schedule a brief controlled deployment; a timeout/error
+aborts all changes. Roll back or disconnect an errored interactive session.
+
+The existing authorization runner now extends its complete-migration-chain
+assertion group with before/after catalog/data snapshots, real authenticated
+INSERT/UPDATE behavior under multiple caller paths and UTC/Asia-Tbilisi timezones,
+hostile built-in shadowing, 18 fail-closed drift cases, rerun rejection, forced
+failure of the second ALTER, rollback and forward recovery. All existing 200
+top-level authorization checks remain; their catalog expectation now requires
+empty paths for all seven public functions. The 30 word-version checks and the
+CI exact-count contracts are unchanged. Run both commands in the CI section
+above. These are disposable PostgreSQL tests, not hosted Supabase verification.
+
+Before COMMIT, ROLLBACK/disconnection restores both original configurations.
+After COMMIT, prefer a reviewed forward correction. If an incident requires
+rollback, obtain separate approval, serialize DDL, and compare saved definitions,
+OIDs, ACLs and bindings. Require both current configurations to be exactly
+`ARRAY['search_path=""']` and all other metadata to match; stop on drift.
+In a short transaction with the same timeouts/table locks, execute only:
+
+```sql
+ALTER FUNCTION public.set_english_word_norm() RESET search_path;
+ALTER FUNCTION public.update_updated_at_column() RESET search_path;
+```
+
+This restores the original NULL configurations without restoring or rewriting
+data, but reintroduces mutable caller paths and the Advisor warnings. Never use
+`RESET ALL`, recreate functions/triggers, or blindly roll back later changes.
+Reinspect metadata and behavior, then prepare a separately approved forward fix.
 
 ## R3-A01: word version migration and deployment review
 

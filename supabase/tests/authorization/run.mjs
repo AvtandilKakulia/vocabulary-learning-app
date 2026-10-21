@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyAuthorization } from './cases.mjs';
+import { verifySearchPathMigration } from './search-path.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -57,12 +58,15 @@ try {
   admin('postgres', 'CREATE DATABASE authorization_fixture');
   file('authorization_fixture', path.join(here, 'fixture.sql'));
   const migrations = path.resolve(here, '../../migrations');
-  for (const name of readdirSync(migrations).filter(name => name.endsWith('.sql')).sort()) {
-    const filename = path.join(migrations, name);
-    file('authorization_fixture', filename);
-    console.log(`MIGRATION ${name} sha256=${createHash('sha256').update(readFileSync(filename)).digest('hex')}`);
-  }
   check('complete migration chain, no fabricated Supabase migration ledger', () => {
+    for (const name of readdirSync(migrations).filter(name => name.endsWith('.sql')).sort()) {
+      const filename = path.join(migrations, name);
+      if (name === '20261020175702_harden_trigger_function_search_paths.sql') {
+        verifySearchPathMigration({ admin, file, probe, migration: filename });
+      }
+      file('authorization_fixture', filename);
+      console.log(`MIGRATION ${name} sha256=${createHash('sha256').update(readFileSync(filename)).digest('hex')}`);
+    }
     assert.equal(admin('authorization_fixture', "SELECT count(*) FROM pg_namespace WHERE nspname='supabase_migrations'"), '0');
   });
 
