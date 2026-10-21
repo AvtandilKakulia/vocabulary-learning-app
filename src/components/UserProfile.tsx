@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLatestRequest } from '../hooks/useLatestRequest';
 import { X, Save, AlertTriangle } from 'lucide-react';
+import { deletionMessage, isConfirmedDeletionFailure } from '../lib/accountDeletion';
+import type { AccountDeletionOperation, AccountDeletionOperations, CompleteAccountDeletion } from '../lib/accountDeletion';
 
 interface UserProfileProps {
   onClose: () => void;
@@ -195,19 +197,26 @@ export default function UserProfile({ onClose, onProfileUpdated }: UserProfilePr
 
 interface DeleteAccountProps {
   account: { readonly id: string; readonly email?: string };
+  operations: AccountDeletionOperations;
   onClose: () => void;
-  onDeleted: () => void;
+  onDeleted: CompleteAccountDeletion;
 }
 
-export function DeleteAccountModal({ account, onClose, onDeleted }: DeleteAccountProps) {
+export function DeleteAccountModal({ account, operations, onClose, onDeleted }: DeleteAccountProps) {
   const { user } = useAuth();
   const [intendedAccount] = useState(() => ({ ...account }));
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [outcome, setOutcome] = useState(() => {
+    const previous = operations.get(account.id);
+    return previous && previous.phase !== 'failed' ? deletionMessage(previous.phase) : '';
+  });
   const mounted = useRef(false);
   const invalidated = useRef(false);
   const inFlight = useRef(false);
+  const submitted = useRef(false);
+  const operation = useRef<AccountDeletionOperation | null>(null);
   const latest = useRef({ userId: user?.id, confirmText });
   latest.current = { userId: user?.id, confirmText };
   const sameAccount = user?.id === intendedAccount.id && account.id === intendedAccount.id;
@@ -233,18 +242,21 @@ export function DeleteAccountModal({ account, onClose, onDeleted }: DeleteAccoun
   const isCurrentIntent = () => mounted.current && !invalidated.current && latest.current.userId === intendedAccount.id;
 
   function closeIntent() {
+    // Closing cannot roll back an already dispatched deletion.
+    if (submitted.current && inFlight.current) return;
     invalidated.current = true;
     onClose();
   }
 
   function rejectSession() {
     invalidated.current = true;
+    setDeleting(false);
     setConfirmText('');
     setError('Unable to verify the session for this account. Close this dialog and try again.');
   }
 
   async function handleDelete() {
-    if (!isCurrentIntent() || latest.current.confirmText !== 'DELETE' || inFlight.current) return;
+    if (!isCurrentIntent() || latest.current.confirmText !== 'DELETE' || inFlight.current || submitted.current || outcome) return;
 
     inFlight.current = true;
     setDeleting(true);
@@ -266,21 +278,51 @@ export function DeleteAccountModal({ account, onClose, onDeleted }: DeleteAccoun
         return;
       }
 
+      const previous = operations.get(intendedAccount.id);
+      if (previous && previous.phase !== 'failed') {
+        setOutcome(deletionMessage(previous.phase));
+        return;
+      }
+      const current: AccountDeletionOperation = { accountId: intendedAccount.id, phase: 'deleting' };
+      operations.set(current.accountId, current);
+      operation.current = current;
+      submitted.current = true;
+      setOutcome(deletionMessage('deleting'));
+      const isCurrentOperation = () => isCurrentIntent() && operation.current === current
+        && operations.get(current.accountId) === current;
+
       // getSession is a client consistency check, not server authorization.
       // Pin this request's token: the shared SDK may read another session before
       // fetch, but must not retarget the confirmed deletion to that new account.
-      const { error: deleteError } = await supabase.rpc('delete_user_account')
-        .setHeader('Authorization', `Bearer ${session.access_token}`);
-
-      if (deleteError) throw deleteError;
-
-      onDeleted();
-    } catch (err: any) {
-      console.error('Error deleting account:', err);
-      setError(err.message || 'Failed to delete account. Please try signing out and back in, then try again.');
+      try {
+        const response = await supabase.rpc('delete_user_account')
+          .setHeader('Authorization', `Bearer ${session.access_token}`);
+        if (response.error) {
+          current.phase = isConfirmedDeletionFailure(response) ? 'failed' : 'unknown';
+        } else if (response.status >= 200 && response.status < 300) {
+          current.phase = 'completing';
+          if (isCurrentOperation()) {
+            setOutcome(deletionMessage(current.phase));
+            try {
+              const completion = await onDeleted({ operation: current, isCurrent: isCurrentOperation });
+              current.phase = completion.error ? 'cleanup-failed' : 'deleted';
+            } catch {
+              current.phase = 'cleanup-failed';
+            }
+          } else {
+            // Confirmed success; obsolete UI cleanup is deliberately skipped.
+            current.phase = 'deleted';
+          }
+        } else {
+          current.phase = 'unknown';
+        }
+      } catch {
+        current.phase = 'unknown';
+      }
+      if (isCurrentOperation()) setOutcome(deletionMessage(current.phase));
     } finally {
       inFlight.current = false;
-      setDeleting(false);
+      if (isCurrentIntent()) setDeleting(false);
     }
   }
 
@@ -321,7 +363,7 @@ export function DeleteAccountModal({ account, onClose, onDeleted }: DeleteAccoun
             <input
               type="text"
               value={confirmText}
-              disabled={deleting || invalidated.current}
+              disabled={deleting || invalidated.current || submitted.current || !!outcome}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="DELETE"
               className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
@@ -334,17 +376,24 @@ export function DeleteAccountModal({ account, onClose, onDeleted }: DeleteAccoun
             </div>
           )}
 
+          {(outcome || (deleting && submitted.current)) && (
+            <p role="status" className="text-sm text-gray-700 dark:text-gray-300">
+              {outcome || deletionMessage('deleting')}
+            </p>
+          )}
+
           <div className="flex gap-4">
             <button
               type="button"
               onClick={closeIntent}
-              className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
+              disabled={deleting && submitted.current}
+              className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
-              Cancel
+              {outcome && !deleting ? 'Close' : 'Cancel'}
             </button>
             <button
               onClick={handleDelete}
-              disabled={confirmText !== 'DELETE' || deleting || invalidated.current}
+              disabled={confirmText !== 'DELETE' || deleting || invalidated.current || submitted.current || !!outcome}
               className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-red-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               {deleting ? 'Deleting...' : 'Delete Account'}

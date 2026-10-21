@@ -11,6 +11,8 @@ import History from './components/History';
 import UserProfile, { DeleteAccountModal } from './components/UserProfile';
 import { BookOpen, Brain, ClipboardList, History as HistoryIcon, LogOut, User, Trash2, ChevronDown, Sun, Moon } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { deletionMessage } from './lib/accountDeletion';
+import type { AccountDeletionOperations, CompleteAccountDeletion } from './lib/accountDeletion';
 
 type View = 'words' | 'free' | 'test' | 'history';
 
@@ -21,6 +23,8 @@ function AppContent() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [deleteAccount, setDeleteAccount] = useState<{ id: string; email?: string } | null>(null);
+  const deletionOperations = useRef<AccountDeletionOperations>(new Map());
+  const [deletedAccounts, setDeletedAccounts] = useState<ReadonlySet<string>>(() => new Set());
   const [profileName, setProfileName] = useState<{ userId: string; name: string | null } | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const userId = user?.id;
@@ -75,6 +79,13 @@ function AppContent() {
     return <AuthPage onAuthSuccess={() => {}} />;
   }
 
+  if (deletedAccounts.has(user.id)) {
+    return <>
+      <p role="status" className="p-4 text-center text-gray-900 dark:text-gray-100">{deletionMessage('deleted')}</p>
+      <AuthPage onAuthSuccess={() => {}} />
+    </>;
+  }
+
   const handleLogoClick = () => {
     setCurrentView('words');
   };
@@ -83,8 +94,13 @@ function AppContent() {
     void loadDisplayName();
   };
 
-  const handleAccountDeleted = async () => {
-    await signOut();
+  const handleAccountDeleted: CompleteAccountDeletion = async ({ operation, isCurrent }) => {
+    if (!isCurrent()) return { error: null };
+    // Public SDK signOut has no compare-and-remove UID parameter. Even local
+    // scope can remove a replacement session after an await. Retire only this
+    // account's app UI; do not mutate shared Auth storage or revoke any session.
+    setDeletedAccounts(previous => new Set(previous).add(operation.accountId));
+    return { error: null };
   };
 
   return (
@@ -290,6 +306,7 @@ function AppContent() {
       {deleteAccount && deleteAccount.id === userId && (
         <DeleteAccountModal
           account={deleteAccount}
+          operations={deletionOperations.current}
           onClose={closeDeleteAccount}
           onDeleted={handleAccountDeleted}
         />
