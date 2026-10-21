@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLatestRequest } from '../hooks/useLatestRequest';
@@ -193,25 +194,83 @@ export default function UserProfile({ onClose, onProfileUpdated }: UserProfilePr
 }
 
 interface DeleteAccountProps {
+  account: { readonly id: string; readonly email?: string };
   onClose: () => void;
   onDeleted: () => void;
 }
 
-export function DeleteAccountModal({ onClose, onDeleted }: DeleteAccountProps) {
+export function DeleteAccountModal({ account, onClose, onDeleted }: DeleteAccountProps) {
   const { user } = useAuth();
+  const [intendedAccount] = useState(() => ({ ...account }));
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const mounted = useRef(false);
+  const invalidated = useRef(false);
+  const inFlight = useRef(false);
+  const latest = useRef({ userId: user?.id, confirmText });
+  latest.current = { userId: user?.id, confirmText };
+  const sameAccount = user?.id === intendedAccount.id && account.id === intendedAccount.id;
+  // A stale callback must fail even before effects run; an intent never revives.
+  if (!sameAccount) invalidated.current = true;
+
+  useLayoutEffect(() => {
+    mounted.current = true;
+    // Observe identity changes even if React batches A -> B -> A into one render.
+    // Keep this callback synchronous: awaiting an Auth call here can deadlock SDK locks.
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted.current && session?.user?.id !== intendedAccount.id) {
+        invalidated.current = true;
+        onClose();
+      }
+    });
+    return () => {
+      mounted.current = false;
+      data.subscription.unsubscribe();
+    };
+  }, [intendedAccount.id, onClose]);
+
+  const isCurrentIntent = () => mounted.current && !invalidated.current && latest.current.userId === intendedAccount.id;
+
+  function closeIntent() {
+    invalidated.current = true;
+    onClose();
+  }
+
+  function rejectSession() {
+    invalidated.current = true;
+    setConfirmText('');
+    setError('Unable to verify the session for this account. Close this dialog and try again.');
+  }
 
   async function handleDelete() {
-    if (!user || confirmText !== 'DELETE') return;
+    if (!isCurrentIntent() || latest.current.confirmText !== 'DELETE' || inFlight.current) return;
 
+    inFlight.current = true;
     setDeleting(true);
     setError('');
 
     try {
-      // Delete user account (this will cascade delete all related data due to RLS and CASCADE)
-      const { error: deleteError } = await supabase.rpc('delete_user_account');
+      let session: Session | null;
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        session = data.session;
+      } catch {
+        if (isCurrentIntent()) rejectSession();
+        return;
+      }
+      if (!isCurrentIntent()) return;
+      if (session?.user?.id !== intendedAccount.id || !session.access_token) {
+        rejectSession();
+        return;
+      }
+
+      // getSession is a client consistency check, not server authorization.
+      // Pin this request's token: the shared SDK may read another session before
+      // fetch, but must not retarget the confirmed deletion to that new account.
+      const { error: deleteError } = await supabase.rpc('delete_user_account')
+        .setHeader('Authorization', `Bearer ${session.access_token}`);
 
       if (deleteError) throw deleteError;
 
@@ -220,9 +279,12 @@ export function DeleteAccountModal({ onClose, onDeleted }: DeleteAccountProps) {
       console.error('Error deleting account:', err);
       setError(err.message || 'Failed to delete account. Please try signing out and back in, then try again.');
     } finally {
+      inFlight.current = false;
       setDeleting(false);
     }
   }
+
+  if (!sameAccount) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
@@ -235,6 +297,9 @@ export function DeleteAccountModal({ onClose, onDeleted }: DeleteAccountProps) {
         </div>
 
         <div className="space-y-6">
+          <p className="text-sm text-gray-700 dark:text-gray-300 break-all">
+            Account: <strong>{intendedAccount.email?.trim() || intendedAccount.id}</strong>
+          </p>
           <div className="bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border-2 border-red-200 dark:border-red-800 rounded-2xl p-6">
             <p className="text-lg text-red-800 dark:text-red-300 font-bold mb-3">
               This action cannot be undone!
@@ -256,6 +321,7 @@ export function DeleteAccountModal({ onClose, onDeleted }: DeleteAccountProps) {
             <input
               type="text"
               value={confirmText}
+              disabled={deleting || invalidated.current}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="DELETE"
               className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
@@ -271,14 +337,14 @@ export function DeleteAccountModal({ onClose, onDeleted }: DeleteAccountProps) {
           <div className="flex gap-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeIntent}
               className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-2xl text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
-              disabled={confirmText !== 'DELETE' || deleting}
+              disabled={confirmText !== 'DELETE' || deleting || invalidated.current}
               className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 text-white px-6 py-3 rounded-2xl font-bold hover:from-red-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               {deleting ? 'Deleting...' : 'Delete Account'}

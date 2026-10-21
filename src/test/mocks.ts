@@ -2,8 +2,8 @@ import { beforeEach, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
 const { supabaseMock, authMock } = vi.hoisted(() => ({
-  supabaseMock: { from: vi.fn(), rpc: vi.fn(), auth: { updateUser: vi.fn() } },
-  authMock: { user: { id: 'user-a' } as { id: string; email?: string } | null },
+  supabaseMock: { from: vi.fn(), rpc: vi.fn(), auth: { updateUser: vi.fn(), getSession: vi.fn(), onAuthStateChange: vi.fn() } },
+  authMock: { user: { id: 'user-a' } as { id: string; email?: string } | null, signOut: vi.fn() },
 }));
 
 export { supabaseMock, authMock };
@@ -16,7 +16,10 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 beforeEach(() => {
   authMock.user = { id: 'user-a' };
+  authMock.signOut.mockReset().mockResolvedValue(undefined);
   supabaseMock.auth.updateUser.mockReset();
+  supabaseMock.auth.getSession.mockReset();
+  supabaseMock.auth.onAuthStateChange.mockReset();
   supabaseMock.from.mockReset().mockImplementation((table) => {
     throw new Error(`Unexpected Supabase table: ${table}`);
   });

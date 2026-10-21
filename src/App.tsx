@@ -20,10 +20,14 @@ function AppContent() {
   const [currentView, setCurrentView] = useState<View>('words');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteAccount, setDeleteAccount] = useState<{ id: string; email?: string } | null>(null);
   const [profileName, setProfileName] = useState<{ userId: string; name: string | null } | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const userId = user?.id;
+  // Invalidate during render, before a different account can commit the dialog.
+  // Clearing the intent also prevents A -> B -> A from reviving confirmation.
+  if (deleteAccount && deleteAccount.id !== userId) setDeleteAccount(null);
+  const closeDeleteAccount = useCallback(() => setDeleteAccount(null), []);
   const beginProfileRead = useLatestRequest(JSON.stringify([userId]));
   const displayName = profileName?.userId === userId ? profileName?.name : null;
 
@@ -187,7 +191,7 @@ function AppContent() {
 
                     <button
                       onClick={() => {
-                        setShowDeleteModal(true);
+                        setDeleteAccount({ id: user.id, email: user.email });
                         setShowUserMenu(false);
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
@@ -283,9 +287,10 @@ function AppContent() {
         />
       )}
 
-      {showDeleteModal && (
+      {deleteAccount && deleteAccount.id === userId && (
         <DeleteAccountModal
-          onClose={() => setShowDeleteModal(false)}
+          account={deleteAccount}
+          onClose={closeDeleteAccount}
           onDeleted={handleAccountDeleted}
         />
       )}
