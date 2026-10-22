@@ -38,7 +38,7 @@ beforeEach(() => {
     listeners.add(listener);
     return { data: { subscription: { unsubscribe: vi.fn(() => listeners.delete(listener)) } } };
   });
-  const request = { ...query(), setHeader: vi.fn().mockReturnThis() };
+  const request = { ...query({ error: null, status: 204 }), setHeader: vi.fn().mockReturnThis() };
   supabaseMock.rpc.mockReturnValue(request);
 });
 
@@ -64,7 +64,9 @@ describe('account-bound deletion intent in the actual App', () => {
     expect(supabaseMock.auth.getSession).toHaveBeenCalledExactlyOnceWith();
     expect(supabaseMock.rpc).toHaveBeenCalledExactlyOnceWith('delete_user_account');
     expect(supabaseMock.rpc.mock.results[0].value.setHeader).toHaveBeenCalledExactlyOnceWith('Authorization', 'Bearer synthetic-token-user-a');
-    expect(authMock.signOut).toHaveBeenCalledOnce();
+    expect(authMock.signOut).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Account deletion confirmed');
+    expect(screen.getByText('Signed out fixture')).toBeInTheDocument();
   });
 
   it('shows the immutable account ID when there is no email', () => {

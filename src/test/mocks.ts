@@ -30,7 +30,8 @@ beforeEach(() => {
 
 export interface QueryResult {
   data?: unknown;
-  error: { message: string } | null;
+  error: { message: string; code?: string } | null;
+  status?: number;
   count?: number | null;
 }
 
