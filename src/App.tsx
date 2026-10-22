@@ -13,6 +13,8 @@ import { BookOpen, Brain, ClipboardList, History as HistoryIcon, LogOut, User, T
 import { supabase } from './lib/supabase';
 import { deletionMessage } from './lib/accountDeletion';
 import type { AccountDeletionOperations, CompleteAccountDeletion } from './lib/accountDeletion';
+import { useRetiredAccount } from './hooks/useRetiredAccount';
+import { eraseAccountRecovery } from './lib/eraseAccountRecovery';
 
 type View = 'words' | 'free' | 'test' | 'history';
 
@@ -26,9 +28,11 @@ function AppContent() {
   const deletionOperations = useRef<AccountDeletionOperations>(new Map());
   const appMounted = useRef(false);
   const [deletedAccounts, setDeletedAccounts] = useState<ReadonlySet<string>>(() => new Set());
+  const [recoveryErasure, setRecoveryErasure] = useState<Record<string, 'pending' | 'verified' | 'incomplete'>>({});
   const [profileName, setProfileName] = useState<{ userId: string; name: string | null } | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const userId = user?.id;
+  const retired = useRetiredAccount(userId);
   // Invalidate during render, before a different account can commit the dialog.
   // Clearing the intent also prevents A -> B -> A from reviving confirmation.
   if (deleteAccount && deleteAccount.id !== userId) setDeleteAccount(null);
@@ -85,9 +89,14 @@ function AppContent() {
     return <AuthPage onAuthSuccess={() => {}} />;
   }
 
-  if (deletedAccounts.has(user.id)) {
+  if (deletedAccounts.has(user.id) || retired) {
     return <>
       <p role="status" className="p-4 text-center text-gray-900 dark:text-gray-100">{deletionMessage('deleted')}</p>
+      <p role="alert" className="p-4 text-center text-gray-900 dark:text-gray-100">{recoveryErasure[user.id] === 'pending'
+        ? 'Removing this account’s browser recovery data…'
+        : recoveryErasure[user.id] === 'verified'
+          ? 'This account’s Practice/Test recovery records were removed and their absence checked in this browser.'
+          : 'This account is retired in this browser. Residual recovery data may remain; complete local erasure has not been verified.'}</p>
       <AuthPage onAuthSuccess={() => {}} />
     </>;
   }
@@ -103,13 +112,26 @@ function AppContent() {
   const handleAccountDeleted: CompleteAccountDeletion = async ({ operation }) => {
     // Confirmed deletion belongs to this App and UID, even if the dialog has
     // unmounted or another account is active. Dialog validity must not gate it.
-    if (!appMounted.current || deletionOperations.current.get(operation.accountId) !== operation
+    if (deletionOperations.current.get(operation.accountId) !== operation
       || operation.phase !== 'completing') return { error: null };
     // Public SDK signOut has no compare-and-remove UID parameter. Even local
     // scope can remove a replacement session after an await. Retire only this
     // account's app UI; do not mutate shared Auth storage or revoke any session.
-    setDeletedAccounts(previous => new Set(previous).add(operation.accountId));
-    return { error: null };
+    if (appMounted.current) {
+      setDeletedAccounts(previous => new Set(previous).add(operation.accountId));
+      setRecoveryErasure(previous => ({ ...previous, [operation.accountId]: 'pending' }));
+    }
+    // Account-level erasure survives dialog/App unmount; only UI updates are
+    // mount-bound. The durable marker also informs a replacement App/peer tab.
+    try {
+      const result = await eraseAccountRecovery(operation.accountId);
+      if (appMounted.current) setRecoveryErasure(previous => ({ ...previous,
+        [operation.accountId]: result.verified ? 'verified' : 'incomplete' }));
+      return { error: result.verified ? null : new Error('Residual browser recovery data may remain.') };
+    } catch (error) {
+      if (appMounted.current) setRecoveryErasure(previous => ({ ...previous, [operation.accountId]: 'incomplete' }));
+      return { error };
+    }
   };
 
   return (

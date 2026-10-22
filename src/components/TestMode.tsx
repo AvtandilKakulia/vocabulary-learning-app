@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { supabase, Word, TestHistory, TestMistake } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLatestRequest } from '../hooks/useLatestRequest';
+import { useRetiredAccount } from '../hooks/useRetiredAccount';
+import { recoveryStore } from '../lib/recoveryStorage';
 import { Check, X, RotateCcw, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import {
@@ -89,6 +91,8 @@ function generateMultipleChoiceOptions(currentWord: Word, vocabulary: Word[], di
 
 export default function TestMode() {
   const { user } = useAuth();
+  const retired = useRetiredAccount(user?.id);
+  if (retired) return <p role="status">This account is retired in this browser. Test recovery is disabled.</p>;
   // Account changes remount all session state before another user can see it.
   return user ? <AccountTestMode key={user.id} userId={user.id} /> : null;
 }
@@ -126,6 +130,7 @@ function AccountTestMode({ userId }: { userId: string }) {
     : active ? { userId, active, result: null, saveStatus: 'idle', hasPersistedCopy: false, hasActiveCopy: true, hasCompletedCheckpoint: false } : null);
 
   function saveActiveProgress(next: ActiveTestSession) {
+    if (recoveryStore.state(userId) === 'retired') return;
     const session = testSessionRef.current;
     if (!session || session.result) return;
     session.active = next;
@@ -136,6 +141,7 @@ function AccountTestMode({ userId }: { userId: string }) {
   }
 
   function changeAnswer(answer: string) {
+    if (recoveryStore.state(userId) === 'retired') return;
     const session = testSessionRef.current;
     if (!session?.active || session.result || showRestartConfirm || answer === session.active.draftAnswer) return;
     setUserAnswer(answer);
@@ -144,6 +150,7 @@ function AccountTestMode({ userId }: { userId: string }) {
   }
 
   async function startTest() {
+    if (recoveryStore.state(userId) === 'retired') return;
     if (testSessionRef.current || starting.current) return;
     const isCurrent = beginVocabularyRead();
     if (!isCurrent) return;
@@ -155,14 +162,14 @@ function AccountTestMode({ userId }: { userId: string }) {
       const seenIds = new Set<string>();
       let expectedCount: number | undefined;
       do {
-        if (!isCurrent()) return;
+        if (!isCurrent() || recoveryStore.state(userId) === 'retired') return;
         const offset = allWords.length;
         const { data, error, count } = await supabase.from('words')
           .select('*', offset === 0 ? { count: 'exact' } : {})
           .eq('user_id', userId)
           .order('created_at', { ascending: true }).order('id', { ascending: true })
           .range(offset, offset + WORD_BATCH_SIZE - 1);
-        if (!isCurrent()) return;
+        if (!isCurrent() || recoveryStore.state(userId) === 'retired') return;
         if (error) throw error;
         if (expectedCount === undefined) {
           if (count === null || !Number.isSafeInteger(count) || count < 0) {
@@ -243,6 +250,7 @@ function AccountTestMode({ userId }: { userId: string }) {
   }
 
   function submitAnswer() {
+    if (recoveryStore.state(userId) === 'retired') return;
     const session = testSessionRef.current;
     if (!session?.active || !testWords[currentQuestion] || session.result || showRestartConfirm ||
       session.active.currentQuestion !== currentQuestion) return;
@@ -307,6 +315,7 @@ function AccountTestMode({ userId }: { userId: string }) {
   }
 
   async function saveTestResult() {
+    if (recoveryStore.state(userId) === 'retired') return;
     const session = testSessionRef.current;
     if (!session?.result || session.saveStatus === 'saving' || session.saveStatus === 'saved' || showDiscardConfirm) return;
 
@@ -336,7 +345,9 @@ function AccountTestMode({ userId }: { userId: string }) {
         throw new Error('Sign in to the account that took this test to save its result.');
       }
 
+      if (recoveryStore.state(userId) === 'retired') return;
       const { error } = await supabase.from('test_history').insert(session.result);
+      if (recoveryStore.state(userId) === 'retired') return;
       if (error) {
         if (error.code !== '23505') throw error;
         // A previous attempt may have committed before its response was lost.
@@ -344,6 +355,7 @@ function AccountTestMode({ userId }: { userId: string }) {
         const { data, error: lookupError } = await supabase.from('test_history')
           .select('id,user_id,test_date,test_direction,total_words,correct_count,mistakes')
           .eq('id', session.result.id).eq('user_id', session.userId);
+        if (recoveryStore.state(userId) === 'retired') return;
         if (lookupError) throw lookupError;
         if (!Array.isArray(data) || data.length !== 1 || !matchesCompletedTest(data[0], session.result)) {
           throw new Error('Could not confirm the existing History record. Your pending result has been kept.');
@@ -359,6 +371,7 @@ function AccountTestMode({ userId }: { userId: string }) {
       setStorageWarning(removed ? '' :
         'Saved to History, but the browser copy could not be removed. It may appear again; retrying will not create another record.');
     } catch (error) {
+      if (recoveryStore.state(userId) === 'retired') return;
       console.error('Error saving test result:', error);
       session.saveStatus = 'error';
       setHistorySaveStatus('error');

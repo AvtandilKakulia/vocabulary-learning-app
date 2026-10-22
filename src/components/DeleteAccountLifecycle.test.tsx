@@ -5,6 +5,7 @@ import { authMock, deferred, query, supabaseMock, type QueryResult } from '@/tes
 import App from '@/App';
 import { DeleteAccountModal } from './UserProfile';
 import type { AccountDeletionOperations, CompleteAccountDeletion } from '@/lib/accountDeletion';
+import { retirementKey } from '@/lib/recoveryStorage';
 
 vi.mock('@/components/WordManagement', () => ({ default: () => <div>Words fixture</div> }));
 vi.mock('@/components/AuthPage', () => ({ default: () => <div>Sign-in fixture</div> }));
@@ -39,7 +40,7 @@ beforeEach(() => {
 });
 
 describe('account deletion completion in App', () => {
-  it('retires only deleted A UI without invoking shared sign-out or erasing stored sessions/recovery data', async () => {
+  it('retires only deleted A UI without invoking shared sign-out or erasing unrelated stored data', async () => {
     localStorage.setItem('synthetic-session', JSON.stringify(session()));
     localStorage.setItem('synthetic-recovery', 'untouched F4 data');
     const before = { ...localStorage };
@@ -51,7 +52,7 @@ describe('account deletion completion in App', () => {
     expect(screen.queryByText('Words fixture')).not.toBeInTheDocument();
     expect(authMock.signOut).not.toHaveBeenCalled();
     expect(supabaseMock.auth.getSession).toHaveBeenCalledOnce();
-    expect({ ...localStorage }).toEqual(before);
+    expect({ ...localStorage }).toEqual({ ...before, [retirementKey(A.id)]: '1' });
     authMock.user = B; view.rerender(<App />);
     expect(screen.getByText('Words fixture')).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
@@ -63,8 +64,9 @@ describe('account deletion completion in App', () => {
   it.each([
     ['A to B', [B]], ['A to signed out', [null]], ['A to B to A', [B, A]], ['A to signed out to B', [null, B]],
   ] as const)('isolates both delayed RPC outcomes after %s', async (_name, users) => {
-    // Each outcome has its own actual App instance and operation registry.
-    for (const outcome of [success, failure]) {
+    // Each outcome has its own App. Successful retirement is now origin-durable,
+    // so exercise rejection first without pretending a new App revives deleted A.
+    for (const outcome of [failure, success]) {
       authMock.user = A;
       const pending = deferred<QueryResult>();
       supabaseMock.rpc.mockClear().mockReturnValue(request(pending.promise));
@@ -142,7 +144,7 @@ describe('account deletion completion in App', () => {
     expect(screen.getByText('Sign-in fixture')).toBeInTheDocument();
   });
 
-  it.each([success, failure])('does not update an unmounted App or a replacement App instance: %j', async outcome => {
+  it.each([success, failure])('keeps unmounted UI empty while only confirmed retirement reaches a replacement App: %j', async outcome => {
     const pending = deferred<QueryResult>();
     supabaseMock.rpc.mockReturnValue(request(pending.promise));
     const view = render(<App />); open(); confirm();
@@ -153,8 +155,14 @@ describe('account deletion completion in App', () => {
     await act(async () => pending.resolve(outcome));
     expect(authMock.signOut).not.toHaveBeenCalled();
     expect(view.container).toBeEmptyDOMElement();
-    expect(replacement.container.innerHTML).toBe(before);
-    expect(screen.getByText('Words fixture')).toBeInTheDocument();
+    if (outcome === success) {
+      expect(screen.getByText('Sign-in fixture')).toBeInTheDocument();
+      expect(screen.queryByText('Words fixture')).not.toBeInTheDocument();
+      expect(localStorage.getItem(retirementKey(A.id))).toBe('1');
+    } else {
+      expect(replacement.container.innerHTML).toBe(before);
+      expect(screen.getByText('Words fixture')).toBeInTheDocument();
+    }
   });
 
   it('permits only a fresh confirmation after an explicit database rejection', async () => {
@@ -347,7 +355,7 @@ describe('installed SDK session replacement boundary', () => {
     expect(screen.getByText('Words fixture')).toBeInTheDocument();
     expect([...stored.entries()]).toEqual(storedBefore);
     expect((await client.auth.getSession()).data.session).toEqual(sessionBefore);
-    expect({ ...localStorage }).toEqual(storageBefore);
+    expect({ ...localStorage }).toEqual({ ...storageBefore, [retirementKey(A.id)]: '1' });
     // A later Auth event cannot revive the account already confirmed deleted.
     await act(async () => signIn(A));
     authMock.user = A; view.rerender(<StrictMode><App /></StrictMode>);

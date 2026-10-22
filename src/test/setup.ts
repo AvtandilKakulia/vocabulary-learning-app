@@ -3,6 +3,20 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import { practiceBrowser } from './practiceBrowser';
 
+// Each test models a fresh browser realm, including retirement remembered when
+// localStorage is blocked. Keep the real implementation; isolate only its lifetime.
+vi.mock('@/lib/recoveryStorage', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/recoveryStorage')>();
+  let store = actual.createRecoveryStore();
+  beforeEach(() => { store = actual.createRecoveryStore(); });
+  return { ...actual, recoveryStore: {
+    state: (...args: Parameters<typeof store.state>) => store.state(...args),
+    retire: (...args: Parameters<typeof store.retire>) => store.retire(...args),
+    subscribe: (...args: Parameters<typeof store.subscribe>) => store.subscribe(...args),
+    write: (...args: Parameters<typeof store.write>) => store.write(...args),
+  } };
+});
+
 // A missed application-boundary mock must fail before the real client starts.
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => { throw new Error('Real Supabase client forbidden in tests'); },

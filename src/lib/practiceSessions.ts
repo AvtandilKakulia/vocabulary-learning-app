@@ -1,8 +1,8 @@
 import type { TestHistory, TestMistake } from './supabase';
 import { ownsPractice, type PracticeWriteAccess } from './practiceOwnership';
+import { legacyPracticeKey, practiceSessionKey, recoveryStore } from './recoveryStorage';
+export { legacyPracticeKey, practiceSessionKey } from './recoveryStorage';
 
-export const legacyPracticeKey = 'vocab_practice_session_state_v2';
-export const practiceSessionKey = (userId: string) => `${legacyPracticeKey}:${encodeURIComponent(userId)}`;
 // ID is optional only for recovery copies written before stable IDs were added.
 export type PracticeResult = Omit<TestHistory, 'id' | 'created_at'> & { id?: string };
 export type PracticeMistake = TestMistake & { word_id?: string };
@@ -33,7 +33,7 @@ const mistakes = (value: unknown): value is PracticeMistake[] => Array.isArray(v
   (item.question_prompt === undefined || typeof item.question_prompt === 'string') &&
   (item.description == null || typeof item.description === 'string'));
 
-function parse(raw: string, userId: string): StoredPracticeSession | null {
+export function parsePracticeSession(raw: string, userId: string): StoredPracticeSession | null {
   try {
     const value: unknown = JSON.parse(raw);
     if (!object(value) || value.userId !== userId || !strings(value.queueIds)) return null;
@@ -70,28 +70,35 @@ function parse(raw: string, userId: string): StoredPracticeSession | null {
 }
 
 export function readPracticeSession(userId: string, access?: PracticeWriteAccess): { session: StoredPracticeSession | null; writable: boolean; warning: string } {
+  const blocked = { session: null, writable: false, warning: recoveryStore.state(userId) === 'retired'
+    ? 'Practice recovery is unavailable for this retired account.'
+    : 'Browser storage is unavailable or its recovery status could not be verified. Practice progress cannot be saved locally.' };
+  if (recoveryStore.state(userId) !== 'active') return blocked;
   try {
     const storage = window.localStorage;
     const key = practiceSessionKey(userId);
     const scoped = storage.getItem(key);
     if (scoped !== null) {
-      const session = parse(scoped, userId);
+      const session = parsePracticeSession(scoped, userId);
+      if (recoveryStore.state(userId) !== 'active') return blocked;
       return { session, writable: !!session, warning: session ? '' : 'Saved Practice data could not be restored. Its browser copy has been kept unchanged.' };
     }
     const legacy = storage.getItem(legacyPracticeKey);
     if (legacy === null) return { session: null, writable: true, warning: '' };
-    const session = parse(legacy, userId);
+    const session = parsePracticeSession(legacy, userId);
+    if (recoveryStore.state(userId) !== 'active') return blocked;
     // Never alter a malformed, incompatible, or another account's legacy copy.
     if (!session) return { session: null, writable: true, warning: '' };
     // Passive readers may inspect legacy progress but must never migrate it.
     if (!ownsPractice(access, userId)) return { session, writable: false, warning: '' };
     try {
-      storage.setItem(key, legacy);
+      if (!recoveryStore.write(userId, key, legacy)) throw new Error('Copy failed');
       if (storage.getItem(key) !== legacy) throw new Error('Copy verification failed');
       // A different tab may have replaced the shared entry while it was copied.
       if (storage.getItem(legacyPracticeKey) === legacy) storage.removeItem(legacyPracticeKey);
-      return { session, writable: true, warning: '' };
+      return recoveryStore.state(userId) === 'active' ? { session, writable: true, warning: '' } : blocked;
     } catch {
+      if (recoveryStore.state(userId) === 'retired') return blocked;
       return { session, writable: false, warning: 'Practice storage migration could not finish. Your original browser copy has been kept.' };
     }
   } catch {
@@ -104,12 +111,13 @@ export function persistPracticeSession(session: StoredPracticeSession, access: P
   try {
     const raw = JSON.stringify(session);
     const existing = window.localStorage.getItem(practiceSessionKey(session.userId));
-    if (existing !== null && !parse(existing, session.userId)) return null;
+    if (recoveryStore.state(session.userId) !== 'active') return null;
+    if (existing !== null && !parsePracticeSession(existing, session.userId)) return null;
     if (existing !== raw) {
-      window.localStorage.setItem(practiceSessionKey(session.userId), raw);
+      if (!recoveryStore.write(session.userId, practiceSessionKey(session.userId), raw)) return null;
     }
     if (verify && window.localStorage.getItem(practiceSessionKey(session.userId)) !== raw) return null;
-    return raw;
+    return recoveryStore.state(session.userId) === 'active' ? raw : null;
   } catch { return null; }
 }
 
@@ -122,11 +130,11 @@ export function removePracticeSession(userId: string, access: PracticeWriteAcces
     const raw = storage.getItem(key);
     if (expected !== undefined && raw !== expected) return false;
     if (raw !== null) {
-      if (!parse(raw, userId)) return false;
+      if (!parsePracticeSession(raw, userId)) return false;
       storage.removeItem(key);
     }
     const legacy = storage.getItem(legacyPracticeKey);
-    if (legacy !== null && parse(legacy, userId)) storage.removeItem(legacyPracticeKey);
+    if (legacy !== null && parsePracticeSession(legacy, userId)) storage.removeItem(legacyPracticeKey);
     return true;
   } catch { return false; }
 }
