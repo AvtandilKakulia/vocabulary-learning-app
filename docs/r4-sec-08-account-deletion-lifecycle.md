@@ -59,21 +59,28 @@ precheck plus local signOut would be best effort and is not used. No direct
 storage manipulation, service-role key, admin call, new auth client in production,
 backend service or forced session replacement is introduced.
 
-For a still-current operation, the awaited completion callback records the
-deleted UID in App memory and replaces that account's protected app UI with the
-existing sign-in screen and an explicit success message: its saved sign-in was
-not removed automatically. Another UID continues normally. This is app UI
+Every confirmed successful operation invokes the awaited completion callback,
+even when its original dialog is obsolete. The still-mounted owning App checks
+the operation's registry identity and confirmed `completing` phase, then records
+its initiating UID in `deletedAccounts`. If that UID is active, its protected UI
+is replaced with the existing sign-in screen and an explicit success message:
+its saved sign-in was not removed automatically. If B is active when A succeeds,
+B continues normally; a later return to A in the same App also shows the retired
+UI. Failure and unknown outcomes do not record a deleted UID. This is app UI
 retirement, **not a claim of SDK sign-out or session erasure**. Regular manual
 sign-out behavior is unchanged and is never invoked by this completion path.
 
 The callback receives the operation (including immutable accountId) and an
-`isCurrent` guard. App's fallback performs no asynchronous SDK operation: its
-guard and UID-scoped state update execute synchronously. The modal awaits the
-returned promise, handles both returned errors and rejection, and checks the
-operation again before any later UI update. Obsolete operations never call
-completion; already-running callbacks cannot publish stale modal results.
-Future asynchronous completion implementations must recheck `isCurrent()`
-before their own UI effects and must not reintroduce shared sign-out.
+`isCurrent` guard for **dialog-local UI only**. Account retirement is deliberately
+independent of that guard. App's fallback performs no asynchronous SDK operation:
+its mount/registry/phase checks and UID-scoped state update execute synchronously.
+The modal awaits the returned promise, handles both returned errors and rejection,
+and checks `isCurrent()` before later modal UI updates. An obsolete dialog cannot
+change B's new dialog or its draft. A new dialog for already-deleted A disappears
+because App retires A, not because an obsolete dialog calls `onClose`. Completion
+after the whole App unmounts cannot update that App or a replacement App instance.
+Future asynchronous completion implementations must keep account-level recording
+separate from guarded dialog effects and must not reintroduce shared sign-out.
 
 ## Operation outcomes, cancellation and retry
 
@@ -85,7 +92,7 @@ after uncertain outcomes in the same App lifetime.
 
 | Outcome | UI and behavior |
 | --- | --- |
-| Successful HTTP RPC response | Database completion confirmed; await current operation's cleanup. No second deletion submission. |
+| Successful HTTP RPC response | Database completion confirmed; always await UID-scoped completion, even if the dialog is obsolete. Retire that UID in the owning App. No second deletion submission. |
 | Cleanup returns an error or rejects | Say deletion was confirmed but local cleanup failed. Do not present it as database failure or allow deletion again. |
 | Explicit PostgreSQL/PostgREST error response | Say the database rejected deletion. Close/reopen and freshly type DELETE to retry, with all F1 checks again. |
 | Rejected transport, status 0, gateway/malformed response | Say outcome is unknown and the account may be deleted. No automatic or same-App replay. Verify account status before any later attempt. |
@@ -96,7 +103,8 @@ Messaging explains that the request cannot be cancelled. Auth changes and actual
 unmount still invalidate the UI; they cannot roll back an already-sent request.
 After an error/terminal outcome, Close remains usable. If a fresh dialog observes
 an older pending operation, it cannot start another; close/reopen to inspect the
-eventual recorded outcome. The old operation does not mutate that new dialog.
+eventual recorded outcome after failure/uncertainty. The old operation does not
+mutate that new dialog; confirmed success instead retires its own UID at App level.
 
 ## Regression coverage and reproduction
 
@@ -127,7 +135,8 @@ tests, restoring the fixed files afterward. Selected tests fail on late A
 sign-out, enabled in-flight Cancel and premature cleanup completion; the corrected
 implementation passes. The PR records final full-suite counts and CI run links.
 
-Local validation (Windows, Node 24.22.0, pnpm 10.34.6):
+Initial implementation validation at `c8d8e57427e41bfa3cd73517ae4b09474fed6c99`
+(Windows, Node 24.22.0, pnpm 10.34.6):
 
 - Focused five-file suite: **67/67** (23 F1, 14 App lifecycle, 5 completion
   contract, 5 real-SDK boundary, 20 existing App/Profile/Auth cases).
@@ -141,6 +150,40 @@ Local validation (Windows, Node 24.22.0, pnpm 10.34.6):
   then the complete run above passed. The intermittent History timing cause is
   not established or claimed fixed; no assertions were weakened or tests skipped.
 
+### Follow-up: late success after A → B → A
+
+Review found that both the modal and App gated completion on the old dialog's
+`isCurrent()` result. After A → B → A, the operation became `deleted` but App's
+`deletedAccounts` set never received A. The old transition test incorrectly
+expected A's protected workspace to remain unchanged after its confirmed deletion.
+That assertion now requires retirement for A success and still requires identical
+UI for another account, failure or uncertainty.
+
+Five permanent tests were added: three StrictMode A → B → A cases (success,
+confirmed failure, unknown), an awaited completion contract with an obsolete A
+dialog and a new B draft, and an installed-SDK case preserving B's exact session
+object/storage bytes/new dialog before returning to deleted A. Existing App
+unmount tests also verify a replacement App is unaffected. The 751 existing tests
+remain, including F1 token pinning and single-flight protections.
+
+Before the production correction, a targeted six-case run against the reviewed
+head failed **four cases**: the corrected existing A → B → A success expectation,
+the new success case without another dialog, the obsolete-dialog completion
+contract, and the SDK case's later return to A. Failure/unknown cases passed.
+This demonstrates the application defect independently of the test changes.
+
+Follow-up validation (same Windows environment, unchanged default settings):
+
+- Focused five-file suite: **72/72** (23 F1, 17 App lifecycle, 6 completion
+  contract, 6 installed-SDK boundary, 20 existing App/Profile/Auth cases).
+- Complete suite: **756/756 in 35 files**, 78.95 s, first full follow-up run
+  (751 existing + 5 added). No intermittent failure occurred in this run.
+- `pnpm exec tsc -b` and `pnpm lint`: passed, zero errors/warnings.
+- `pnpm build`: passed, 9.12 s; existing >500 kB chunk warning remains
+  (520.74 kB main JS). `git diff --check`: passed.
+- No dependency, configuration, timeout, worker or F4 recovery-data changes.
+  The PR contains the final commit's GitHub Actions results and run link.
+
 ## Remaining boundaries and manual review
 
 - This fallback intentionally leaves SDK session storage untouched. A's token
@@ -151,7 +194,8 @@ Local validation (Windows, Node 24.22.0, pnpm 10.34.6):
   existing zero-argument RPC has no durable request-status/idempotency protocol.
   Reload is not evidence that an uncertain deletion failed. Verify first.
 - An already-sent A deletion may succeed after switching away, including when
-  A later returns. The obsolete dialog cannot revive or clean up the new UI.
+  A later returns. Confirmed success retires A in the same App even if its original
+  dialog is obsolete. B's SDK session, storage, workspace and dialog are untouched.
 - F4 (Practice/Test/local recovery erasure and old writers) remains separate.
   Auth configuration, session expiry, RLS and the RPC are unchanged. This is not
   a claim that the entire account-deletion lifecycle is safe.

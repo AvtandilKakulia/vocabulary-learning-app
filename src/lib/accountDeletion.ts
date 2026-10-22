@@ -8,6 +8,7 @@ export interface AccountDeletionOperation {
 export type AccountDeletionOperations = Map<string, AccountDeletionOperation>;
 export interface AccountDeletionCompletion {
   readonly operation: AccountDeletionOperation;
+  // Guards dialog-local UI only; confirmed account retirement survives it.
   readonly isCurrent: () => boolean;
 }
 export type CompleteAccountDeletion = (completion: AccountDeletionCompletion) => Promise<{ error: unknown | null }>;

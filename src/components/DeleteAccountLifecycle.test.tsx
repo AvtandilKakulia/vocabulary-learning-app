@@ -76,12 +76,52 @@ describe('account deletion completion in App', () => {
       const before = view.container.innerHTML;
       await act(async () => pending.resolve(outcome));
       await act(async () => stale());
-      expect(view.container.innerHTML).toBe(before);
+      if (authMock.user?.id === A.id && outcome === success) {
+        expect(screen.getByText('Sign-in fixture')).toBeInTheDocument();
+        expect(screen.queryByText('Words fixture')).not.toBeInTheDocument();
+        expect(screen.queryByPlaceholderText('DELETE')).not.toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('Account deletion confirmed');
+      } else {
+        expect(view.container.innerHTML).toBe(before);
+      }
       expect(authMock.signOut).not.toHaveBeenCalled();
       expect(supabaseMock.rpc).toHaveBeenCalledExactlyOnceWith('delete_user_account');
       expect(screen.queryByText(/private server detail/)).not.toBeInTheDocument();
       view.unmount();
     }
+  });
+
+  it.each(['success', 'failure', 'unknown'] as const)('records only confirmed late A success after A to B to A: %s', async outcome => {
+    const pending = deferred<QueryResult>();
+    supabaseMock.rpc.mockReturnValue(request(pending.promise));
+    const view = render(<StrictMode><App /></StrictMode>); open(); confirm();
+    const stale = handler(submit());
+    await act(async () => fireEvent.click(submit()));
+    for (const user of [B, A]) { authMock.user = user; view.rerender(<StrictMode><App /></StrictMode>); }
+    expect(screen.queryByPlaceholderText('DELETE')).not.toBeInTheDocument();
+    const before = view.container.innerHTML;
+    await act(async () => pending.resolve(outcome === 'success' ? success : outcome === 'failure' ? failure : { status: 504, error: { message: 'gateway timeout' } }));
+    await act(async () => stale());
+    if (outcome === 'success') {
+      expect(screen.getByRole('status')).toHaveTextContent('Account deletion confirmed');
+      expect(screen.getByText('Sign-in fixture')).toBeInTheDocument();
+      expect(screen.queryByText('Words fixture')).not.toBeInTheDocument();
+    } else {
+      expect(view.container.innerHTML).toBe(before);
+      expect(screen.getByText('Words fixture')).toBeInTheDocument();
+      open();
+      expect(input()).toHaveValue('');
+      if (outcome === 'unknown') {
+        expect(screen.getByRole('status')).toHaveTextContent('server outcome is unknown');
+        expect(input()).toBeDisabled();
+      } else {
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        expect(input()).toBeEnabled();
+      }
+      expect(submit()).toBeDisabled();
+    }
+    expect(supabaseMock.rpc).toHaveBeenCalledExactlyOnceWith('delete_user_account');
+    expect(authMock.signOut).not.toHaveBeenCalled();
   });
 
   it('blocks native and stale Cancel once dispatched, and blocks duplicate submissions', async () => {
@@ -102,15 +142,19 @@ describe('account deletion completion in App', () => {
     expect(screen.getByText('Sign-in fixture')).toBeInTheDocument();
   });
 
-  it.each([success, failure])('does not run completion after unmount: %j', async outcome => {
+  it.each([success, failure])('does not update an unmounted App or a replacement App instance: %j', async outcome => {
     const pending = deferred<QueryResult>();
     supabaseMock.rpc.mockReturnValue(request(pending.promise));
     const view = render(<App />); open(); confirm();
     await act(async () => fireEvent.click(submit()));
     view.unmount();
+    const replacement = render(<App />);
+    const before = replacement.container.innerHTML;
     await act(async () => pending.resolve(outcome));
     expect(authMock.signOut).not.toHaveBeenCalled();
     expect(view.container).toBeEmptyDOMElement();
+    expect(replacement.container.innerHTML).toBe(before);
+    expect(screen.getByText('Words fixture')).toBeInTheDocument();
   });
 
   it('permits only a fresh confirmation after an explicit database rejection', async () => {
@@ -170,6 +214,34 @@ describe('account deletion completion in App', () => {
 });
 
 describe('awaited completion contract', () => {
+  it('awaits account completion even when the original dialog is obsolete, without updating the new dialog', async () => {
+    const rpc = deferred<QueryResult>();
+    const completion = deferred<{ error: unknown | null }>();
+    supabaseMock.rpc.mockReturnValue(request(rpc.promise));
+    const complete = vi.fn<CompleteAccountDeletion>().mockReturnValue(completion.promise);
+    const operations: AccountDeletionOperations = new Map();
+    const view = render(<DeleteAccountModal account={A} operations={operations} onClose={vi.fn()} onDeleted={complete} />);
+    confirm(); let work: Promise<void>;
+    await act(async () => { work = handler(submit())(); });
+    view.unmount();
+    authMock.user = B;
+    const replacement = render(<DeleteAccountModal account={B} operations={operations} onClose={vi.fn()} onDeleted={complete} />);
+    fireEvent.change(input(), { target: { value: 'B draft' } });
+    const before = replacement.container.innerHTML;
+    await act(async () => rpc.resolve(success));
+    expect(complete).toHaveBeenCalledOnce();
+    expect(complete.mock.calls[0][0].operation).toBe(operations.get(A.id));
+    expect(complete.mock.calls[0][0].isCurrent()).toBe(false);
+    expect(operations.get(A.id)?.phase).toBe('completing');
+    expect(replacement.container.innerHTML).toBe(before);
+    await act(async () => { completion.resolve({ error: null }); await work!; });
+    expect(operations.get(A.id)?.phase).toBe('deleted');
+    expect(replacement.container.innerHTML).toBe(before);
+    expect(input()).toHaveValue('B draft');
+    expect(authMock.signOut).not.toHaveBeenCalled();
+    expect(supabaseMock.rpc).toHaveBeenCalledExactlyOnceWith('delete_user_account');
+  });
+
   it.each(['success', 'returned Auth error', 'rejection'] as const)('awaits %s, keeps busy, and never repeats confirmed deletion', async outcome => {
     const pending = deferred<{ error: unknown | null }>();
     const complete = vi.fn<CompleteAccountDeletion>().mockReturnValue(pending.promise);
@@ -252,6 +324,42 @@ async function sdkFixture() {
 }
 
 describe('installed SDK session replacement boundary', () => {
+  it('records late A success while preserving B exact SDK session, storage and new dialog, then retires returning A', async () => {
+    const { client, stored, transport, signIn } = await sdkFixture();
+    const pending = deferred<QueryResult>();
+    supabaseMock.auth.getSession.mockImplementation(() => client.auth.getSession());
+    supabaseMock.auth.onAuthStateChange.mockImplementation(callback => client.auth.onAuthStateChange(callback));
+    authMock.signOut.mockImplementation(() => client.auth.signOut({ scope: 'local' }));
+    supabaseMock.rpc.mockReturnValue(request(pending.promise));
+    const view = render(<StrictMode><App /></StrictMode>); open(); confirm();
+    await act(async () => fireEvent.click(submit()));
+    await act(async () => signIn(B));
+    authMock.user = B; view.rerender(<StrictMode><App /></StrictMode>);
+    open(B); fireEvent.change(input(), { target: { value: 'B draft' } });
+    const storedBefore = [...stored.entries()];
+    const sessionBefore = (await client.auth.getSession()).data.session;
+    expect(sessionBefore?.user.id).toBe(B.id);
+    const storageBefore = { ...localStorage };
+    const uiBefore = view.container.innerHTML;
+    await act(async () => pending.resolve(success));
+    expect(view.container.innerHTML).toBe(uiBefore);
+    expect(input()).toHaveValue('B draft');
+    expect(screen.getByText('Words fixture')).toBeInTheDocument();
+    expect([...stored.entries()]).toEqual(storedBefore);
+    expect((await client.auth.getSession()).data.session).toEqual(sessionBefore);
+    expect({ ...localStorage }).toEqual(storageBefore);
+    // A later Auth event cannot revive the account already confirmed deleted.
+    await act(async () => signIn(A));
+    authMock.user = A; view.rerender(<StrictMode><App /></StrictMode>);
+    expect(screen.getByRole('status')).toHaveTextContent('Account deletion confirmed');
+    expect(screen.getByText('Sign-in fixture')).toBeInTheDocument();
+    expect(screen.queryByText('Words fixture')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('DELETE')).not.toBeInTheDocument();
+    expect(transport.mock.calls.filter(([url]) => String(url).includes('/logout'))).toHaveLength(0);
+    expect(authMock.signOut).not.toHaveBeenCalled();
+    expect(supabaseMock.rpc).toHaveBeenCalledExactlyOnceWith('delete_user_account');
+  });
+
   it.each(['queued', 'processing'] as const)('demonstrates unsafe checked local signOut when B replaces A while %s', async timing => {
     const fixture = await sdkFixture();
     const { client, stored, transport, logout, reachedLogout, reachedLock, releaseLock, signIn } = fixture;

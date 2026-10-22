@@ -301,17 +301,14 @@ export function DeleteAccountModal({ account, operations, onClose, onDeleted }: 
           current.phase = isConfirmedDeletionFailure(response) ? 'failed' : 'unknown';
         } else if (response.status >= 200 && response.status < 300) {
           current.phase = 'completing';
-          if (isCurrentOperation()) {
-            setOutcome(deletionMessage(current.phase));
-            try {
-              const completion = await onDeleted({ operation: current, isCurrent: isCurrentOperation });
-              current.phase = completion.error ? 'cleanup-failed' : 'deleted';
-            } catch {
-              current.phase = 'cleanup-failed';
-            }
-          } else {
-            // Confirmed success; obsolete UI cleanup is deliberately skipped.
-            current.phase = 'deleted';
+          if (isCurrentOperation()) setOutcome(deletionMessage(current.phase));
+          // Always report confirmed account deletion; only this dialog's UI
+          // updates depend on its continued validity after an account switch.
+          try {
+            const completion = await onDeleted({ operation: current, isCurrent: isCurrentOperation });
+            current.phase = completion.error ? 'cleanup-failed' : 'deleted';
+          } catch {
+            current.phase = 'cleanup-failed';
           }
         } else {
           current.phase = 'unknown';

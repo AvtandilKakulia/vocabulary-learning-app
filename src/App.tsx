@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useLatestRequest } from './hooks/useLatestRequest';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -24,6 +24,7 @@ function AppContent() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [deleteAccount, setDeleteAccount] = useState<{ id: string; email?: string } | null>(null);
   const deletionOperations = useRef<AccountDeletionOperations>(new Map());
+  const appMounted = useRef(false);
   const [deletedAccounts, setDeletedAccounts] = useState<ReadonlySet<string>>(() => new Set());
   const [profileName, setProfileName] = useState<{ userId: string; name: string | null } | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -34,6 +35,11 @@ function AppContent() {
   const closeDeleteAccount = useCallback(() => setDeleteAccount(null), []);
   const beginProfileRead = useLatestRequest(JSON.stringify([userId]));
   const displayName = profileName?.userId === userId ? profileName?.name : null;
+
+  useLayoutEffect(() => {
+    appMounted.current = true;
+    return () => { appMounted.current = false; };
+  }, []);
 
   const loadDisplayName = useCallback(async () => {
     const isCurrent = beginProfileRead();
@@ -94,8 +100,11 @@ function AppContent() {
     void loadDisplayName();
   };
 
-  const handleAccountDeleted: CompleteAccountDeletion = async ({ operation, isCurrent }) => {
-    if (!isCurrent()) return { error: null };
+  const handleAccountDeleted: CompleteAccountDeletion = async ({ operation }) => {
+    // Confirmed deletion belongs to this App and UID, even if the dialog has
+    // unmounted or another account is active. Dialog validity must not gate it.
+    if (!appMounted.current || deletionOperations.current.get(operation.accountId) !== operation
+      || operation.phase !== 'completing') return { error: null };
     // Public SDK signOut has no compare-and-remove UID parameter. Even local
     // scope can remove a replacement session after an await. Retire only this
     // account's app UI; do not mutate shared Auth storage or revoke any session.
