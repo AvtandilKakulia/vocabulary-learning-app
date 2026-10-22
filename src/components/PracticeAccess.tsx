@@ -2,16 +2,19 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { flushSync } from 'react-dom';
 import { coordinatePractice, type PracticeOwner, type PracticeOwnershipState } from '../lib/practiceOwnership';
 import { legacyPracticeKey, practiceSessionKey, readPracticeSession } from '../lib/practiceSessions';
+import { useRetiredAccount } from '../hooks/useRetiredAccount';
 
 export function PracticeAccess({ userId, children }: {
   userId: string;
   children: (owner: PracticeOwner, handoffRequested: boolean) => ReactNode;
 }) {
+  const retired = useRetiredAccount(userId);
   const [state, setState] = useState<PracticeOwnershipState>({ status: 'checking' });
   const [confirm, setConfirm] = useState(false);
   const [snapshot, setSnapshot] = useState(() => readPracticeSession(userId).session);
   const coordination = useRef<ReturnType<typeof coordinatePractice>>();
   useLayoutEffect(() => {
+    if (retired) return;
     const current = coordinatePractice(userId, next => {
       if (next.status === 'active' && next.handoffRequested) {
         // A channel message is outside React. Commit any pending answer update
@@ -21,7 +24,7 @@ export function PracticeAccess({ userId, children }: {
     });
     coordination.current = current;
     return () => current.stop();
-  }, [userId]);
+  }, [userId, retired]);
 
   useEffect(() => {
     if (state.status === 'active') return;
@@ -34,6 +37,7 @@ export function PracticeAccess({ userId, children }: {
     return () => window.removeEventListener('storage', onStorage);
   }, [state.status, userId]);
 
+  if (retired) return <p role="status">This account is retired in this browser. Practice recovery is disabled.</p>;
   if (state.status === 'active') return children(state.owner, state.handoffRequested);
   if (state.status === 'checking') return <p role="status" className="p-8 text-center">Loading your words...</p>;
   return <section className="max-w-2xl mx-auto p-8 space-y-4 text-gray-900 dark:text-gray-100" aria-label="Practice access">

@@ -1,5 +1,6 @@
 import type { Word, TestHistory } from './supabase';
 import { completedTestSnapshot, isCompletedTestResult, readPendingTests, type CompletedTestResult } from './pendingTestResults';
+import { activeTestPrefix as prefix, recoveryStore } from './recoveryStorage';
 
 export interface TestQuestion extends Pick<Word, 'id' | 'english_word' | 'georgian_definitions' | 'description'> {
   userAnswer: string;
@@ -20,7 +21,6 @@ export interface ActiveTestSession {
   draftAnswer: string;
 }
 
-const prefix = (userId: string) => `vocab_active_test:${encodeURIComponent(userId)}:`;
 export const activeTestKey = (userId: string, id: string) => `${prefix(userId)}${id}`;
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -67,9 +67,8 @@ function snapshot(session: ActiveTestSession): ActiveTestSession {
 
 export function persistActiveTest(session: ActiveTestSession): boolean {
   try {
-    window.localStorage.setItem(activeTestKey(session.userId, session.id),
+    return recoveryStore.write(session.userId, activeTestKey(session.userId, session.id),
       JSON.stringify({ version: 1, phase: 'active', session: snapshot(session) }));
-    return true;
   } catch { return false; }
 }
 
@@ -77,9 +76,8 @@ export function persistActiveTest(session: ActiveTestSession): boolean {
 // cannot be allocated (e.g. quota). It retains the exact completed payload and ID.
 export function checkpointCompletedTest(result: CompletedTestResult): boolean {
   try {
-    window.localStorage.setItem(activeTestKey(result.user_id, result.id),
+    return recoveryStore.write(result.user_id, activeTestKey(result.user_id, result.id),
       JSON.stringify({ version: 1, phase: 'completed', result: completedTestSnapshot(result) }));
-    return true;
   } catch { return false; }
 }
 
@@ -91,6 +89,11 @@ export function removeActiveTest(userId: string, id: string): boolean {
 }
 
 export function readTestRecovery(userId: string) {
+  const blocked = () => ({ results: [], sessions: [], activeCopyIds: new Set<string>(), completedCopyIds: new Set<string>(),
+    pendingCopyIds: new Set<string>(), warning: recoveryStore.state(userId) === 'retired'
+      ? 'Test recovery is unavailable for this retired account.'
+      : 'Browser storage is unavailable or its recovery status could not be verified. Navigation or refresh may lose the current session.' });
+  if (recoveryStore.state(userId) !== 'active') return blocked();
   const pending = readPendingTests(userId);
   const results = new Map(pending.results.map(result => [result.id, result]));
   const sessions: ActiveTestSession[] = [];
@@ -123,6 +126,7 @@ export function readTestRecovery(userId: string) {
   } catch {
     warnings.push('Browser storage is unavailable. Navigation or refresh may lose the current session.');
   }
+  if (recoveryStore.state(userId) !== 'active') return blocked();
   return {
     results: [...results.values()].sort((a, b) => a.test_date.localeCompare(b.test_date) || a.id.localeCompare(b.id)),
     // A pending result always supersedes the active record for that same ID.

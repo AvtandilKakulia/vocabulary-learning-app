@@ -1,3 +1,5 @@
+import { recoveryStore } from './recoveryStorage';
+
 // Web Locks are the exclusion mechanism. Messages only request a cooperative
 // handoff; they never grant ownership, and no localStorage CAS/lease is assumed.
 export const practiceLockName = (userId: string) => `vocab:practice:editor:${encodeURIComponent(userId)}`;
@@ -19,7 +21,7 @@ export type PracticeOwnershipState =
   | { status: 'active'; owner: PracticeOwner; handoffRequested: boolean };
 
 export function ownsPractice(access: PracticeWriteAccess | undefined, userId: string) {
-  return access?.userId === userId && access.canWrite();
+  return access?.userId === userId && recoveryStore.state(userId) !== 'retired' && access.canWrite();
 }
 
 // StrictMode can start a replacement effect before the browser has delivered
@@ -83,7 +85,7 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
   } catch { /* Without messaging, Continue waits for the owner to close/leave. */ }
 
   const acquire = (wait: boolean) => {
-    if (disposed || owner?.canWrite() || pending) return;
+    if (disposed || recoveryStore.state(userId) === 'retired' || owner?.canWrite() || pending) return;
     if (!locks?.request) { emit({ status: 'unavailable' }); return; }
     const request = ++generation;
     const controller = new AbortController();
@@ -95,7 +97,7 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
       const launch = () => locks.request(practiceLockName(userId), wait
         ? { mode: 'exclusive', signal: controller.signal }
         : { mode: 'exclusive', ifAvailable: true }, async lock => {
-        if (disposed || request !== generation) return;
+        if (disposed || request !== generation || recoveryStore.state(userId) === 'retired') return;
         pending = undefined;
         waiting = false;
         waitingId = undefined;
@@ -105,7 +107,7 @@ export function coordinatePractice(userId: string, changed: (state: PracticeOwne
         const released = new Promise<void>(resolve => { unlock = resolve; });
         const acquired: PracticeOwner = {
           userId,
-          canWrite: () => held && !disposed,
+          canWrite: () => held && !disposed && recoveryStore.state(userId) !== 'retired',
           finishHandoff: () => {
             // Cancellation may arrive while React prepares the checkpoint.
             // A delayed completion must not release an otherwise usable editor.
@@ -177,7 +179,7 @@ export async function withAvailablePracticeAccess(userId: string, action: (acces
   if (!navigator.locks?.request) return;
   try {
     await navigator.locks.request(practiceLockName(userId), { mode: 'exclusive', ifAvailable: true }, lock => {
-      if (!lock) return;
+      if (!lock || recoveryStore.state(userId) === 'retired') return;
       let held = true;
       try { action({ userId, canWrite: () => held }); } finally { held = false; }
     });

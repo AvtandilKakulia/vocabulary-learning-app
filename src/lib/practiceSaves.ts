@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { matchesCompletedTest, type CompletedTestResult } from './pendingTestResults';
 import { practiceSessionKey, removePracticeSession, type PracticeResult } from './practiceSessions';
 import { ownsPractice, practiceSaveLockName, withAvailablePracticeAccess, type PracticeWriteAccess } from './practiceOwnership';
+import { recoveryStore } from './recoveryStorage';
 
 type SaveOutcome = { status: 'saved' } | { status: 'error'; error: unknown };
 export interface PracticeSave {
@@ -37,6 +38,14 @@ export function savePracticeResult(result: CompletedTestResult, savedCopy: strin
             throw new Error('Practice moved to another tab. Restore its latest result before retrying.');
           }
           const { error } = await supabase.from('test_history').insert(result);
+          // The request cannot be cancelled, but retirement must prevent later
+          // verification/cleanup work from using this now-obsolete checkpoint.
+          if (recoveryStore.state(result.user_id) === 'retired') {
+            operation.savedCopy = '';
+            saves.delete(key(result));
+            if (error) throw error;
+            return;
+          }
           if (error) {
             if (error.code !== '23505') throw error;
             // An earlier request may have committed before its response was lost.
@@ -44,6 +53,7 @@ export function savePracticeResult(result: CompletedTestResult, savedCopy: strin
             const { data, error: lookupError } = await supabase.from('test_history')
               .select('id,user_id,test_date,test_direction,total_words,correct_count,mistakes')
               .eq('id', result.id).eq('user_id', result.user_id);
+            if (recoveryStore.state(result.user_id) === 'retired') throw new Error('Account retired.');
             if (lookupError) throw lookupError;
             if (!Array.isArray(data) || data.length !== 1 || !matchesCompletedTest(data[0], result)) {
               throw new Error('Could not confirm the existing History record. Your Practice result has been kept.');

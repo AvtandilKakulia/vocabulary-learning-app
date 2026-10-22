@@ -1,8 +1,8 @@
 import type { TestHistory, TestMistake } from './supabase';
+import { pendingTestPrefix as accountPrefix, recoveryStore } from './recoveryStorage';
 
 export type CompletedTestResult = Omit<TestHistory, 'created_at'>;
 
-const storagePrefix = 'vocab_pending_test';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -27,10 +27,6 @@ export function isCompletedTestResult(value: unknown, userId: string): value is 
     value.mistakes.length === Number(value.total_words) - Number(value.correct_count);
 }
 
-function accountPrefix(userId: string) {
-  return `${storagePrefix}:${encodeURIComponent(userId)}:`;
-}
-
 export function pendingTestKey(result: Pick<CompletedTestResult, 'user_id' | 'id'>) {
   return `${accountPrefix(result.user_id)}${result.id}`;
 }
@@ -51,6 +47,10 @@ export function completedTestSnapshot(result: CompletedTestResult): CompletedTes
 }
 
 export function readPendingTests(userId: string): { results: CompletedTestResult[]; warning: string } {
+  const blocked = { results: [], warning: recoveryStore.state(userId) === 'retired'
+    ? 'Test recovery is unavailable for this retired account.'
+    : 'Browser storage is unavailable or its recovery status could not be verified. Pending test results could not be read.' };
+  if (recoveryStore.state(userId) !== 'active') return blocked;
   const results: CompletedTestResult[] = [];
   let warning = '';
   try {
@@ -72,14 +72,13 @@ export function readPendingTests(userId: string): { results: CompletedTestResult
     warning = 'Browser storage is unavailable. Pending test results could not be read.';
   }
   results.sort((a, b) => a.test_date.localeCompare(b.test_date) || a.id.localeCompare(b.id));
-  return { results, warning };
+  return recoveryStore.state(userId) === 'active' ? { results, warning } : blocked;
 }
 
 export function persistPendingTest(result: CompletedTestResult): boolean {
   try {
     // One key per result avoids overwriting completed tests from another tab.
-    window.localStorage.setItem(pendingTestKey(result), JSON.stringify({ version: 1, result: completedTestSnapshot(result) }));
-    return true;
+    return recoveryStore.write(result.user_id, pendingTestKey(result), JSON.stringify({ version: 1, result: completedTestSnapshot(result) }));
   } catch {
     return false;
   }
