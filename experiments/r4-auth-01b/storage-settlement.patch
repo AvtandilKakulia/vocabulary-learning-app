@@ -1,0 +1,124 @@
+diff --git a/packages/core/auth-js/src/GoTrueClient.ts b/packages/core/auth-js/src/GoTrueClient.ts
+index b80b276..12c4fa8 100644
+--- a/packages/core/auth-js/src/GoTrueClient.ts
++++ b/packages/core/auth-js/src/GoTrueClient.ts
+@@ -733,7 +733,7 @@ export default class GoTrueClient {
+         return { error: null }
+       }
+       // no login attempt via callback url try to recover session from storage
+-      await this._recoverAndRefresh()
++      await this._recoverAndRefresh(true)
+       return { error: null }
+     } catch (error) {
+       if (isAuthError(error)) {
+@@ -4857,7 +4857,7 @@ export default class GoTrueClient {
+    * Recovers the session from LocalStorage and refreshes the token
+    * Note: this method is async to accommodate for AsyncStorage e.g. in React native.
+    */
+-  private async _recoverAndRefresh() {
++  private async _recoverAndRefresh(reportInitializationError = false) {
+     const debugName = '#_recoverAndRefresh()'
+     this._debug(debugName, 'begin')
+
+@@ -4972,6 +4972,9 @@ export default class GoTrueClient {
+     } catch (err) {
+       this._debug(debugName, 'error', err)
+
++      // Initialization must expose persistence failure through its public result.
++      if (reportInitializationError) throw err
++
+       if (isAuthRetryableFetchError(err)) {
+         // Transient/aborted network failure during session recovery (e.g. a
+         // superseded page navigation cancelling the in-flight request). Warn
+@@ -5119,48 +5122,54 @@ export default class GoTrueClient {
+       this._debug(debugName, 'error', error)
+
+       if (isAuthError(error)) {
+-        const result = { data: null, error }
+-
+-        if (!isAuthRetryableFetchError(error)) {
+-          // Proactive vs reactive distinction: a refresh fires whenever
+-          // the access token is within EXPIRY_MARGIN_MS of expiry. If the
+-          // access token is *still valid* at this moment, the refresh was
+-          // proactive and the existing session is still usable until its
+-          // real expiry — destroying it now would log out a user whose
+-          // access token works. If the access token has actually expired,
+-          // the refresh token is the only credential left and it just got
+-          // rejected — the session is genuinely dead. `__loadSession`
+-          // mirrors this distinction on the read path so callers see the
+-          // preserved session instead of `session: null`.
+-          const storedNow = (await getItemAsync(this.storage, this.storageKey)) as Session | null
+-          const accessTokenStillValid = !!(
+-            storedNow?.expires_at && storedNow.expires_at * 1000 > Date.now()
+-          )
+-
+-          if (accessTokenStillValid) {
+-            this._debug(
+-              debugName,
+-              'proactive refresh failed, access token still valid — preserving session'
++        try {
++          const result = { data: null, error }
++
++          if (!isAuthRetryableFetchError(error)) {
++            // Proactive vs reactive distinction: a refresh fires whenever
++            // the access token is within EXPIRY_MARGIN_MS of expiry. If the
++            // access token is *still valid* at this moment, the refresh was
++            // proactive and the existing session is still usable until its
++            // real expiry — destroying it now would log out a user whose
++            // access token works. If the access token has actually expired,
++            // the refresh token is the only credential left and it just got
++            // rejected — the session is genuinely dead. `__loadSession`
++            // mirrors this distinction on the read path so callers see the
++            // preserved session instead of `session: null`.
++            const storedNow = (await getItemAsync(this.storage, this.storageKey)) as Session | null
++            const accessTokenStillValid = !!(
++              storedNow?.expires_at && storedNow.expires_at * 1000 > Date.now()
+             )
+-          } else {
+-            await this._removeSession()
++
++            if (accessTokenStillValid) {
++              this._debug(
++                debugName,
++                'proactive refresh failed, access token still valid — preserving session'
++              )
++            } else {
++              await this._removeSession()
++            }
+           }
+-        }
+
+-        // Cache the failure so serial callers (and the next auto-refresh
+-        // tick) passing the same refresh token within the cooldown window
+-        // receive it synchronously instead of firing another `/token`
+-        // call. Set after the optional `_removeSession` above (which
+-        // clears the cache as part of teardown) so the cache survives.
+-        this.lastRefreshFailure = {
+-          refreshToken,
+-          result,
+-          expiresAt: Date.now() + REFRESH_FAILURE_COOLDOWN_MS,
+-        }
++          // Cache the failure so serial callers (and the next auto-refresh
++          // tick) passing the same refresh token within the cooldown window
++          // receive it synchronously instead of firing another `/token`
++          // call. Set after the optional `_removeSession` above (which
++          // clears the cache as part of teardown) so the cache survives.
++          this.lastRefreshFailure = {
++            refreshToken,
++            result,
++            expiresAt: Date.now() + REFRESH_FAILURE_COOLDOWN_MS,
++          }
+
+-        this.refreshingDeferred?.resolve(result)
++          this.refreshingDeferred?.resolve(result)
+
+-        return result
++          return result
++        } catch (cleanupError) {
++          // A failure inside error handling must settle the same shared deferred.
++          this.refreshingDeferred?.reject(cleanupError)
++          throw cleanupError
++        }
+       }
+
+       this.refreshingDeferred?.reject(error)
