@@ -449,32 +449,32 @@ function AccountTestMode({ userId }: { userId: string }) {
 
   if (stage === 'setup') {
     return (
-      <div className="max-w-2xl mx-auto space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">Test Mode</h2>
+      <div className="max-w-2xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Test Mode</h2>
         {storageWarning && <p role="alert">{storageWarning}</p>}
 
-        <div className="bg-white rounded-lg shadow-lg p-8 space-y-6">
+        <div className="bg-white rounded-lg shadow-lg p-8 space-y-6 dark:bg-gray-800">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-200">
               Translation Direction
             </label>
             <div className="flex gap-2">
               <button
                 onClick={() => setDirection('en-to-geo')}
-                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-4 py-2 rounded-lg border transition-colors ${
                   direction === 'en-to-geo'
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-700'
                 }`}
               >
                 English → Georgian
               </button>
               <button
                 onClick={() => setDirection('geo-to-en')}
-                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-4 py-2 rounded-lg border transition-colors ${
                   direction === 'geo-to-en'
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-700'
                 }`}
               >
                 Georgian → English
@@ -483,10 +483,10 @@ function AccountTestMode({ userId }: { userId: string }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-200">
               Number of Words
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[10, 20, 30].map(count => (
                 <button
                   key={count}
@@ -494,10 +494,10 @@ function AccountTestMode({ userId }: { userId: string }) {
                     setWordCount(count);
                     setCustomCount('');
                   }}
-                  className={`px-4 py-2 rounded-lg border transition-colors ${
+                  className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 rounded-lg border transition-colors ${
                     wordCount === count
                       ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-700'
                   }`}
                 >
                   {count}
@@ -511,32 +511,32 @@ function AccountTestMode({ userId }: { userId: string }) {
                   setWordCount(0);
                 }}
                 placeholder="Custom"
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-200">
               Input Type
             </label>
             <div className="flex gap-2">
               <button
                 onClick={() => setInputType('text')}
-                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-4 py-2 rounded-lg border transition-colors ${
                   inputType === 'text'
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-700'
                 }`}
               >
                 Text Input
               </button>
               <button
                 onClick={() => setInputType('multiple')}
-                className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${
+                className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-4 py-2 rounded-lg border transition-colors ${
                   inputType === 'multiple'
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-700'
                 }`}
               >
                 Multiple Choice
@@ -547,7 +547,7 @@ function AccountTestMode({ userId }: { userId: string }) {
           <button
             onClick={startTest}
             disabled={loading || (wordCount === 0 && !customCount)}
-            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800"
           >
             {loading ? 'Loading...' : 'Start Test'}
           </button>
@@ -561,46 +561,46 @@ function AccountTestMode({ userId }: { userId: string }) {
     const progress = ((currentQuestion) / testWords.length) * 100;
 
     return (
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">Test in Progress</h2>
-          <div className="text-sm text-gray-600">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Test in Progress</h2>
+          <div className="text-sm text-gray-600 dark:text-gray-300">
             Question {currentQuestion + 1} of {testWords.length}
           </div>
         </div>
 
         {storageWarning && <p role="alert">{storageWarning}</p>}
         <button onClick={() => setShowRestartConfirm(true)} disabled={showRestartConfirm}
-          className="px-4 py-2 border rounded-lg">Restart Test</button>
+          className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border rounded-lg border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700">Restart Test</button>
         {showRestartConfirm && (
           <div role="alertdialog" aria-modal="true" aria-labelledby="restart-test-title"
             className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md space-y-4">
+            <div className="bg-white rounded-lg p-6 max-w-md space-y-4 dark:bg-gray-800">
               <h3 id="restart-test-title" className="font-bold">Abandon this unfinished test?</h3>
               <p>Your current questions, answers and progress will be lost. Confirm to return to test setup.</p>
-              <button autoFocus onClick={() => setShowRestartConfirm(false)} className="px-4 py-2 border rounded">Cancel</button>
-              <button onClick={restartTest} className="px-4 py-2 bg-red-600 text-white rounded">Discard progress</button>
+              <button autoFocus onClick={() => setShowRestartConfirm(false)} className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border rounded border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={restartTest} className="disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 bg-red-600 text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800">Discard progress</button>
             </div>
           </div>
         )}
 
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
           <div
             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="bg-white rounded-lg shadow-lg p-8 dark:bg-gray-800">
           <div className="text-center mb-8">
-            <div className="text-4xl font-bold text-gray-900 mb-4">
+            <div className="text-4xl font-bold text-gray-900 mb-4 dark:text-gray-100">
               {direction === 'en-to-geo'
                 ? currentWord.english_word
                 : currentWord.georgian_definitions.join(', ')
               }
             </div>
             {currentWord.description && (
-              <div className="text-sm text-gray-600 italic">
+              <div className="text-sm text-gray-600 italic dark:text-gray-300">
                 <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(currentWord.description) }} />
               </div>
             )}
@@ -619,13 +619,13 @@ function AccountTestMode({ userId }: { userId: string }) {
                   }
                 }}
                 placeholder="Type your answer..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
                 autoFocus
               />
             ) : (
               <div className="space-y-3">
                 {multipleChoiceOptions.map((option, idx) => (
-                  <label key={idx} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <label key={idx} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors dark:border-gray-600 dark:hover:bg-gray-700">
                     <input
                       type="radio"
                       name="multipleChoice"
@@ -633,7 +633,7 @@ function AccountTestMode({ userId }: { userId: string }) {
                       checked={userAnswer === option}
                       onChange={(e) => changeAnswer(e.target.value)}
                       disabled={showRestartConfirm}
-                      className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-4 h-4 text-blue-600 focus:ring-blue-500 dark:text-blue-300"
                     />
                     <span className="text-lg">{option}</span>
                   </label>
@@ -644,16 +644,16 @@ function AccountTestMode({ userId }: { userId: string }) {
             <button
               onClick={submitAnswer}
               disabled={!userAnswer.trim() || showRestartConfirm}
-              className={`w-full px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors ${
+              className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors ${
                 currentQuestion >= testWords.length - 1
-                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  ? 'bg-green-700 hover:bg-green-700 text-white'
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
             >
               {currentQuestion < testWords.length - 1 ? 'Next Question' : 'Finish Test'}
             </button>
             {currentQuestion >= testWords.length - 1 && (
-              <p className="text-sm text-green-600 text-center mt-2 font-medium">
+              <p className="text-sm text-green-700 text-center mt-2 font-medium dark:text-green-300">
                 This is your final question!
               </p>
             )}
@@ -682,8 +682,8 @@ function AccountTestMode({ userId }: { userId: string }) {
           : 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100';
 
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">Test Results</h2>
+      <div className="max-w-3xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Test Results</h2>
 
         <div role={isSaveError ? 'alert' : 'status'} aria-live={isSaveError ? 'assertive' : 'polite'}
           aria-atomic="true" aria-labelledby="test-save-status"
@@ -706,7 +706,7 @@ function AccountTestMode({ userId }: { userId: string }) {
                 <button
                   onClick={() => void saveTestResult()}
                   disabled={showDiscardConfirm}
-                  className="min-h-11 w-full rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-300 dark:text-blue-950 dark:hover:bg-blue-200 dark:focus-visible:outline-blue-300 sm:w-auto"
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 min-h-11 w-full rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-300 dark:text-blue-950 dark:hover:bg-blue-200 dark:focus-visible:outline-blue-300 sm:w-auto"
                 >
                   Retry Save
                 </button>
@@ -715,27 +715,27 @@ function AccountTestMode({ userId }: { userId: string }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="bg-white rounded-lg shadow-lg p-8 dark:bg-gray-800">
           <div className="text-center mb-8">
-            <div className="text-6xl font-bold text-gray-900 mb-2">
+            <div className="text-6xl font-bold text-gray-900 mb-2 dark:text-gray-100">
               {percentage}%
             </div>
-            <div className="text-xl text-gray-600">
+            <div className="text-xl text-gray-600 dark:text-gray-300">
               {correctCount} out of {result.total_words} correct
             </div>
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-sm text-gray-600 mt-2 dark:text-gray-300">
               {result.test_direction === 'en-to-geo' ? 'English → Georgian' : 'Georgian → English'}
               {' · '}{new Date(result.test_date).toLocaleString()}
             </p>
           </div>
 
           <div className="space-y-4 mb-6">
-            <h3 className="font-bold text-lg text-gray-900">Review:</h3>
+            <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Review:</h3>
             {testWords.length === 0 && (
               <>
                 <p>Recovered score and mistakes. Individual correct answers are not stored.</p>
                 {result.mistakes.map((mistake, index) => (
-                  <div key={index} className="p-4 rounded-lg border bg-red-50 border-red-200">
+                  <div key={index} className="p-4 rounded-lg border bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800">
                     <div className="font-medium">{mistake.question_prompt ?? mistake.english_word}</div>
                     {mistake.description && <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(mistake.description) }} />}
                     <div>Your answer: {mistake.user_answer || '(empty)'}</div>
@@ -749,25 +749,25 @@ function AccountTestMode({ userId }: { userId: string }) {
                 key={idx}
                 className={`p-4 rounded-lg border ${
                   word.isCorrect
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-red-50 border-red-200'
+                    ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800'
+                    : 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
                 }`}
               >
                 <div className="flex items-start gap-3">
                   {word.isCorrect ? (
-                    <Check className="text-green-600 flex-shrink-0 mt-1" size={20} />
+                    <Check className="text-green-700 flex-shrink-0 mt-1 dark:text-green-300" size={20} />
                   ) : (
-                    <X className="text-red-600 flex-shrink-0 mt-1" size={20} />
+                    <X className="text-red-600 flex-shrink-0 mt-1 dark:text-red-300" size={20} />
                   )}
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">
                       {direction === 'en-to-geo' ? word.english_word : word.georgian_definitions.join(', ')}
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">
+                    <div className="text-sm text-gray-600 mt-1 dark:text-gray-300">
                       Your answer: <span className="font-medium">{word.userAnswer || '(empty)'}</span>
                     </div>
                     {!word.isCorrect && (
-                      <div className="text-sm text-gray-600 mt-1">
+                      <div className="text-sm text-gray-600 mt-1 dark:text-gray-300">
                         Correct: <span className="font-medium">
                           {direction === 'en-to-geo'
                             ? word.georgian_definitions.join(', ')
@@ -785,7 +785,7 @@ function AccountTestMode({ userId }: { userId: string }) {
           <button
             onClick={resetTest}
             disabled={historySaveStatus === 'saving' || showDiscardConfirm}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800"
           >
             <RotateCcw size={20} />
             Take Another Test
@@ -794,11 +794,11 @@ function AccountTestMode({ userId }: { userId: string }) {
         {showDiscardConfirm && (
           <div role="alertdialog" aria-modal="true" aria-labelledby="discard-test-title"
             className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md space-y-4">
+            <div className="bg-white rounded-lg p-6 max-w-md space-y-4 dark:bg-gray-800">
               <h3 id="discard-test-title" className="font-bold">Discard this completed test?</h3>
               <p>Saving to History has not been confirmed. Discarding removes this browser's recovery copy and you cannot retry it here. If an earlier request reached the server, its History record will remain.</p>
-              <button autoFocus onClick={() => setShowDiscardConfirm(false)} className="px-4 py-2 border rounded">Cancel</button>
-              <button onClick={discardResult} disabled={historySaveStatus === 'saving'} className="px-4 py-2 bg-red-600 text-white rounded">Discard result</button>
+              <button autoFocus onClick={() => setShowDiscardConfirm(false)} className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border rounded border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={discardResult} disabled={historySaveStatus === 'saving'} className="disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 bg-red-600 text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800">Discard result</button>
             </div>
           </div>
         )}
