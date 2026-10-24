@@ -106,7 +106,7 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
             {record.mistakes.map((m, idx) => (
               <div
                 key={idx}
-                className="p-4 bg-red-50 border border-red-200 rounded-xl dark:bg-red-950 dark:border-red-800"
+                className="p-4 bg-gray-50 border border-red-200 rounded-xl dark:bg-gray-900 dark:border-red-900/60"
               >
                 <div className="font-bold text-lg mb-2">
                   {m.question_prompt ?? m.english_word}

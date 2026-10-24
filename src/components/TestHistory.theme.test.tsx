@@ -29,6 +29,11 @@ describe('Test and History theme presentation', () => {
     panel(choice);
     expect(choice).toHaveClass('text-gray-700', 'dark:text-gray-200', 'dark:border-gray-500', 'dark:hover:bg-gray-700', 'focus-visible:ring-2');
     expect(screen.getByPlaceholderText('Custom')).toHaveClass('bg-white', 'dark:bg-gray-900', 'dark:text-gray-100', 'dark:placeholder:text-gray-400');
+    const count = screen.getByRole('spinbutton');
+    expect(count).toHaveAttribute('type', 'number');
+    expect(count).toHaveClass('[appearance:textfield]', '[&::-webkit-inner-spin-button]:appearance-none', '[&::-webkit-outer-spin-button]:appearance-none', 'focus-visible:ring-2');
+    fireEvent.change(count, { target: { value: '12' } });
+    expect(count).toHaveValue(12);
   });
 
   it('styles active question, unchanged rich description, text input and restart confirmation', () => {
@@ -43,6 +48,9 @@ describe('Test and History theme presentation', () => {
     const dialog = screen.getByRole('alertdialog');
     panel(within(dialog).getByText('Abandon this unfinished test?'));
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveClass('dark:border-gray-500', 'dark:hover:bg-gray-700', 'focus-visible:ring-2');
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' });
+    expect(cancel.parentElement).toHaveClass('flex', 'flex-col', 'gap-3', 'sm:flex-row');
+    expect(within(dialog).getByRole('button', { name: 'Discard progress' }).parentElement).toBe(cancel.parentElement);
     expect(input).toBeDisabled();
   });
 
@@ -73,12 +81,20 @@ describe('Test and History theme presentation', () => {
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
     for (const field of screen.getAllByRole('combobox').slice(0, 4)) {
       expect(field).toHaveClass('bg-white', 'text-gray-900', 'dark:bg-gray-900', 'dark:text-gray-100', 'dark:[color-scheme:dark]', 'focus-visible:ring-2');
+      expect(field).toHaveClass('appearance-none', 'pr-12');
+      expect(field.parentElement).toHaveClass('relative');
+      const indicator = field.parentElement!.querySelector('svg');
+      expect(indicator).toHaveAttribute('aria-hidden', 'true');
+      expect(indicator).toHaveAttribute('focusable', 'false');
+      expect(indicator).toHaveClass('pointer-events-none', 'right-4', 'dark:text-gray-300');
     }
     expect(screen.getByText('Total Tests')).toHaveClass('dark:text-blue-400');
     const row = container.querySelector('[data-history-id]')!;
     expect(row).toHaveClass('dark:text-gray-100', 'dark:border-gray-700', 'dark:hover:bg-gray-700');
     fireEvent.click(screen.getByRole('button', { name: 'Show mistakes' }));
-    expect(screen.getByText('cat').closest('.bg-red-50')).toHaveClass('dark:bg-red-950');
+    const mistake = screen.getByText('cat').closest('.border');
+    expect(mistake).toHaveClass('bg-gray-50', 'border-red-200', 'dark:bg-gray-900', 'dark:border-red-900/60');
+    expect(mistake).not.toHaveClass('dark:bg-red-950');
     expect(screen.getByText('Saved context').tagName).toBe('STRONG');
     expect(screen.getByText('dog')).toHaveClass('dark:text-red-300');
     expect(screen.getByText('კატა')).toHaveClass('dark:text-green-300');

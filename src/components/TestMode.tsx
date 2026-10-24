@@ -511,7 +511,7 @@ function AccountTestMode({ userId }: { userId: string }) {
                   setWordCount(0);
                 }}
                 placeholder="Custom"
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
               />
             </div>
           </div>
@@ -578,8 +578,10 @@ function AccountTestMode({ userId }: { userId: string }) {
             <div className="bg-white rounded-lg p-6 max-w-md space-y-4 dark:bg-gray-800">
               <h3 id="restart-test-title" className="font-bold">Abandon this unfinished test?</h3>
               <p>Your current questions, answers and progress will be lost. Confirm to return to test setup.</p>
-              <button autoFocus onClick={() => setShowRestartConfirm(false)} className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border rounded border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
-              <button onClick={restartTest} className="disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 bg-red-600 text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800">Discard progress</button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button autoFocus onClick={() => setShowRestartConfirm(false)} className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border rounded border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
+                <button onClick={restartTest} className="disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 bg-red-600 text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800">Discard progress</button>
+              </div>
             </div>
           </div>
         )}

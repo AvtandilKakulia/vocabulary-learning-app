@@ -8,7 +8,7 @@ import HistoryRows from './history/HistoryRows';
 import HistoryPagination from './history/HistoryPagination';
 import { HISTORY_PAGE_SIZES, readHistoryPageSize, rememberHistoryPageSize } from '../lib/historyPreferences';
 import { beginHistoryDeletion, getHistoryDeletionState, subscribeHistoryDeletion } from '../lib/historyDeletion';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ChevronDown } from 'lucide-react';
 
 const HISTORY_BATCH_SIZE = 500;
 // 100 UUIDs keep the encoded filter near 4 KB, well below the previous 19 KB
@@ -482,6 +482,7 @@ export default function History() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6 bg-white/80 dark:bg-gray-800/80 rounded-2xl shadow">
           <div>
             <label className="block text-sm font-semibold mb-2">Direction</label>
+            <div className="relative">
             <select
               value={filterDirection}
               disabled={deleting}
@@ -491,18 +492,21 @@ export default function History() {
                 setFilterDirection(e.target.value as any);
                 setPage(0);
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="en-to-geo">English → Georgian</option>
               <option value="geo-to-en">Georgian → English</option>
             </select>
+            <ChevronDown aria-hidden="true" focusable="false" size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300" />
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-semibold mb-2">
               Score Range
             </label>
+            <div className="relative">
             <select
               value={filterScore}
               disabled={deleting}
@@ -512,43 +516,51 @@ export default function History() {
                 setFilterScore(e.target.value as any);
                 setPage(0);
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="high">High (80–100%)</option>
               <option value="medium">Medium (50–79%)</option>
               <option value="low">Low (0–49%)</option>
             </select>
+            <ChevronDown aria-hidden="true" focusable="false" size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300" />
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-semibold mb-2">
               Sort By
             </label>
+            <div className="relative">
             <select
               value={sortBy}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortBy(e.target.value as any); setPage(0); } }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="date">Date</option>
               <option value="score">Score</option>
             </select>
+            <ChevronDown aria-hidden="true" focusable="false" size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300" />
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-semibold mb-2">
               Order
             </label>
+            <div className="relative">
             <select
               value={sortOrder}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortOrder(e.target.value as any); setPage(0); } }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="desc">Newest First</option>
               <option value="asc">Oldest First</option>
             </select>
+            <ChevronDown aria-hidden="true" focusable="false" size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300" />
+            </div>
           </div>
         </div>
       </div>
