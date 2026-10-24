@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLatestRequest } from '../hooks/useLatestRequest';
 import { useRetiredAccount } from '../hooks/useRetiredAccount';
 import { recoveryStore } from '../lib/recoveryStorage';
-import { Check, X, RotateCcw, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react';
+import { Check, X, RotateCcw, CheckCircle2, AlertCircle, Info, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
 import {
   CompletedTestResult, matchesCompletedTest, persistPendingTest, removePendingTest,
@@ -447,6 +447,14 @@ function AccountTestMode({ userId }: { userId: string }) {
     }
   }
 
+  function adjustCustomCount(delta: number) {
+    setCustomCount(current => {
+      const value = Number(current);
+      return String(Number.isFinite(value) ? Math.max(1, value + delta) : 1);
+    });
+    setWordCount(0);
+  }
+
   if (stage === 'setup') {
     return (
       <div className="max-w-2xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
@@ -503,16 +511,29 @@ function AccountTestMode({ userId }: { userId: string }) {
                   {count}
                 </button>
               ))}
-              <input
-                type="number"
-                value={customCount}
-                onChange={(e) => {
-                  setCustomCount(e.target.value);
-                  setWordCount(0);
-                }}
-                placeholder="Custom"
-                className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-4 py-2 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
-              />
+              <div className="relative min-w-0">
+                <input
+                  type="number"
+                  aria-label="Custom word count"
+                  value={customCount}
+                  onChange={(e) => {
+                    setCustomCount(e.target.value);
+                    setWordCount(0);
+                  }}
+                  placeholder="Custom"
+                  className="w-full h-full [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 pl-4 pr-10 py-2 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
+                />
+                <div className="absolute inset-y-1 right-1 flex flex-col">
+                  <button type="button" aria-label="Increase custom word count" onClick={() => adjustCustomCount(1)}
+                    className="min-h-0 flex-1 rounded px-1 text-gray-700 hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-300">
+                    <ChevronUp size={14} aria-hidden="true" />
+                  </button>
+                  <button type="button" aria-label="Decrease custom word count" onClick={() => adjustCustomCount(-1)}
+                    className="min-h-0 flex-1 rounded px-1 text-gray-700 hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-300">
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

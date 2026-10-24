@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { query, supabaseMock } from '@/test/mocks';
 import { historyRecord } from '@/test/fixtures';
@@ -22,6 +23,37 @@ function panel(element: HTMLElement) {
 }
 
 describe('Test and History theme presentation', () => {
+  it('increments/decrements Custom without nonpositive counts or a new maximum', async () => {
+    render(<TestMode />);
+    const user = userEvent.setup();
+    const input = screen.getByRole('spinbutton', { name: 'Custom word count' });
+    const up = screen.getByRole('button', { name: 'Increase custom word count' });
+    const down = screen.getByRole('button', { name: 'Decrease custom word count' });
+    expect(up).toHaveAttribute('type', 'button');
+    expect(down).toHaveAttribute('type', 'button');
+    await user.click(up);
+    expect(input).toHaveValue(1);
+    expect(screen.getByRole('button', { name: /^10$/ })).not.toHaveClass('bg-blue-600');
+    await user.click(down);
+    expect(input).toHaveValue(1);
+    await user.clear(input);
+    await user.type(input, '12');
+    expect(fireEvent.keyDown(input, { key: 'ArrowUp' })).toBe(true);
+    await user.click(up);
+    expect(input).toHaveValue(13);
+    await user.click(down);
+    expect(input).toHaveValue(12);
+    await user.click(screen.getByRole('button', { name: '20' }));
+    await user.click(down);
+    expect(input).toHaveValue(1);
+    fireEvent.change(input, { target: { value: '1001' } });
+    up.focus();
+    await user.keyboard('{Enter}');
+    expect(input).toHaveValue(1002);
+    expect(input).not.toHaveAttribute('max');
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
   it('styles setup headings, inactive choices and custom input for both themes', () => {
     render(<TestMode />);
     expect(screen.getByRole('heading', { name: 'Test Mode' })).toHaveClass('text-gray-900', 'dark:text-gray-100');
@@ -79,9 +111,11 @@ describe('Test and History theme presentation', () => {
     ] })], error: null }));
     const { container } = render(<History />);
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+    expect(container.querySelectorAll('select.history-filter-select')).toHaveLength(4);
     for (const field of screen.getAllByRole('combobox').slice(0, 4)) {
       expect(field).toHaveClass('bg-white', 'text-gray-900', 'dark:bg-gray-900', 'dark:text-gray-100', 'dark:[color-scheme:dark]', 'focus-visible:ring-2');
       expect(field).toHaveClass('appearance-none', 'pr-12');
+      expect(field).toHaveClass('history-filter-select');
       expect(field.parentElement).toHaveClass('relative');
       const indicator = field.parentElement!.querySelector('svg');
       expect(indicator).toHaveAttribute('aria-hidden', 'true');
@@ -97,7 +131,9 @@ describe('Test and History theme presentation', () => {
     expect(mistake).not.toHaveClass('dark:bg-red-950');
     expect(screen.getByText('Saved context').tagName).toBe('STRONG');
     expect(screen.getByText('dog')).toHaveClass('dark:text-red-300');
+    expect(screen.getByText('dog').parentElement).toHaveClass('text-red-700', 'dark:text-red-300');
     expect(screen.getByText('კატა')).toHaveClass('dark:text-green-300');
+    expect(screen.getByText('კატა').parentElement).toHaveClass('text-green-700', 'dark:text-green-300');
     fireEvent.click(screen.getByRole('button', { name: /^Delete record from/ }));
     panel(screen.getByRole('heading', { name: 'Delete Test Record' }));
     expect(screen.getByRole('button', { name: /^Delete$/ })).toHaveClass('bg-red-700', 'text-white');

@@ -19,6 +19,16 @@ interface RowProps extends Actions {
 const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabled, onSelect, onDelete, onExpand, scoreEmoji }: RowProps) {
   const percent = Math.round(record.correct_count / record.total_words * 100);
   const date = new Date(record.test_date).toLocaleString();
+  const summary = <>
+    <span className="flex flex-wrap items-center gap-4 mb-2">
+      <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent dark:from-blue-300 dark:to-purple-300">{percent}%</span>
+      <span className="text-lg font-semibold">({record.correct_count}/{record.total_words}){' '}{scoreEmoji(percent)}</span>
+      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold dark:bg-blue-950 dark:text-blue-200">
+        {record.test_direction === 'en-to-geo' ? 'English → Georgian' : 'Georgian → English'}
+      </span>
+    </span>
+    <span className="block text-sm text-gray-500 dark:text-gray-400">{date}</span>
+  </>;
   return (
     <div
       data-history-id={record.id}
@@ -44,27 +54,13 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
             )}
           </button>
 
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-4 mb-2">
-              <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent dark:from-blue-300 dark:to-purple-300">
-                {percent}%
-              </div>
-              <div className="text-lg font-semibold">
-                ({record.correct_count}/{record.total_words}){' '}
-                {scoreEmoji(percent)}
-              </div>
-
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold dark:bg-blue-950 dark:text-blue-200">
-                {record.test_direction === 'en-to-geo'
-                  ? 'English → Georgian'
-                  : 'Georgian → English'}
-              </span>
-            </div>
-
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              {date}
-            </div>
-          </div>
+          {record.mistakes.length > 0 ? (
+            <button type="button" aria-label={`${expanded ? 'Collapse' : 'Expand'} record from ${date}: ${percent}% (${record.correct_count}/${record.total_words}), ${record.test_direction === 'en-to-geo' ? 'English → Georgian' : 'Georgian → English'}`}
+              aria-expanded={expanded} onClick={() => onExpand(record.id)}
+              className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:focus-visible:ring-blue-300">
+              {summary}
+            </button>
+          ) : <div className="min-w-0 flex-1">{summary}</div>}
         </div>
 
         <div className="flex items-center gap-2">
@@ -89,7 +85,7 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
             aria-label={`Delete record from ${date}`}
             onClick={() => onDelete(record.id)}
             disabled={disabled}
-            className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 p-2 text-red-600 dark:text-red-300"
+            className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 dark:focus-visible:ring-red-400 dark:focus-visible:ring-offset-gray-800 p-2 rounded-xl border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900"
           >
             <Trash2 size={18} />
           </button>
@@ -120,14 +116,14 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
                   />
                 )}
 
-                <div className="text-sm mb-1">
+                <div className="text-sm mb-1 text-red-700 dark:text-red-300">
                   Your answer:{' '}
                   <span className="font-semibold text-red-700 dark:text-red-300">
                     {m.user_answer || '(empty)'}
                   </span>
                 </div>
 
-                <div className="text-sm">
+                <div className="text-sm text-green-700 dark:text-green-300">
                   Correct:{' '}
                   <span className="font-semibold text-green-700 dark:text-green-300">
                     {m.correct_definitions.join(', ')}

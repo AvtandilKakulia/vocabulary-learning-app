@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLatestRequest } from '../hooks/useLatestRequest';
 import HistoryRows from './history/HistoryRows';
 import HistoryPagination from './history/HistoryPagination';
+import './history/historyFilters.css';
 import { HISTORY_PAGE_SIZES, readHistoryPageSize, rememberHistoryPageSize } from '../lib/historyPreferences';
 import { beginHistoryDeletion, getHistoryDeletionState, subscribeHistoryDeletion } from '../lib/historyDeletion';
 import { Trash2, ChevronDown } from 'lucide-react';
@@ -492,7 +493,7 @@ export default function History() {
                 setFilterDirection(e.target.value as any);
                 setPage(0);
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="en-to-geo">English → Georgian</option>
@@ -516,7 +517,7 @@ export default function History() {
                 setFilterScore(e.target.value as any);
                 setPage(0);
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="high">High (80–100%)</option>
@@ -536,7 +537,7 @@ export default function History() {
               value={sortBy}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortBy(e.target.value as any); setPage(0); } }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="date">Date</option>
               <option value="score">Score</option>
@@ -554,7 +555,7 @@ export default function History() {
               value={sortOrder}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortOrder(e.target.value as any); setPage(0); } }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="desc">Newest First</option>
               <option value="asc">Oldest First</option>
