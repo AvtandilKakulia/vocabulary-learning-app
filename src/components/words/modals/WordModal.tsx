@@ -3,7 +3,7 @@ import { AlertCircle, ArrowRight, Bold, Palette, Plus, X } from "lucide-react";
 import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
-import { editDescriptionStudyMask, readDescriptionSelection, type DescriptionSelection } from "../../../lib/descriptionStudyMask";
+import { editDescriptionStudyMask, readDescriptionSelection, readDescriptionSourceSelection, type DescriptionSelection } from "../../../lib/descriptionStudyMask";
 import { WordFormData } from "../useWords";
 import { partOfSpeechStyles } from "../partOfSpeechStyles";
 import ModalPortal from "./ModalPortal";
@@ -52,7 +52,8 @@ export default function WordModal({
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
-  const studySelectionRef = useRef<{ description: string; selection: DescriptionSelection } | null>(null);
+  const studySelectionRef = useRef<{ description: string; selection: DescriptionSelection | null; error?: string } | null>(null);
+  const selectionSourceRef = useRef<"textarea" | "preview" | null>(null);
   const [maskFeedback, setMaskFeedback] = useState("");
   const initialStateRef = useRef<{
     englishWord: string;
@@ -85,6 +86,7 @@ export default function WordModal({
     setGeorgianDefs(word?.georgian_definitions || [""]);
     setDescription(word?.description || "");
     studySelectionRef.current = null;
+    selectionSourceRef.current = null;
     setMaskFeedback("");
     setShowColorPicker(false);
     setShowCloseConfirm(false);
@@ -108,7 +110,9 @@ export default function WordModal({
 
   useEffect(() => {
     studySelectionRef.current = null;
+    selectionSourceRef.current = null;
     const captureSelection = () => {
+      if (selectionSourceRef.current !== "preview") return;
       const selection = window.getSelection();
       const preview = previewRef.current;
       if (!preview || !selection?.rangeCount) return;
@@ -123,9 +127,24 @@ export default function WordModal({
     return () => document.removeEventListener("selectionchange", captureSelection);
   }, [description, hidden]);
 
+  const captureSourceSelection = (textarea: HTMLTextAreaElement) => {
+    if (document.activeElement !== textarea) return;
+    selectionSourceRef.current = "textarea";
+    studySelectionRef.current = null;
+    // Textarea values normalize CRLF; offsets belong to that visible source.
+    if (textarea.value !== description.replace(/\r\n?/g, "\n") || textarea.selectionStart === textarea.selectionEnd) return;
+    const mapped = readDescriptionSourceSelection(textarea.value,
+      { start: textarea.selectionStart, end: textarea.selectionEnd });
+    studySelectionRef.current = { description, selection: mapped.selection ?? null, error: mapped.error };
+  };
+
   const handleStudyMask = (action: "mask" | "unmask") => {
     if (hidden || phaseRef.current !== "editing") return;
     const saved = studySelectionRef.current;
+    if (saved?.description === description && saved.error) {
+      setMaskFeedback(saved.error);
+      return;
+    }
     const result = editDescriptionStudyMask(description,
       saved?.description === description ? saved.selection : null, action);
     if ("error" in result) {
@@ -180,6 +199,8 @@ export default function WordModal({
       return;
     }
 
+    studySelectionRef.current = null;
+    selectionSourceRef.current = null;
     setDescription(result.nextText);
 
     requestAnimationFrame(() => {
@@ -597,14 +618,16 @@ export default function WordModal({
                       </button>
                     </div>
                     <p id="study-mask-help" className="mb-2 text-sm text-gray-600 dark:text-gray-300">
-                      Select text in the Preview below, then choose Mask for Study. Dotted underlines mark hidden study content; select any part of a marked region to remove its entire mask. Original text stays visible here.
+                      Select words directly in Description, then choose Mask for Study. For complex HTML, select text in Preview instead. Dotted underlines mark study masks; select text inside one to remove its entire mask. Original text stays visible here.
                     </p>
                     <p role="status" className="text-sm text-blue-700 dark:text-blue-300 mb-2">{maskFeedback}</p>
                     <textarea
                       ref={descriptionRef}
                       value={description}
+                      onSelect={(event) => captureSourceSelection(event.currentTarget)}
                       onChange={(e) => {
                         studySelectionRef.current = null;
+                        selectionSourceRef.current = null;
                         setMaskFeedback("");
                         setDescription(e.target.value);
                       }}
@@ -619,6 +642,10 @@ export default function WordModal({
                         </div>
                         <div
                           ref={previewRef}
+                          onPointerDown={() => {
+                            selectionSourceRef.current = "preview";
+                            studySelectionRef.current = null;
+                          }}
                           role="region"
                           aria-label="Description preview"
                           className="prose prose-sm dark:prose-invert max-w-none dark:text-gray-200 select-text [&_[data-study-mask=true]]:underline [&_[data-study-mask=true]]:decoration-dotted [&_[data-study-mask=true]]:underline-offset-4"

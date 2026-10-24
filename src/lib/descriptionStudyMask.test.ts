@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { editDescriptionStudyMask, readDescriptionSelection, renderStudyDescription } from './descriptionStudyMask';
+import { editDescriptionStudyMask, readDescriptionSelection, readDescriptionSourceSelection, renderStudyDescription } from './descriptionStudyMask';
 import { sanitizeDescription } from './sanitizeDescription';
 
 const mask = (text: string) => `<span data-study-mask="true">${text}</span>`;
@@ -10,6 +10,48 @@ function edit(html: string, start: number, end: number, action: 'mask' | 'unmask
 }
 
 describe('Description study masking', () => {
+  it('keeps incidental edge spaces outside a newly applied mask', () => {
+    expect(edit('The company will postpone the meeting.', 16, 26))
+      .toBe(`The company will ${mask('postpone')} the meeting.`);
+  });
+
+  it('preserves edge whitespace in previously saved masks without modifying their source', () => {
+    const original = `The company will${mask(' postpone ')}the meeting.`;
+    expect(renderStudyDescription(original)).toBe(`The company will${mask(' ***** ')}the meeting.`);
+    expect(original).toContain(' postpone ');
+  });
+
+  it.each([
+    ['postpone the meeting', 0, 9, '***** the meeting'],
+    ['Please postpone, if needed.', 7, 15, 'Please *****, if needed.'],
+    ['next Monday', 0, 11, '*****'],
+    ['reconsideration', 2, 10, 're*****ation'],
+    [' \t\u00a0ქართული\t \u00a0', 0, 13, ' \t\u00a0*****\t \u00a0'],
+  ] as const)('preserves surrounding characters when masking %s', (source, start, end, expected) => {
+    const marked = edit(source, start, end);
+    const dom = document.createElement('div');
+    dom.innerHTML = renderStudyDescription(marked);
+    expect(dom.textContent).toBe(expected);
+    expect(dom.querySelector('[data-study-mask]')!.textContent).toBe('*****');
+    dom.innerHTML = marked;
+    expect(dom.textContent).toBe(source);
+    expect(dom.querySelector('[data-study-mask]')!.textContent).toBe(source.slice(start, end).trim());
+  });
+
+  it('keeps formatted legacy edge whitespace and BRs, hides internal spaces and preserves punctuation', () => {
+    const source = `Before${mask('<strong> \t<br>next Monday&nbsp;</strong><span style="color: #abcdef"><br>\t</span>')},${mask('ქართული ')}after`;
+    const expected = `Before${mask('<strong> \t<br></strong>*****<strong>&nbsp;</strong><span style="color: #abcdef"><br>\t</span>')},${mask('***** ')}after`;
+    expect(renderStudyDescription(source)).toBe(expected);
+    expect(renderStudyDescription(expected)).toBe(expected);
+    expect(renderStudyDescription(source)).not.toMatch(/next|Monday|ქართული/);
+    expect(sanitizeDescription(source)).toContain('next Monday');
+  });
+
+  it('leaves selected edge line breaks outside new masks, and keeps whitespace-only legacy regions as whitespace', () => {
+    expect(edit('A<br>next Monday\nB', 1, 14)).toBe(`A<br>${mask('next Monday')}<br>B`);
+    expect(renderStudyDescription(mask(' \t&nbsp;<br>'))).toBe(mask(' \t&nbsp;<br>'));
+  });
+
   it.each(['postpone', 'next Monday', 'ქართული, ტექსტი!', '🌍'])('masks %s as exactly five stars without changing its source', value => {
     const original = `Before ${value} after`;
     const marked = edit(original, 7, 7 + value.length);
@@ -101,5 +143,65 @@ describe('Description study masking', () => {
     vi.stubGlobal('DOMParser', undefined);
     expect(renderStudyDescription(mask('secret'))).toBe('');
     expect(editDescriptionStudyMask('text', { start: 0, end: 4 }, 'mask')).toHaveProperty('error');
+  });
+});
+
+describe('Description textarea source selection mapping', () => {
+  const mappedEdit = (source: string, selected: string, occurrence: 'first' | 'last' = 'first', action: 'mask' | 'unmask' = 'mask') => {
+    const start = occurrence === 'last' ? source.lastIndexOf(selected) : source.indexOf(selected);
+    const mapped = readDescriptionSourceSelection(source, { start, end: start + selected.length });
+    expect(mapped.error).toBeUndefined();
+    const result = editDescriptionStudyMask(source, mapped.selection!, action);
+    if ('error' in result) throw new Error(result.error);
+    return result.html;
+  };
+
+  it('uses exact offsets for repeated phrases, including formatted duplicates and attribute text', () => {
+    const source = 'same <strong>same</strong> <span title="same > same" style="color: #abcdef">same</span>';
+    const marked = mappedEdit(source, 'same', 'last');
+    expect(marked).toBe('same <strong>same</strong> ' + mask('<span style="color: #abcdef">same</span>'));
+  });
+
+  it.each(['ქართული', '🌍', '&amp;', '&#x1F30D;', '&NotEqualTilde;'])('maps complete Unicode/entity tokens: %s', selected => {
+    const source = `Before <strong>${selected}</strong> after`;
+    expect(renderStudyDescription(mappedEdit(source, selected))).toBe(`Before ${mask('*****')} after`);
+  });
+
+  it('maps selections across balanced formatting, newlines and entities using the DOM text projection', () => {
+    const selected = 'one</strong> &amp; <span style="color: #abcdef">ქართული<br>two';
+    const source = `<strong>${selected}</span> after`;
+    expect(renderStudyDescription(mappedEdit(source, selected))).toBe(`${mask('*****')} after`);
+    expect(mappedEdit('A\r\nB', 'B')).toBe(`A<br>${mask('B')}`);
+  });
+
+  it('removes a saved mask from its source text, preserving color and bold markup', () => {
+    const source = `before ${mask('<strong>ქართული &amp; text</strong>')} <span style="color: #abcdef">after</span>`;
+    expect(mappedEdit(source, 'ქართული', 'first', 'unmask'))
+      .toBe('before <strong>ქართული &amp; text</strong> <span style="color: #abcdef">after</span>');
+  });
+
+  it.each([
+    ['<strong>text</strong>', 2, 10],
+    ['<span style="color: #abcdef">text</span>', 14, 20],
+    ['A &amp; B', 3, 7],
+    ['A &#x1F30D; B', 2, 6],
+    ['A 🌍 B', 3, 4],
+    ['<strong>text</strong>', 0, 8],
+    ['<strong><span>text</strong></span>', 14, 18],
+    ['<strong>text', 8, 12],
+    ['<script>text</script>safe', 8, 12],
+    ['<b>text</b>', 3, 7],
+    ['A &amp B', 0, 1],
+    ['<!-- comment -->text', 16, 20],
+    ['2 < 3 text', 6, 10],
+  ] as const)('rejects ambiguous source or an indivisible boundary: %s [%i,%i]', (source, start, end) => {
+    expect(readDescriptionSourceSelection(source, { start, end }).error).toContain('Preview');
+  });
+
+  it('never keeps unsafe attributes when a safe text interval is transformed', () => {
+    const source = '<span onclick="evil()" style="color: red">safe</span> &amp; sound';
+    const output = mappedEdit(source, 'safe');
+    expect(output).toBe(`${mask('<span>safe</span>')} &amp; sound`);
+    expect(renderStudyDescription(output)).not.toMatch(/evil|onclick|safe/);
   });
 });

@@ -13,6 +13,14 @@ function editor(description = 'The company will postpone until Monday.') {
 }
 function preview() { return screen.getByRole('region', { name: 'Description preview' }); }
 function input() { return screen.getByPlaceholderText('Add additional context or example sentences...') as HTMLTextAreaElement; }
+function selectSource(text: string, last = false) {
+  const field = input();
+  const start = last ? field.value.lastIndexOf(text) : field.value.indexOf(text);
+  expect(start).toBeGreaterThanOrEqual(0);
+  field.focus();
+  field.setSelectionRange(start, start + text.length);
+  fireEvent.select(field);
+}
 function selectText(text: string) {
   const root = preview();
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -32,6 +40,8 @@ function selectText(text: string) {
   range.setStart(...locate(start));
   range.setEnd(...locate(start + text.length));
   act(() => {
+    input().blur();
+    fireEvent.pointerDown(root);
     window.getSelection()!.removeAllRanges();
     window.getSelection()!.addRange(range);
     document.dispatchEvent(new Event('selectionchange'));
@@ -39,6 +49,92 @@ function selectText(text: string) {
 }
 
 describe('Word editor study masking', () => {
+  it('masks a word selected directly inside the textarea', async () => {
+    editor();
+    input().focus();
+    input().setSelectionRange(17, 25);
+    fireEvent.select(input());
+    await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    expect(input()).toHaveValue('The company will <span data-study-mask="true">postpone</span> until Monday.');
+  });
+
+  it('masks formatted textarea text including entities, excluding incidental edge whitespace', async () => {
+    const { props } = editor('Before <strong> ქართული &amp;</strong> <span style="color: #abcdef">text! </span>after');
+    selectSource(' ქართული &amp;</strong> <span style="color: #abcdef">text! ');
+    await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    expect(preview()).toHaveTextContent('Before ქართული & text! after');
+    const marked = preview().querySelector('[data-study-mask]')!;
+    expect(marked.textContent).toBe('ქართული & text!');
+    expect(marked.querySelector('strong')).toHaveTextContent('ქართული &');
+    expect(marked.querySelector('[style]')).toHaveTextContent('text!');
+    const expected = input().value;
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(props.updateWord).toHaveBeenCalledExactlyOnceWith(props.word.id, expect.objectContaining({ description: expected }), props.word.updated_at);
+  });
+
+  it('unmasks saved source text via keyboard and retains an unsaved draft through Cancel/Keep editing', async () => {
+    const original = 'Before <span data-study-mask="true"><strong>ქართული &amp; text</strong></span> after';
+    const { props } = editor(original);
+    selectSource('ქართული');
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(screen.getByRole('button', { name: 'Remove Study Mask' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    const expected = 'Before <strong>ქართული &amp; text</strong> after';
+    expect(input()).toHaveValue(expected);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByText('Close without saving?')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(input()).toHaveValue(expected);
+    expect(props.updateWord).not.toHaveBeenCalled();
+    selectSource('ქართული');
+    await userEvent.keyboard('{Shift>}{Tab}{Tab}{/Shift}{Enter}');
+    expect(preview().querySelector('[data-study-mask]')).toHaveTextContent('ქართული');
+  });
+
+  it('honors the newest source or Preview selection even when the other selection remains', async () => {
+    editor('same same');
+    selectText('same');
+    selectSource('same', true);
+    // Some browsers retain the previous window selection while the textarea is focused.
+    document.dispatchEvent(new Event('selectionchange'));
+    await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    expect(input()).toHaveValue('same <span data-study-mask="true">same</span>');
+    selectSource('same', true);
+    selectText('same');
+    await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    expect(input()).toHaveValue('<span data-study-mask="true">same</span> <span data-study-mask="true">same</span>');
+  });
+
+  it.each(['strong', 'amp', '\udf0d'])('rejects selection inside a tag/entity/surrogate (%s) without falling back to an old Preview range', async selected => {
+    editor('<strong>word &amp; 🌍</strong> other');
+    selectText('other');
+    const original = input().value;
+    selectSource(selected);
+    await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    expect(input()).toHaveValue(original);
+    expect(screen.getByRole('status')).toHaveTextContent('without cutting HTML tags, entities or characters');
+    expect(screen.getByRole('status')).toHaveTextContent('Preview');
+    selectText('word');
+    await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    expect(preview().querySelector('[data-study-mask]')).toHaveTextContent('word');
+  });
+
+  it('invalidates source selections after typing or Bold without losing the latest edit', async () => {
+    editor();
+    selectSource('postpone');
+    act(() => {
+      fireEvent.change(input(), { target: { value: 'new draft' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    });
+    expect(input()).toHaveValue('new draft');
+    selectSource('draft');
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
+    });
+    expect(input()).toHaveValue('new <strong>draft</strong>');
+  });
+
   it('marks multiple preview selections, retains visible words and saves the exact marked source/version', async () => {
     const { props } = editor();
     for (const text of ['postpone', 'Monday']) {
@@ -86,7 +182,7 @@ describe('Word editor study masking', () => {
     editor('A <span data-study-mask="true">secret</span> phrase');
     const original = input().value;
     await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Select text in the Description preview first.');
+    expect(screen.getByRole('status')).toHaveTextContent('Select text in Description or its Preview first.');
     selectText('secret');
     await userEvent.click(screen.getByRole('button', { name: 'Mask for Study' }));
     expect(screen.getByRole('status')).toHaveTextContent('already includes a study mask');
