@@ -401,10 +401,10 @@ export default function History() {
   }, [currentPage]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-gray-900 dark:text-gray-100">
       {/* HEADER */}
       <div className="text-center mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent dark:from-blue-300 dark:to-purple-300">
           Test History & Statistics
         </h1>
         <p className="text-lg text-gray-600 dark:text-gray-400">
@@ -453,16 +453,16 @@ export default function History() {
               <div className="text-sm text-blue-600 dark:text-blue-400 mb-2">
                 Total Tests
               </div>
-              <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent dark:from-blue-300 dark:to-purple-300">
                 {totalTests}
               </div>
             </div>
 
             <div className="bg-white/80 dark:bg-gray-800/80 p-6 rounded-2xl shadow">
-              <div className="text-sm text-green-600 dark:text-green-400 mb-2">
+              <div className="text-sm text-green-700 dark:text-green-400 mb-2">
                 Average Score
               </div>
-              <div className="text-4xl font-bold flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+              <div className="text-4xl font-bold flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent dark:from-green-300 dark:to-emerald-300">
                 {avgScore}% {getScoreEmoji(avgScore)}
               </div>
             </div>
@@ -471,7 +471,7 @@ export default function History() {
               <div className="text-sm text-purple-600 dark:text-purple-400 mb-2">
                 Total Questions
               </div>
-              <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent dark:from-purple-300 dark:to-pink-300">
                 {filteredHistory.reduce((s, r) => s + r.total_words, 0)}
               </div>
             </div>
@@ -491,7 +491,7 @@ export default function History() {
                 setFilterDirection(e.target.value as any);
                 setPage(0);
               }}
-              className="w-full px-4 py-3 rounded-xl border"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="en-to-geo">English → Georgian</option>
@@ -512,7 +512,7 @@ export default function History() {
                 setFilterScore(e.target.value as any);
                 setPage(0);
               }}
-              className="w-full px-4 py-3 rounded-xl border"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="high">High (80–100%)</option>
@@ -529,7 +529,7 @@ export default function History() {
               value={sortBy}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortBy(e.target.value as any); setPage(0); } }}
-              className="w-full px-4 py-3 rounded-xl border"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="date">Date</option>
               <option value="score">Score</option>
@@ -544,7 +544,7 @@ export default function History() {
               value={sortOrder}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortOrder(e.target.value as any); setPage(0); } }}
-              className="w-full px-4 py-3 rounded-xl border"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="desc">Newest First</option>
               <option value="asc">Oldest First</option>
@@ -580,7 +580,7 @@ export default function History() {
         <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
           Records per page
           <select value={pageSize} onChange={event => changePageSize(event.target.value)} disabled={deleting}
-            className="px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700">
             {HISTORY_PAGE_SIZES.map(size => <option key={size} value={size}>{size} records</option>)}
           </select>
         </label>
@@ -593,12 +593,12 @@ export default function History() {
         ) : readError ? (
           <div role="alert" className="p-12 text-center text-red-700 dark:text-red-300">
             <p>{readError}</p>
-            <button type="button" onClick={() => { void loadHistory(); }} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
+            <button type="button" onClick={() => { void loadHistory(); }} className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 mt-4 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
               Retry
             </button>
           </div>
         ) : filteredHistory.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
+          <div className="p-12 text-center text-gray-500 dark:text-gray-400">
             No results found.
           </div>
         ) : (
@@ -614,9 +614,9 @@ export default function History() {
       {/* DELETE MODAL */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md dark:bg-gray-800">
             <div className="text-center mb-6">
-              <div className="w-20 h-20 mx-auto bg-red-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+              <div className="w-20 h-20 mx-auto bg-red-700 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg">
                 <svg width="32" height="32" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="15" y1="9" x2="9" y2="15"></line>
@@ -624,11 +624,11 @@ export default function History() {
                 </svg>
               </div>
 
-              <h3 className="text-2xl font-bold text-red-600 mb-2">
+              <h3 className="text-2xl font-bold text-red-600 mb-2 dark:text-red-300">
                 Delete Test Record
               </h3>
 
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">
                 This action cannot be undone.
               </p>
             </div>
@@ -637,7 +637,7 @@ export default function History() {
               <button
                 onClick={() => setShowDeleteModal(null)}
                 disabled={deleting}
-                className="flex-1 px-6 py-3 border rounded-xl"
+                className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-6 py-3 border rounded-xl border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -645,7 +645,7 @@ export default function History() {
               <button
                 onClick={() => deleteHistory(showDeleteModal)}
                 disabled={deleting}
-                className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl"
+                className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-6 py-3 bg-red-700 text-white rounded-xl"
               >
                 {deleting ? 'Deleting...' : 'Delete'}
               </button>
@@ -658,9 +658,9 @@ export default function History() {
       {bulkConfirmation && (
         <div role="alertdialog" aria-modal="true" aria-labelledby="bulk-delete-title"
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md dark:bg-gray-800">
             <div className="text-center mb-6">
-              <div className="w-20 h-20 mx-auto bg-red-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+              <div className="w-20 h-20 mx-auto bg-red-700 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg">
                 <svg width="32" height="32" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="15" y1="9" x2="9" y2="15"></line>
@@ -668,17 +668,17 @@ export default function History() {
                 </svg>
               </div>
 
-              <h3 id="bulk-delete-title" className="text-2xl font-bold text-red-600 mb-2">
+              <h3 id="bulk-delete-title" className="text-2xl font-bold text-red-600 mb-2 dark:text-red-300">
                 Delete {confirmedIds.length} Record{confirmedIds.length !== 1 ? 's' : ''}
               </h3>
 
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">
                 This will permanently remove the selected records.
               </p>
             </div>
 
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-              <p className="text-sm text-red-700">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 dark:bg-red-950 dark:border-red-800">
+              <p className="text-sm text-red-700 dark:text-red-300">
                 You are about to delete{' '}
                 <strong>{confirmedIds.length}</strong> test record
                 {confirmedIds.length !== 1 ? 's' : ''}.
@@ -690,7 +690,7 @@ export default function History() {
               <button
                 onClick={closeBulkConfirmation}
                 disabled={deleting}
-                className="flex-1 px-6 py-3 border rounded-xl"
+                className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 px-6 py-3 border rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -698,7 +698,7 @@ export default function History() {
               <button
                 onClick={() => { void bulkDeleteHistory(bulkConfirmation); }}
                 disabled={deleting || loading || confirmedIds.length === 0}
-                className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl"
+                className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-6 py-3 bg-red-700 text-white rounded-xl"
               >
                 {deleting
                   ? 'Deleting...'

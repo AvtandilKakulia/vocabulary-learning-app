@@ -22,9 +22,9 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
   return (
     <div
       data-history-id={record.id}
-      className={`p-6 border-b hover:bg-blue-50/40 ${
+      className={`p-6 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-blue-50/40 dark:hover:bg-gray-700 ${
         selected
-          ? 'bg-blue-50/60'
+          ? 'bg-blue-50/60 dark:bg-blue-950/60'
           : ''
       }`}
     >
@@ -35,10 +35,10 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
             aria-pressed={selected}
             onClick={() => onSelect(record.id)}
             disabled={disabled}
-            className="p-1"
+            className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 p-1"
           >
             {selected ? (
-              <CheckSquare size={20} className="text-blue-600" />
+              <CheckSquare size={20} className="text-blue-600 dark:text-blue-300" />
             ) : (
               <Square size={20} />
             )}
@@ -46,7 +46,7 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
 
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-4 mb-2">
-              <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent dark:from-blue-300 dark:to-purple-300">
                 {percent}%
               </div>
               <div className="text-lg font-semibold">
@@ -54,14 +54,14 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
                 {scoreEmoji(percent)}
               </div>
 
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold dark:bg-blue-950 dark:text-blue-200">
                 {record.test_direction === 'en-to-geo'
                   ? 'English → Georgian'
                   : 'Georgian → English'}
               </span>
             </div>
 
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
               {date}
             </div>
           </div>
@@ -75,7 +75,7 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
               onClick={() =>
                 onExpand(record.id)
               }
-              className="p-2"
+              className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 p-2"
             >
               {expanded ? (
                 <ChevronUp size={20} />
@@ -89,7 +89,7 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
             aria-label={`Delete record from ${date}`}
             onClick={() => onDelete(record.id)}
             disabled={disabled}
-            className="p-2 text-red-600"
+            className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 p-2 text-red-600 dark:text-red-300"
           >
             <Trash2 size={18} />
           </button>
@@ -97,7 +97,7 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
       </div>
 
       {expanded && record.mistakes.length > 0 && (
-        <div className="mt-6 pt-6 border-t">
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
           <div className="text-lg font-semibold mb-4">
             Mistakes ({record.mistakes.length}):
           </div>
@@ -106,14 +106,14 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
             {record.mistakes.map((m, idx) => (
               <div
                 key={idx}
-                className="p-4 bg-red-50 border border-red-200 rounded-xl"
+                className="p-4 bg-red-50 border border-red-200 rounded-xl dark:bg-red-950 dark:border-red-800"
               >
                 <div className="font-bold text-lg mb-2">
                   {m.question_prompt ?? m.english_word}
                 </div>
                 {m.description?.trim() && (
                   <div
-                    className="text-sm text-gray-600 mb-2 break-words"
+                    className="text-sm text-gray-600 mb-2 break-words dark:text-gray-300"
                     dangerouslySetInnerHTML={{
                       __html: sanitizeDescription(m.description),
                     }}
@@ -122,14 +122,14 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
 
                 <div className="text-sm mb-1">
                   Your answer:{' '}
-                  <span className="font-semibold text-red-700">
+                  <span className="font-semibold text-red-700 dark:text-red-300">
                     {m.user_answer || '(empty)'}
                   </span>
                 </div>
 
                 <div className="text-sm">
                   Correct:{' '}
-                  <span className="font-semibold text-green-700">
+                  <span className="font-semibold text-green-700 dark:text-green-300">
                     {m.correct_definitions.join(', ')}
                   </span>
                 </div>
