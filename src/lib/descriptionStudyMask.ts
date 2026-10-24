@@ -31,7 +31,7 @@ export function renderStudyDescription(description: string): string {
 }
 
 // Treat a visible line break as one character so selections across lines map
-// identically in the preview and the detached, sanitized document.
+// identically in the source projection and detached, sanitized document.
 function length(node: Node): number {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length ?? 0;
   if (node.nodeName === 'BR') return 1;
@@ -51,7 +51,7 @@ function descriptionText(node: Node): string {
  */
 export function readDescriptionSourceSelection(source: string, selection: DescriptionSelection):
   { selection: DescriptionSelection; error?: never } | { error: string; selection?: never } {
-  const invalid = { error: 'Select complete text without cutting HTML tags, entities or characters. For complex HTML, select text in the Preview instead.' };
+  const invalid = { error: 'Select complete text without cutting HTML tags, entities or characters. Select only text between complete formatting tags; ambiguous HTML must be corrected before masking.' };
   if (typeof DOMParser === 'undefined') return invalid;
   const { start, end } = selection;
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > source.length) return invalid;
@@ -64,7 +64,7 @@ export function readDescriptionSourceSelection(source: string, selection: Descri
     let next = index + 1;
     let value = source[index];
     if (value === '<') {
-      // Unsupported/ambiguous HTML uses the rendered-preview alternative.
+      // Unsupported/ambiguous HTML cannot be mapped safely.
       const name = source.slice(index).match(/^<(\/?)(strong|span|br)(?=[\s/>])/i);
       if (!name) return invalid;
       let quote = '';
@@ -110,15 +110,6 @@ export function readDescriptionSourceSelection(source: string, selection: Descri
   return { selection: { start: from, end: to } };
 }
 
-export function readDescriptionSelection(root: HTMLElement, range: Range): DescriptionSelection | null {
-  if (range.collapsed || !root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-  const prefix = range.cloneRange();
-  prefix.selectNodeContents(root);
-  prefix.setEnd(range.startContainer, range.startOffset);
-  const start = length(prefix.cloneContents());
-  return { start, end: start + length(range.cloneContents()) };
-}
-
 /** Clone a text interval with its formatting ancestors; never splice HTML strings. */
 function slice(node: Node, start: number, end: number): Node | null {
   const size = length(node);
@@ -142,13 +133,13 @@ export function editDescriptionStudyMask(
   description: string, selection: DescriptionSelection | null, action: 'mask' | 'unmask',
 ): MaskEdit {
   if (!selection || typeof DOMParser === 'undefined') {
-    return { error: 'Select text in Description or its Preview first.' };
+    return { error: 'Select text in Description first.' };
   }
   const root = parseDescription(description);
   const doc = root.ownerDocument;
   let { start, end } = selection;
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= end || end > length(root)) {
-    return { error: 'The selection has changed. Select text in the preview again.' };
+    return { error: 'The selection has changed. Select text in Description again.' };
   }
   let selected = slice(root, start, end) as HTMLElement;
   if (action === 'mask') {
@@ -179,7 +170,7 @@ export function editDescriptionStudyMask(
     else Array.from(node.childNodes).forEach(inspect);
   };
   inspect(root);
-  if (splitCharacter) return { error: 'Select complete characters in the preview.' };
+  if (splitCharacter) return { error: 'Select complete characters in Description.' };
 
   if (action === 'unmask') {
     if (!overlapping.length) return { error: 'The selection does not include a study mask.' };

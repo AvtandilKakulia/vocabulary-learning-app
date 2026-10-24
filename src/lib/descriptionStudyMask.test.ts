@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { editDescriptionStudyMask, readDescriptionSelection, readDescriptionSourceSelection, renderStudyDescription } from './descriptionStudyMask';
+import { editDescriptionStudyMask, readDescriptionSourceSelection, renderStudyDescription } from './descriptionStudyMask';
 import { sanitizeDescription } from './sanitizeDescription';
 
 const mask = (text: string) => `<span data-study-mask="true">${text}</span>`;
@@ -91,20 +91,13 @@ describe('Description study masking', () => {
     expect(normal.querySelector('[style]')).toHaveTextContent('ქართული');
   });
 
-  it('maps a real Range across nodes and a line break without counting markup or entity source bytes', () => {
-    const root = document.createElement('div');
-    root.innerHTML = 'A &amp; <strong>ქართული</strong><br><span>next</span>';
-    const range = document.createRange();
-    range.setStart(root.firstChild!, 2);
-    range.setEnd(root.lastChild!.firstChild!, 2);
-    const selection = readDescriptionSelection(root, range);
-    expect(selection).toEqual({ start: 2, end: 14 });
-    const result = editDescriptionStudyMask(root.innerHTML, selection, 'mask');
+  it('maps textarea text across nodes and a line break without counting markup or entity bytes', () => {
+    const source = 'A &amp; <strong>ქართული</strong><br><span>next</span>';
+    const mapped = readDescriptionSourceSelection(source, { start: 2, end: source.indexOf('next') + 2 });
+    expect(mapped.selection).toEqual({ start: 2, end: 14 });
+    const result = editDescriptionStudyMask(source, mapped.selection!, 'mask');
     expect(result).toHaveProperty('html');
     if ('html' in result) expect(renderStudyDescription(result.html)).toBe(`A ${mask('*****')}<span>xt</span>`);
-    range.collapse(true);
-    expect(readDescriptionSelection(root, range)).toBeNull();
-    expect(readDescriptionSelection(document.createElement('div'), range)).toBeNull();
   });
 
   it('removes masks from colored spans without removing their color or bold descendants', () => {
@@ -195,7 +188,7 @@ describe('Description textarea source selection mapping', () => {
     ['<!-- comment -->text', 16, 20],
     ['2 < 3 text', 6, 10],
   ] as const)('rejects ambiguous source or an indivisible boundary: %s [%i,%i]', (source, start, end) => {
-    expect(readDescriptionSourceSelection(source, { start, end }).error).toContain('Preview');
+    expect(readDescriptionSourceSelection(source, { start, end }).error).toContain('complete formatting tags');
   });
 
   it('never keeps unsafe attributes when a safe text interval is transformed', () => {

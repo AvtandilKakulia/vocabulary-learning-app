@@ -3,7 +3,7 @@ import { AlertCircle, ArrowRight, Bold, Palette, Plus, X } from "lucide-react";
 import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
-import { editDescriptionStudyMask, readDescriptionSelection, readDescriptionSourceSelection, type DescriptionSelection } from "../../../lib/descriptionStudyMask";
+import { editDescriptionStudyMask, readDescriptionSourceSelection, type DescriptionSelection } from "../../../lib/descriptionStudyMask";
 import { WordFormData } from "../useWords";
 import { partOfSpeechStyles } from "../partOfSpeechStyles";
 import ModalPortal from "./ModalPortal";
@@ -51,9 +51,8 @@ export default function WordModal({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
-  const previewRef = useRef<HTMLDivElement | null>(null);
+  const studyToolbarRef = useRef<HTMLDivElement | null>(null);
   const studySelectionRef = useRef<{ description: string; selection: DescriptionSelection | null; error?: string } | null>(null);
-  const selectionSourceRef = useRef<"textarea" | "preview" | null>(null);
   const [maskFeedback, setMaskFeedback] = useState("");
   const initialStateRef = useRef<{
     englishWord: string;
@@ -86,7 +85,6 @@ export default function WordModal({
     setGeorgianDefs(word?.georgian_definitions || [""]);
     setDescription(word?.description || "");
     studySelectionRef.current = null;
-    selectionSourceRef.current = null;
     setMaskFeedback("");
     setShowColorPicker(false);
     setShowCloseConfirm(false);
@@ -110,26 +108,19 @@ export default function WordModal({
 
   useEffect(() => {
     studySelectionRef.current = null;
-    selectionSourceRef.current = null;
-    const captureSelection = () => {
-      if (selectionSourceRef.current !== "preview") return;
-      const selection = window.getSelection();
-      const preview = previewRef.current;
-      if (!preview || !selection?.rangeCount) return;
-      const range = selection.getRangeAt(0);
-      const offsets = readDescriptionSelection(preview, range);
-      if (offsets) studySelectionRef.current = { description, selection: offsets };
-      else if (!range.collapsed || preview.contains(range.startContainer)) studySelectionRef.current = null;
-      // Moving focus to the toolbar may collapse the DOM selection. Retain the
-      // captured offsets for keyboard/touch activation until the source changes.
-    };
-    document.addEventListener("selectionchange", captureSelection);
-    return () => document.removeEventListener("selectionchange", captureSelection);
   }, [description, hidden]);
+
+  // Keep the range only while focus travels within the textarea/toolbar.
+  // Copying Preview text or moving elsewhere ends this editing interaction.
+  const releaseStudySelection = (event: React.FocusEvent<HTMLElement>) => {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || (next !== descriptionRef.current && !studyToolbarRef.current?.contains(next))) {
+      studySelectionRef.current = null;
+    }
+  };
 
   const captureSourceSelection = (textarea: HTMLTextAreaElement) => {
     if (document.activeElement !== textarea) return;
-    selectionSourceRef.current = "textarea";
     studySelectionRef.current = null;
     // Textarea values normalize CRLF; offsets belong to that visible source.
     if (textarea.value !== description.replace(/\r\n?/g, "\n") || textarea.selectionStart === textarea.selectionEnd) return;
@@ -200,7 +191,6 @@ export default function WordModal({
     }
 
     studySelectionRef.current = null;
-    selectionSourceRef.current = null;
     setDescription(result.nextText);
 
     requestAnimationFrame(() => {
@@ -560,7 +550,7 @@ export default function WordModal({
                         <span>Rich text</span>
                       </span>
                     </label>
-                    <div className="flex flex-wrap gap-2 mb-2">
+                    <div ref={studyToolbarRef} onBlur={releaseStudySelection} className="flex flex-wrap gap-2 mb-2">
                       <button
                         type="button"
                         onClick={() => handleFormatting("bold")}
@@ -618,16 +608,16 @@ export default function WordModal({
                       </button>
                     </div>
                     <p id="study-mask-help" className="mb-2 text-sm text-gray-600 dark:text-gray-300">
-                      Select words directly in Description, then choose Mask for Study. For complex HTML, select text in Preview instead. Dotted underlines mark study masks; select text inside one to remove its entire mask. Original text stays visible here.
+                      Select words directly in Description, then choose Mask for Study. To remove a mask, select its text in Description and choose Remove Study Mask. Preview only displays the original words; dotted underlines identify masks.
                     </p>
                     <p role="status" className="text-sm text-blue-700 dark:text-blue-300 mb-2">{maskFeedback}</p>
                     <textarea
                       ref={descriptionRef}
                       value={description}
                       onSelect={(event) => captureSourceSelection(event.currentTarget)}
+                      onBlur={releaseStudySelection}
                       onChange={(e) => {
                         studySelectionRef.current = null;
-                        selectionSourceRef.current = null;
                         setMaskFeedback("");
                         setDescription(e.target.value);
                       }}
@@ -641,11 +631,6 @@ export default function WordModal({
                           Preview
                         </div>
                         <div
-                          ref={previewRef}
-                          onPointerDown={() => {
-                            selectionSourceRef.current = "preview";
-                            studySelectionRef.current = null;
-                          }}
                           role="region"
                           aria-label="Description preview"
                           className="prose prose-sm dark:prose-invert max-w-none dark:text-gray-200 select-text [&_[data-study-mask=true]]:underline [&_[data-study-mask=true]]:decoration-dotted [&_[data-study-mask=true]]:underline-offset-4"
