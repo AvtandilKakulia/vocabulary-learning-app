@@ -1,0 +1,44 @@
+{
+  "checkedAt": "2026-10-23T21:50:44.466Z",
+  "tag": "v2.118.0",
+  "base": "6ede0cbfc8801bee14f61043578d2f3acf7fa831",
+  "releasePublished": "2026-10-15T12:55:27Z",
+  "npmPublished": "2026-10-15T12:57:17.683Z",
+  "issue2708": {
+    "state": "open",
+    "updatedAt": "2026-09-25T22:37:28Z"
+  },
+  "authSourceSha256": "7552500e375665e28acf23fb552ccbf1ef11379afab15859b2f670f1ae9aee9f",
+  "prs": {
+    "2627": {
+      "state": "closed",
+      "merged": true,
+      "head": "f87fc1c8751ebb851247e36d3d52222014b9752f",
+      "base": "6dbd2248b8e56e8fe2b6bd8e51ed6af7a4450eac",
+      "updatedAt": "2026-08-24T10:17:13Z",
+      "mergedAt": "2026-08-24T10:17:11Z"
+    },
+    "2709": {
+      "state": "open",
+      "merged": false,
+      "head": "2ba54f13607a8fd86aebbde81fefe980830ab9ef",
+      "base": "6d21e3fc8cd5e9cba6b6c30b75a71ffeb97b478d",
+      "updatedAt": "2026-09-25T20:18:41Z",
+      "mergedAt": null,
+      "sourceSha256": "e225efeef0c142ba14e277fe39159dbde901ad3679f71c9755c292a0e08e3bb0",
+      "patchSha256": "ec92c6e77bc1596e3879f7ecf0445095c8e0cca12a6e7390f8d8bfaab9ed86cc"
+    },
+    "2742": {
+      "state": "open",
+      "merged": false,
+      "head": "b72048731964c7213b47ffb0fe9cd3cfd3e95c01",
+      "base": "4d23055805ce2cf853686b704cfaec1a701d29c6",
+      "updatedAt": "2026-10-08T19:30:59Z",
+      "mergedAt": null,
+      "sourceSha256": "9add228451a99b5c64e7844e950cb36ca0891d505347d1894037d183a0719dbc",
+      "patchSha256": "9938b901db70b909909b1ff1e1a6d00ed5f4f24a49533b2ad779a59d3b499398"
+    }
+  },
+  "localPatchSha256": "c3bd7c1162b2039925bd693ac900006c3e8db960ea56d5a130790bc9e134fabb",
+  "expectedPatchedSourceSha256": "a49ee37b6e6f8fe6d9127ebe453a6a29cff482a7048bed24e0b9138f8dfe8321"
+}
