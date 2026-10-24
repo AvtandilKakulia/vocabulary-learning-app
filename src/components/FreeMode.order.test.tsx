@@ -45,6 +45,70 @@ beforeEach(() => {
 });
 
 describe('Practice ordering preserves the session', () => {
+  it('defaults a fresh session to Georgian → English and reorders the untouched first question without refetching', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    render(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findByRole('textbox');
+    await waitFor(() => expect(stored()).toMatchObject({ direction: 'geo-to-en', queueIds: ['b', 'c', 'd', 'a'] }));
+    expect(screen.getByRole('button', { name: 'Georgian → English' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('meaning b')).toBeInTheDocument();
+    const reads = supabaseMock.from.mock.calls.length;
+    for (let i = 0; i < 3; i++) {
+      await order('In database order');
+      expect(stored().queueIds).toEqual(['a', 'b', 'c', 'd']);
+      expect(screen.getByText('meaning a')).toBeInTheDocument();
+      expect(screen.queryByText('meaning b')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'In database order' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Random' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByRole('status')).toHaveTextContent('The question order is updated.');
+      await order('Random');
+      expect(stored().queueIds).toEqual(['b', 'c', 'd', 'a']);
+      expect(screen.getByText('meaning b')).toBeInTheDocument();
+      expect(screen.getByRole('textbox')).toHaveValue('');
+      expect(stored()).toMatchObject({ totalAttempts: 0, correctCount: 0, mistakes: [], unresolvedWordIds: [], hasChecked: false });
+    }
+    expect(supabaseMock.from).toHaveBeenCalledTimes(reads);
+  });
+
+  it.each(['en-to-geo', 'geo-to-en'] as const)('restores the saved %s direction and progress after navigation', async direction => {
+    seed({ direction, queueIds: ['c', 'd'], attemptedWordIds: ['a', 'b'], totalAttempts: 2, correctCount: 2 });
+    const before = stored();
+    const view = render(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findByRole('textbox');
+    const name = direction === 'en-to-geo' ? 'English → Georgian' : 'Georgian → English';
+    expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
+    view.rerender(<div>Words</div>);
+    view.rerender(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findByRole('textbox');
+    expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
+    expect(stored()).toEqual(before);
+  });
+
+  it.each([{ queueIds: ['a'] }, { queueIds: ['a', 'b', 'c', 'd'] }])('reports an unchanged sequence honestly for %j', async ({ queueIds }) => {
+    // Switching modes need not change the actual sequence, including one-word sessions.
+    supabaseMock.from.mockReturnValue(query({ data: vocabulary.filter(item => queueIds.includes(item.id)), error: null }));
+    seed({ queueIds, orderMode: 'random' });
+    render(<FreeMode />);
+    await screen.findByRole('textbox');
+    await order('In database order');
+    expect(stored().queueIds).toEqual(queueIds);
+    expect(screen.getByRole('status')).toHaveTextContent('Database order selected. The question sequence is unchanged.');
+    vi.spyOn(Math, 'random').mockReturnValue(0.999);
+    await order('Random');
+    expect(stored().queueIds).toEqual(queueIds);
+    expect(screen.getByRole('status')).toHaveTextContent('Random order selected. The question sequence is unchanged.');
+  });
+
+  it('treats whitespace as a draft and keeps the active word when switching to database order', async () => {
+    seed({ orderMode: 'random', queueIds: ['d', 'c', 'b', 'a'] });
+    render(<FreeMode />);
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: '  ' } });
+    await order('In database order');
+    expect(stored().queueIds).toEqual(['d', 'a', 'b', 'c']);
+    expect(screen.getByRole('textbox')).toHaveValue('  ');
+    expect(screen.getByRole('status')).toHaveTextContent('The new order takes effect from the next word. Your current answer is kept.');
+  });
+
   it('retains two scored answers, mistakes, the active draft and storage when changing order', async () => {
     seed();
     render(<StrictMode><FreeMode /></StrictMode>);
@@ -75,6 +139,7 @@ describe('Practice ordering preserves the session', () => {
     await order('In database order');
     expect(stored().queueIds).toEqual(['d', 'a', 'b', 'c']);
     expect(screen.getByRole('textbox')).toHaveValue('draft d');
+    expect(screen.getByRole('status')).toHaveTextContent('The new order takes effect from the next word.');
     expect(read.select).toHaveBeenCalledWith('*', { count: 'exact' });
     expect(read.eq).toHaveBeenCalledWith('user_id', 'user-a');
     expect(read.order.mock.calls).toEqual([['created_at', { ascending: true }], ['id', { ascending: true }]]);
@@ -83,7 +148,7 @@ describe('Practice ordering preserves the session', () => {
   it('shuffles only pending questions and makes selecting the active mode a no-op', async () => {
     seed();
     render(<FreeMode />);
-    await screen.findByRole('textbox');
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'active draft' } });
     const random = vi.spyOn(Math, 'random').mockReturnValue(0);
     await order('Random');
     expect(stored().queueIds).toEqual(['a', 'c', 'd', 'b']);
@@ -96,6 +161,7 @@ describe('Practice ordering preserves the session', () => {
     expect(random).toHaveBeenCalledTimes(calls);
     await order('In database order');
     expect(stored().queueIds).toEqual(['a', 'b', 'c', 'd']);
+    expect(screen.getByRole('textbox')).toHaveValue('active draft');
   });
 
   it.each([true, false])('keeps checked feedback and the scoring guard when correct=%s', async correct => {
@@ -223,6 +289,7 @@ describe('Practice ordering preserves the session', () => {
     render(<StrictMode><FreeMode /></StrictMode>);
     const original = localStorage.getItem(practiceSessionKey('user-a'));
     expect(screen.getByText('Loading your words...')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'In database order' })).not.toBeInTheDocument();
     expect(localStorage.getItem(practiceSessionKey('user-a'))).toBe(original);
     await act(async () => current.resolve({ data: vocabulary, error: null }));
     await answer('meaning a');

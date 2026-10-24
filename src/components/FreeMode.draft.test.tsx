@@ -68,7 +68,7 @@ describe.each([false, true])('Practice draft readiness (StrictMode: %s)', strict
     await waitFor(() => expect(bLoad.range).toHaveBeenCalled());
     await act(async () => bRead.resolve({ data: [bWord], error: null }));
     await waitFor(() => expect(JSON.parse(localStorage.getItem(bKey)!)).toEqual({
-      userId: 'user-b', queueIds: ['b'], direction: 'en-to-geo', orderMode: 'random',
+      userId: 'user-b', queueIds: ['b'], direction: 'geo-to-en', orderMode: 'random',
       allowReguess: false, correctCount: 0, totalAttempts: 0, mistakes: [],
       attemptedWordIds: [], unresolvedWordIds: [], hasChecked: false, completed: false,
     }));

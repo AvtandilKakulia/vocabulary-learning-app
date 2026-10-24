@@ -44,6 +44,8 @@ describe('Practice answer initialization', () => {
   it('reinitializes one or three inputs when changing direction before checking', async () => {
     supabaseMock.from.mockReturnValue(query({ data: [irregular('first')], error: null }));
     render(<FreeMode />);
+    await screen.findAllByRole('textbox');
+    await userEvent.click(screen.getByRole('button', { name: 'English → Georgian' }));
     fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'unfinished' } });
     await userEvent.click(screen.getByRole('button', { name: 'Georgian → English' }));
     expect(screen.getAllByRole('textbox')).toHaveLength(3);
@@ -114,7 +116,7 @@ describe('Practice account storage isolation', () => {
     expect(screen.queryByDisplayValue('A unfinished input')).not.toBeInTheDocument();
     // The first checkpoint follows vocabulary reconciliation, after the input
     // can already be visible. Wait for storage itself, not just the rendered UI.
-    await waitFor(() => expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ userId: 'user-b', direction: 'en-to-geo',
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(bKey)!)).toMatchObject({ userId: 'user-b', direction: 'geo-to-en',
       orderMode: 'random', allowReguess: false, totalAttempts: 0, correctCount: 0, mistakes: [], attemptedWordIds: [], hasChecked: false }));
     await user.click(screen.getByRole('button', { name: 'In database order' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'wrong B' } });
@@ -125,6 +127,7 @@ describe('Practice account storage isolation', () => {
     expect(localStorage.getItem(storageKey)).toBe(aCopy);
     await user.click(screen.getByRole('button', { name: 'Random' }));
     expect(localStorage.getItem(storageKey)).toBe(aCopy);
+    await user.click(screen.getByRole('button', { name: 'English → Georgian' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'დათმობა' } });
     await user.click(screen.getByRole('button', { name: 'Check Answer' }));
     await user.click(screen.getByRole('button', { name: 'Next Word' }));
@@ -210,10 +213,10 @@ describe('Practice account storage isolation', () => {
     await user.click(screen.getByRole('button', { name: 'Close & Save' }));
     const aCopy = localStorage.getItem(storageKey);
     authMock.user = { id: 'user-b' };
-    const bWord = word({ id: 'b', user_id: 'user-b', english_word: 'B private word' });
+    const bWord = word({ id: 'b', user_id: 'user-b', english_word: 'B private word', georgian_definitions: ['B private meaning'] });
     supabaseMock.from.mockReturnValue(query({ data: [bWord], error: null }));
     rerender(<FreeMode />);
-    await screen.findByText('B private word');
+    await screen.findByText('B private meaning');
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'B input' } });
     const bCopy = localStorage.getItem(bKey);
     await act(async () => {
@@ -335,7 +338,7 @@ describe('Practice vocabulary read errors', () => {
     const current = query({ data: [word({ user_id: 'user-b' })], error: null });
     supabaseMock.from.mockReturnValueOnce(current);
     rerender(<FreeMode />);
-    await screen.findByText('yield');
+    await screen.findByText('დათმობა, მოსავლიანობა');
     await act(async () => old.reject(new Error('old account')));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(current.eq).toHaveBeenCalledWith('user_id', 'user-b');
@@ -417,13 +420,13 @@ describe('Practice vocabulary read races', () => {
     authMock.user = { id: 'user-b' };
     rerender(<FreeMode />);
     await waitFor(() => expect(bQuery.eq).toHaveBeenCalledWith('user_id', 'user-b'));
-    await act(async () => b.resolve({ data: [word({ id: 'b', user_id: 'user-b', english_word: 'B vocabulary' })], error: null }));
-    await act(async () => a.resolve({ data: [word({ english_word: 'A vocabulary' })], error: null }));
-    expect(screen.getByText('B vocabulary')).toBeInTheDocument();
-    expect(screen.queryByText('A vocabulary')).not.toBeInTheDocument();
+    await act(async () => b.resolve({ data: [word({ id: 'b', user_id: 'user-b', english_word: 'B vocabulary', georgian_definitions: ['B meaning'] })], error: null }));
+    await act(async () => a.resolve({ data: [word({ english_word: 'A vocabulary', georgian_definitions: ['A meaning'] })], error: null }));
+    expect(screen.getByText('B meaning')).toBeInTheDocument();
+    expect(screen.queryByText('A meaning')).not.toBeInTheDocument();
     authMock.user = null;
     rerender(<FreeMode />);
-    expect(screen.queryByText('B vocabulary')).not.toBeInTheDocument();
+    expect(screen.queryByText('B meaning')).not.toBeInTheDocument();
     expect(screen.queryByText('Loading your words...')).not.toBeInTheDocument();
   });
 
@@ -547,7 +550,7 @@ describe('FreeMode save lifecycle', () => {
       await screen.findByRole('textbox');
       // Capture B only after its initialization effect persists the complete checkpoint.
       await waitFor(() => expect(JSON.parse(localStorage.getItem(practiceSessionKey('user-b'))!)).toEqual({
-        userId: 'user-b', queueIds: [current.id], direction: 'en-to-geo', orderMode: 'random',
+        userId: 'user-b', queueIds: [current.id], direction: 'geo-to-en', orderMode: 'random',
         allowReguess: false, correctCount: 0, totalAttempts: 0, mistakes: [],
         attemptedWordIds: [], unresolvedWordIds: [], hasChecked: false, completed: false,
       }));
