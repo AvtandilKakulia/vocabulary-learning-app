@@ -1,0 +1,317 @@
+import GoTrueClient from '../src/GoTrueClient'
+import { Session, SupportedStorage } from '../src/lib/types'
+import { AuthRetryableFetchError } from '../src/lib/errors'
+
+const turn = () => new Promise<void>((done) => setImmediate(done))
+function barrier() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+const session = (): Session => ({
+  access_token: 'synthetic-access',
+  refresh_token: 'synthetic-refresh',
+  token_type: 'bearer',
+  expires_in: 3600,
+  expires_at: Math.floor(Date.now() / 1000) + 3600,
+  user: {
+    id: 'A',
+    aud: 'authenticated',
+    app_metadata: {},
+    user_metadata: {},
+    created_at: new Date(0).toISOString(),
+  },
+})
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
+function fixture(seed: unknown = session()) {
+  const key = 'initial-storage',
+    bytes = new Map<string, string>(),
+    health: unknown[] = []
+  if (seed !== null) bytes.set(key, JSON.stringify(seed))
+  const failure = new Error('synthetic storage unavailable')
+  let fault: 'get' | 'set' | null = null,
+    once = false
+  const access = (method: 'get' | 'set') => {
+    if (fault === method) {
+      if (once) fault = null
+      health.push(failure)
+      throw failure
+    }
+  }
+  const storage: SupportedStorage = {
+    getItem: async (name) => {
+      access('get')
+      return bytes.get(name) ?? null
+    },
+    setItem: async (name, value) => {
+      access('set')
+      bytes.set(name, value)
+    },
+    removeItem: async (name) => {
+      bytes.delete(name)
+    },
+  }
+  return {
+    key,
+    bytes,
+    storage,
+    health,
+    failure,
+    arm: (method: 'get' | 'set', transient = false) => {
+      fault = method
+      once = transient
+    },
+    clear: () => {
+      fault = null
+    },
+  }
+}
+const clients: GoTrueClient[] = []
+function clientFor(
+  store: ReturnType<typeof fixture>,
+  options: Partial<ConstructorParameters<typeof GoTrueClient>[0]> = {}
+) {
+  const client = new GoTrueClient({
+    url: 'https://synthetic.invalid',
+    storage: store.storage,
+    storageKey: store.key,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+    persistSession: true,
+    fetch: async () => {
+      throw new Error('Unexpected synthetic request')
+    },
+    ...options,
+  })
+  clients.push(client)
+  return client
+}
+
+describe('initial subscription and public storage-health admission', () => {
+  let errors: jest.SpyInstance, warnings: jest.SpyInstance
+  beforeEach(() => {
+    errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+    warnings = jest.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(async () => {
+    for (const client of clients.splice(0)) await client.dispose()
+    jest.restoreAllMocks()
+  })
+
+  it.each(['get', 'preflight', 'transient', 'late'] as const)(
+    '%s failure remains observable without an SDK-owned rejection',
+    async (kind) => {
+      const store = fixture()
+      if (kind === 'preflight')
+        expect(await store.storage.getItem(store.key)).toBe(store.bytes.get(store.key))
+      if (kind !== 'late') store.arm('get', kind === 'transient')
+      const client = clientFor(store)
+      expect(await client.initialize()).toEqual({ error: null })
+      if (kind === 'late') {
+        expect((await client.getSession()).data.session?.user.id).toBe('A')
+        store.arm('get')
+      }
+      const delivered = barrier(),
+        events: unknown[] = [],
+        unhandled: unknown[] = []
+      const onUnhandled = (reason: unknown) => {
+        unhandled.push(reason)
+      }
+      process.on('unhandledRejection', onUnhandled)
+      try {
+        const {
+          data: { subscription },
+        } = client.onAuthStateChange((event, value) => {
+          events.push([event, value?.user.id ?? null])
+          delivered.resolve()
+        })
+        await delivered.promise
+        await turn()
+        expect(events).toEqual([['INITIAL_SESSION', kind === 'transient' ? 'A' : null]])
+        expect(store.health.length).toBeGreaterThan(0)
+        expect(store.health.every((error) => error === store.failure)).toBe(true)
+        // A healthy later read does not erase the failed storage operation from this admission attempt.
+        store.clear()
+        expect((await client.getSession()).data.session?.user.id).toBe('A')
+        expect(store.health.length === 0).toBe(false)
+        expect(unhandled).toEqual([])
+        subscription.unsubscribe()
+      } finally {
+        process.removeListener('unhandledRejection', onUnhandled)
+      }
+    }
+  )
+
+  it.each(['healthy', 'read-failed'] as const)(
+    'invokes a throwing %s INITIAL_SESSION listener exactly once',
+    async (kind) => {
+      const store = fixture(),
+        client = clientFor(store)
+      await client.initialize()
+      if (kind === 'read-failed') store.arm('get')
+      const reached = barrier(),
+        callbackFailure = new Error('synthetic subscriber exception')
+      const callback = jest.fn(() => {
+        reached.resolve()
+        throw callbackFailure
+      })
+      client.onAuthStateChange(callback)
+      await reached.promise
+      await turn()
+      expect(callback).toHaveBeenCalledTimes(1)
+      expect(callback.mock.calls[0]).toEqual([
+        'INITIAL_SESSION',
+        kind === 'read-failed' ? null : JSON.parse(store.bytes.get(store.key)!),
+      ])
+      expect(errors.mock.calls.some((args) => args.includes(callbackFailure))).toBe(true)
+      expect(store.bytes.has(store.key)).toBe(true)
+    }
+  )
+
+  it.each(['empty', 'invalid', 'missing-refresh', 'malformed-user', 'expired'] as const)(
+    'preserves %s initialization semantics',
+    async (kind) => {
+      const seed = session() as unknown as Record<string, unknown>
+      if (kind === 'invalid') delete seed.access_token
+      if (kind === 'missing-refresh' || kind === 'expired') seed.expires_at = 1
+      if (kind === 'missing-refresh') seed.refresh_token = ''
+      if (kind === 'malformed-user') seed.user = 'not-an-object'
+      const store = fixture(kind === 'empty' ? null : seed)
+      if (kind === 'malformed-user') store.storage.isServer = true
+      const fetch = jest.fn(async () => json(session()))
+      const client = clientFor(store, { autoRefreshToken: kind === 'expired', fetch })
+      expect((await client.initialize()).error).toBeNull()
+      await client.stopAutoRefresh()
+      const done = barrier(),
+        events: unknown[] = []
+      client.onAuthStateChange((event, value) => {
+        events.push([event, value?.user.id ?? null])
+        done.resolve()
+      })
+      await done.promise
+      await turn()
+      expect(events).toEqual([['INITIAL_SESSION', kind === 'expired' ? 'A' : null]])
+      expect(fetch).toHaveBeenCalledTimes(kind === 'expired' ? 1 : 0)
+      expect(store.bytes.has(store.key)).toBe(!['empty', 'invalid'].includes(kind))
+      if (kind === 'missing-refresh')
+        await expect(client.getSession()).rejects.toMatchObject({ name: 'AuthSessionMissingError' })
+      if (kind === 'malformed-user')
+        await expect(client.getSession()).rejects.toBeInstanceOf(TypeError)
+      expect(store.health).toEqual([])
+    }
+  )
+
+  it('retains ownership of the legacy lock until the initial listener completes', async () => {
+    const store = fixture(),
+      entered = barrier(),
+      release = barrier()
+    let held = false
+    const lock = jest.fn(async (_name: string, _timeout: number, work: () => Promise<unknown>) => {
+      held = true
+      try {
+        return await work()
+      } finally {
+        held = false
+      }
+    })
+    const client = clientFor(store, {
+      lock: lock as NonNullable<ConstructorParameters<typeof GoTrueClient>[0]>['lock'],
+    })
+    await client.initialize()
+    client.onAuthStateChange(async () => {
+      entered.resolve()
+      await release.promise
+    })
+    await entered.promise
+    await turn()
+    expect(held).toBe(true)
+    release.resolve()
+    await turn()
+    expect(held).toBe(false)
+  })
+
+  it('does not notify a subscription removed while the storage read is pending', async () => {
+    const store = fixture(),
+      client = clientFor(store)
+    await client.initialize()
+    const reached = barrier(),
+      release = barrier(),
+      read = store.storage.getItem
+    store.storage.getItem = async (key) => {
+      reached.resolve()
+      await release.promise
+      return read(key)
+    }
+    const callback = jest.fn(),
+      {
+        data: { subscription },
+      } = client.onAuthStateChange(callback)
+    await reached.promise
+    subscription.unsubscribe()
+    release.resolve()
+    await turn()
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('detects storage write failure in the nested user recovery branch even when initialize returns no error', async () => {
+    const seed = { ...session(), user: undefined },
+      store = fixture(seed)
+    store.arm('set')
+    const client = clientFor(store, { fetch: async () => json(session().user) })
+    expect((await client.initialize()).error).toBeNull()
+    expect(store.health).toEqual([store.failure])
+    expect(errors).toHaveBeenCalledWith('Error getting user data:', store.failure)
+    expect(JSON.parse(store.bytes.get(store.key)!).user).toBeUndefined()
+  })
+
+  it('does not confuse an Auth/network error class with the origin of a storage exception', async () => {
+    const store = fixture(),
+      error = new AuthRetryableFetchError('adapter rejected with this class', 0)
+    store.storage.getItem = async () => {
+      store.health.push(error)
+      throw error
+    }
+    const client = clientFor(store)
+    expect((await client.initialize()).error).toBeNull()
+    expect(store.health).toEqual([error])
+    expect(warnings).toHaveBeenCalledWith(error)
+  })
+
+  it.each(['offline', '503'] as const)(
+    'preserves %s startup and recovery without a permanent fatal admission error',
+    async (kind) => {
+      const store = fixture({ ...session(), expires_at: 1 }),
+        original = store.bytes.get(store.key)
+      let now = Date.now(),
+        online = false
+      jest.spyOn(Date, 'now').mockImplementation(() => now)
+      const fetch = jest.fn(async () => {
+        if (online) return json(session())
+        // Deterministically exhaust the SDK's per-refresh retry budget; no real-time sleep or changed SDK constant.
+        now += 30001
+        if (kind === 'offline') throw new TypeError('synthetic offline')
+        return new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } })
+      })
+      const client = clientFor(store, { fetch, autoRefreshToken: true })
+      expect((await client.initialize()).error).toBeNull()
+      await client.stopAutoRefresh()
+      expect(store.health).toEqual([])
+      expect(store.bytes.get(store.key)).toBe(original)
+      expect(fetch).toHaveBeenCalledTimes(1)
+      const failedRead = await client.getSession()
+      expect(failedRead.error).toMatchObject({ name: 'AuthRetryableFetchError' })
+      expect(failedRead.data.session).toBeNull()
+      online = true
+      expect((await client.getSession()).error).toBe(failedRead.error)
+      expect(fetch).toHaveBeenCalledTimes(1)
+      now += 60001 // Existing cooldown remains authoritative; no SDK-private mutation or bypass.
+      expect((await client.getSession()).data.session?.user.id).toBe('A')
+      expect(fetch).toHaveBeenCalledTimes(2)
+      expect(store.health).toEqual([])
+      expect((await client.initialize()).error).toBeNull()
+    }
+  )
+})
