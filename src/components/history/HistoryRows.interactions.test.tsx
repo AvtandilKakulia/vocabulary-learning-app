@@ -70,10 +70,12 @@ describe('History summary interaction', () => {
     expect(perfect.queryByText(/Mistakes/)).not.toBeInTheDocument();
   });
 
-  it('uses the enabled bulk-delete red palette and native disabled behavior', () => {
+  it('uses a transparent trash control with bulk-delete red accents on hover and native disabled behavior', () => {
     const { rows, rerender, onSelect, onDelete } = setup();
     const deletion = within(rows[0]).getByRole('button', { name: /^Delete record/ });
-    expect(deletion).toHaveClass('bg-red-50', 'border-red-300', 'text-red-700', 'dark:bg-red-950', 'dark:border-red-800', 'dark:text-red-200', 'dark:hover:bg-red-900');
+    expect(deletion).toHaveClass('bg-transparent', 'border-transparent', 'text-red-700', 'hover:bg-red-100', 'dark:text-red-200', 'dark:hover:bg-red-900', 'focus-visible:ring-2', 'disabled:opacity-50');
+    expect(deletion).not.toHaveClass('bg-red-50', 'dark:bg-red-950', 'border-red-300', 'dark:border-red-800');
+    expect(deletion.querySelector('svg')).toHaveAttribute('width', '18');
     rerender(<HistoryRows records={[historyRecord()]} selectedIds={new Set()} disabled onSelect={onSelect} onDelete={onDelete} scoreEmoji={() => ''} />);
     expect(screen.getByRole('button', { name: /^Delete record/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /^Delete record/ }));
@@ -86,6 +88,11 @@ describe('History summary interaction', () => {
     expect(pickerStyles).toContain('.history-filter-select::picker(select)');
     expect(pickerStyles).toContain('.history-filter-select::picker-icon');
     expect(pickerStyles).toContain('border-radius: 0.75rem');
+    expect(pickerStyles).toContain('position-area: block-end span-inline-end');
+    expect(pickerStyles).toContain('position-try-order: normal');
+    expect(pickerStyles).toContain('position-try-fallbacks: flip-block');
+    expect(pickerStyles).toContain('max-block-size: min(20rem, 60vh, calc(100% - 0.75rem))');
+    expect(pickerStyles).toContain('overflow-y: auto');
     expect(pickerStyles).toContain('.dark select.history-filter-select::picker(select)');
   });
 });

@@ -132,8 +132,14 @@ describe('Test and History theme presentation', () => {
     expect(screen.getByText('Saved context').tagName).toBe('STRONG');
     expect(screen.getByText('dog')).toHaveClass('dark:text-red-300');
     expect(screen.getByText('dog').parentElement).toHaveClass('text-red-700', 'dark:text-red-300');
+    expect(screen.getByText('Your answer:')).toHaveClass('font-bold');
+    expect(screen.getByText('dog')).toHaveClass('font-semibold');
+    expect(screen.getByText('dog')).not.toHaveClass('font-bold');
     expect(screen.getByText('კატა')).toHaveClass('dark:text-green-300');
     expect(screen.getByText('კატა').parentElement).toHaveClass('text-green-700', 'dark:text-green-300');
+    expect(screen.getByText('Correct:')).toHaveClass('font-bold');
+    expect(screen.getByText('კატა')).toHaveClass('font-semibold');
+    expect(screen.getByText('კატა')).not.toHaveClass('font-bold');
     fireEvent.click(screen.getByRole('button', { name: /^Delete record from/ }));
     panel(screen.getByRole('heading', { name: 'Delete Test Record' }));
     expect(screen.getByRole('button', { name: /^Delete$/ })).toHaveClass('bg-red-700', 'text-white');

@@ -85,7 +85,7 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
             aria-label={`Delete record from ${date}`}
             onClick={() => onDelete(record.id)}
             disabled={disabled}
-            className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 dark:focus-visible:ring-red-400 dark:focus-visible:ring-offset-gray-800 p-2 rounded-xl border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900"
+            className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 dark:focus-visible:ring-red-400 dark:focus-visible:ring-offset-gray-800 p-2 rounded-xl border border-transparent bg-transparent text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900"
           >
             <Trash2 size={18} />
           </button>
@@ -117,14 +117,14 @@ const HistoryRow = memo(function HistoryRow({ record, selected, expanded, disabl
                 )}
 
                 <div className="text-sm mb-1 text-red-700 dark:text-red-300">
-                  Your answer:{' '}
+                  <span className="font-bold">Your answer:</span>{' '}
                   <span className="font-semibold text-red-700 dark:text-red-300">
                     {m.user_answer || '(empty)'}
                   </span>
                 </div>
 
                 <div className="text-sm text-green-700 dark:text-green-300">
-                  Correct:{' '}
+                  <span className="font-bold">Correct:</span>{' '}
                   <span className="font-semibold text-green-700 dark:text-green-300">
                     {m.correct_definitions.join(', ')}
                   </span>
