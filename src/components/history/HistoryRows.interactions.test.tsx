@@ -73,9 +73,13 @@ describe('History summary interaction', () => {
   it('uses a transparent trash control with bulk-delete red accents on hover and native disabled behavior', () => {
     const { rows, rerender, onSelect, onDelete } = setup();
     const deletion = within(rows[0]).getByRole('button', { name: /^Delete record/ });
-    expect(deletion).toHaveClass('bg-transparent', 'border-transparent', 'text-red-700', 'hover:bg-red-100', 'dark:text-red-200', 'dark:hover:bg-red-900', 'focus-visible:ring-2', 'disabled:opacity-50');
-    expect(deletion).not.toHaveClass('bg-red-50', 'dark:bg-red-950', 'border-red-300', 'dark:border-red-800');
+    expect(deletion).toHaveClass('bg-transparent', 'border-transparent', 'hover:bg-red-100', 'dark:hover:bg-red-900', 'focus-visible:ring-2', 'disabled:opacity-50');
+    for (const persistentRed of ['bg-red-50', 'dark:bg-red-950', 'border-red-300', 'dark:border-red-800']) {
+      expect(deletion).not.toHaveClass(persistentRed);
+    }
     expect(deletion.querySelector('svg')).toHaveAttribute('width', '18');
+    expect(deletion.querySelector('svg')).toHaveClass('text-red-600', 'dark:text-red-400');
+    expect(deletion.querySelector('svg')).not.toHaveClass('dark:text-red-200');
     rerender(<HistoryRows records={[historyRecord()]} selectedIds={new Set()} disabled onSelect={onSelect} onDelete={onDelete} scoreEmoji={() => ''} />);
     expect(screen.getByRole('button', { name: /^Delete record/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /^Delete record/ }));

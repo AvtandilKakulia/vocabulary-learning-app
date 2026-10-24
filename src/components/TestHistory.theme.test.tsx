@@ -130,16 +130,16 @@ describe('Test and History theme presentation', () => {
     expect(mistake).toHaveClass('bg-gray-50', 'border-red-200', 'dark:bg-gray-900', 'dark:border-red-900/60');
     expect(mistake).not.toHaveClass('dark:bg-red-950');
     expect(screen.getByText('Saved context').tagName).toBe('STRONG');
-    expect(screen.getByText('dog')).toHaveClass('dark:text-red-300');
-    expect(screen.getByText('dog').parentElement).toHaveClass('text-red-700', 'dark:text-red-300');
-    expect(screen.getByText('Your answer:')).toHaveClass('font-bold');
-    expect(screen.getByText('dog')).toHaveClass('font-semibold');
-    expect(screen.getByText('dog')).not.toHaveClass('font-bold');
-    expect(screen.getByText('კატა')).toHaveClass('dark:text-green-300');
-    expect(screen.getByText('კატა').parentElement).toHaveClass('text-green-700', 'dark:text-green-300');
-    expect(screen.getByText('Correct:')).toHaveClass('font-bold');
-    expect(screen.getByText('კატა')).toHaveClass('font-semibold');
-    expect(screen.getByText('კატა')).not.toHaveClass('font-bold');
+    expect(screen.getByText('Your answer:')).toHaveClass('font-bold', 'text-red-700', 'dark:text-red-300');
+    expect(screen.getByText('Correct:')).toHaveClass('font-bold', 'text-green-700', 'dark:text-green-300');
+    for (const value of [screen.getByText('dog'), screen.getByText('კატა')]) {
+      expect(value).toHaveClass('font-semibold', 'text-gray-900', 'dark:text-gray-100');
+      expect(value).not.toHaveClass('font-bold');
+      for (const color of ['text-red-700', 'dark:text-red-300', 'text-green-700', 'dark:text-green-300']) {
+        expect(value).not.toHaveClass(color);
+        expect(value.parentElement).not.toHaveClass(color);
+      }
+    }
     fireEvent.click(screen.getByRole('button', { name: /^Delete record from/ }));
     panel(screen.getByRole('heading', { name: 'Delete Test Record' }));
     expect(screen.getByRole('button', { name: /^Delete$/ })).toHaveClass('bg-red-700', 'text-white');
