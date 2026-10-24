@@ -1,0 +1,198 @@
+{
+  "checkedAt": "2026-10-24T08:59:53.3904645Z",
+  "release": "v2.118.0",
+  "published": "2026-10-15T12:55:27Z",
+  "master": "51816da3805daf2aed7393870e34d7e3374edb69",
+  "prs": {
+    "2627": {
+      "head": "f87fc1c8751ebb851247e36d3d52222014b9752f",
+      "merge": "ff9909e6c813662144ff6d92a010f74627c6262a",
+      "merged": true,
+      "state": "closed",
+      "updated": "2026-08-24T10:17:13Z",
+      "base": "6dbd2248b8e56e8fe2b6bd8e51ed6af7a4450eac"
+    },
+    "2709": {
+      "head": "2ba54f13607a8fd86aebbde81fefe980830ab9ef",
+      "merged": false,
+      "state": "open",
+      "updated": "2026-09-25T20:18:41Z",
+      "base": "6d21e3fc8cd5e9cba6b6c30b75a71ffeb97b478d",
+      "author": "dasjideepak"
+    },
+    "2742": {
+      "head": "b72048731964c7213b47ffb0fe9cd3cfd3e95c01",
+      "merged": false,
+      "state": "open",
+      "updated": "2026-10-08T19:30:59Z",
+      "base": "4d23055805ce2cf853686b704cfaec1a701d29c6",
+      "author": "hemanshuwadile"
+    }
+  },
+  "sourcePath": "packages/core/auth-js/src/GoTrueClient.ts",
+  "hashes": {
+    "base": "5e0d1bb373a813272e8203dbe65b615bc939c3c8a90797210045c6f1b81661d7",
+    "pr2742": "c9fa8a19758194d4891c6c3c3b8c3551c0cb43025baccad7dc98a59a72e82a6d",
+    "terminal": "8fdb7ee85cc919f8f14583ba5872f87113d7f5b5453fc2cf657c799c4e0e6048",
+    "initialSupplement": "dd6c1364fd59d68666501eba63fe2cf04714a0022a0a44779a00a8dd6a67bb7c",
+    "proposal": "8c29c791f5e6c52caf562f3f3f388af996221a99943fb5b37422a43332334920"
+  },
+  "applicationBase": "dd411f192bc9fd38e0c776bd1e9bbaeb9fa9ef87",
+  "releaseCommit": "6ede0cbfc8801bee14f61043578d2f3acf7fa831",
+  "hashNormalization": "UTF-8, CRLF normalized to LF",
+  "artifacts": {
+    "terminal-refresh.patch": "536345a908463da8c801fd1264f840266a0efb81ee6cbd31c6343ecd8395078f",
+    "initial-supplement.patch": "7c65e9d61422d71c7d4ce8d6833a75f3d3267480e8164c584f1e68425b1882d5",
+    "GoTrueClient.initialStorage.test.ts.txt": "500ececee81d9abc8f1104cfa4efa45c9113b80554725b1cc0d585b20b051c9a",
+    "GoTrueClient.terminalStorage.test.ts.txt": "fc0b04e4bb79f885abf0d94c26c107b7ae85b9cc8deaf72b115ab2b82aea659d"
+  },
+  "upstreamLockSha256": "9ba3d2e8e815a0c725d59909c8498005d95ff3242739d596f974aea50db2bce4",
+  "related": [
+    {
+      "number": 2708,
+      "title": "auth-js: onAuthStateChange leaves an unhandled rejection when the stored session cannot be loaded (expired session with empty refresh_token, or non-object user)",
+      "state": "open",
+      "url": "https://github.com/supabase/supabase-js/issues/2708",
+      "updatedAt": "2026-09-25T22:37:28Z"
+    },
+    {
+      "number": 2767,
+      "title": "auth-js: no public way to retry a refresh after a cached failure (`REFRESH_FAILURE_COOLDOWN_MS`), so mobile apps wait up to 60 s after the network comes back",
+      "state": "open",
+      "url": "https://github.com/supabase/supabase-js/issues/2767",
+      "updatedAt": "2026-10-15T19:53:16Z"
+    },
+    {
+      "number": 2769,
+      "title": "fix(auth): allow bounded retry after transient refresh failure on resume",
+      "state": "open",
+      "url": "https://github.com/supabase/supabase-js/pull/2769",
+      "updatedAt": "2026-10-20T08:45:02Z"
+    },
+    {
+      "number": 2568,
+      "title": "fix(auth): fail token refresh fast when offline and resume on reconnect",
+      "state": "open",
+      "url": "https://github.com/supabase/supabase-js/pull/2568",
+      "updatedAt": "2026-07-30T10:56:00Z"
+    },
+    {
+      "number": 2715,
+      "title": "auth-js: expired session is removed when the refresh request is rate-limited (429) or times out (408)",
+      "state": "open",
+      "url": "https://github.com/supabase/supabase-js/issues/2715",
+      "updatedAt": "2026-10-17T16:52:24Z"
+    }
+  ],
+  "duplicateSearch": [
+    {
+      "query": "repo:supabase/supabase-js \"refreshingDeferred\"",
+      "count": 14,
+      "numbers": [
+        2568,
+        2769,
+        2767,
+        2686,
+        2715,
+        2387,
+        2392,
+        2145,
+        2126,
+        2277,
+        2344,
+        2430,
+        2436,
+        1966
+      ]
+    },
+    {
+      "query": "repo:supabase/supabase-js \"cleanup\" \"refresh\"",
+      "count": 18,
+      "numbers": [
+        2542,
+        2727,
+        2627,
+        2626,
+        2512,
+        2166,
+        2557,
+        2436,
+        2392,
+        2146,
+        2145,
+        2387,
+        2144,
+        2113,
+        2020,
+        1594,
+        1492,
+        553
+      ]
+    },
+    {
+      "query": "repo:supabase/supabase-js \"storage\" \"pending\"",
+      "count": 31,
+      "numbers": [
+        2687,
+        2655,
+        2702,
+        1730,
+        2568,
+        2626,
+        2715,
+        2130,
+        2675,
+        2569,
+        2512,
+        2630,
+        2563,
+        2557,
+        2513,
+        2463,
+        2597,
+        2498,
+        2550,
+        2376,
+        2153,
+        2270,
+        2242,
+        2356,
+        2243,
+        2176,
+        2106,
+        2178,
+        992,
+        2112,
+        1400
+      ]
+    },
+    {
+      "query": "repo:supabase/supabase-js \"orphan\"",
+      "count": 22,
+      "numbers": [
+        2620,
+        2512,
+        2492,
+        2426,
+        2583,
+        2376,
+        2387,
+        2392,
+        2111,
+        2235,
+        2106,
+        2144,
+        2178,
+        1948,
+        1441,
+        2125,
+        2013,
+        1902,
+        1907,
+        1903,
+        1759,
+        936
+      ]
+    }
+  ]
+}

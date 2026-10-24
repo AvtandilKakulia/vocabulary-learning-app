@@ -1,0 +1,217 @@
+import GoTrueClient from '../src/GoTrueClient'
+import { Session } from '../src/lib/types'
+
+function barrier<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+const turn = () => new Promise<void>((done) => setImmediate(done))
+const session = (expired = false, suffix = 'original'): Session => ({
+  access_token: `synthetic-access-${suffix}`,
+  refresh_token: `synthetic-refresh-${suffix}`,
+  token_type: 'bearer',
+  expires_in: 3600,
+  expires_at: expired ? 1 : Math.floor(Date.now() / 1000) + 3600,
+  user: {
+    id: 'synthetic-user',
+    aud: 'authenticated',
+    app_metadata: {},
+    user_metadata: {},
+    created_at: new Date(0).toISOString(),
+  },
+})
+const response = (success: boolean) =>
+  new Response(
+    JSON.stringify(
+      success
+        ? session(false, 'renewed')
+        : {
+            message: 'Synthetic terminal rejection',
+            error_code: 'refresh_token_not_found',
+          }
+    ),
+    { status: success ? 200 : 400, headers: { 'content-type': 'application/json' } }
+  )
+
+describe('terminal refresh storage failures settle the shared deferred', () => {
+  const scenarios = [
+    'get',
+    'remove',
+    'abort',
+    'quota',
+    'lost-ack',
+    'delayed',
+    'healthy',
+    'success',
+    'proactive',
+  ] as const
+  it.each(scenarios.flatMap((kind) => [2, 4].map((count) => ({ kind, count }))))(
+    '$kind with $count callers',
+    async ({ kind, count }) => {
+      const storageKey = `terminal-storage-${kind}-${count}`
+      const bytes = new Map<string, string>([[storageKey, JSON.stringify(session())]])
+      const removals: string[] = [],
+        events: string[] = []
+      const reached = barrier(),
+        release = barrier<Response>(),
+        cleanupReached = barrier(),
+        cleanupAck = barrier()
+      const failure = new Error(`synthetic-${kind}`)
+      failure.name =
+        kind === 'abort' ? 'AbortError' : kind === 'quota' ? 'QuotaExceededError' : 'Error'
+      let armed = false
+      const storage = {
+        getItem: async (key: string) => {
+          if (armed && kind === 'get' && key === storageKey) throw failure
+          return bytes.get(key) ?? null
+        },
+        setItem: async (key: string, value: string) => {
+          bytes.set(key, value)
+        },
+        removeItem: async (key: string) => {
+          removals.push(key)
+          if (armed && key === storageKey && ['remove', 'abort', 'quota'].includes(kind))
+            throw failure
+          bytes.delete(key)
+          if (armed && key === storageKey && kind === 'lost-ack') throw failure
+          if (armed && key === storageKey && kind === 'delayed') {
+            cleanupReached.resolve()
+            await cleanupAck.promise
+          }
+        },
+      }
+      const fetch = jest
+        .fn()
+        .mockImplementationOnce(async () => {
+          reached.resolve()
+          return release.promise
+        })
+        .mockImplementation(async () => response(true))
+      const client = new GoTrueClient({
+        url: 'https://synthetic.invalid',
+        storageKey,
+        storage,
+        persistSession: true,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        fetch,
+      })
+      await client.initialize()
+      const initial = barrier()
+      const {
+        data: { subscription },
+      } = client.onAuthStateChange((event) => {
+        events.push(event)
+        if (event === 'INITIAL_SESSION') initial.resolve()
+      })
+      try {
+        await initial.promise
+        // Each public call is observed immediately. No timeout converts a pending waiter into success.
+        const settled: Array<{ status: string; error: unknown }> = []
+        const call = () =>
+          client.refreshSession({ refresh_token: session().refresh_token }).then(
+            (result) => {
+              settled.push({
+                status: result.error ? 'returned-error' : 'success',
+                error: result.error,
+              })
+              return result
+            },
+            (error) => {
+              settled.push({ status: 'rejected', error })
+              return null
+            }
+          )
+        const first = call()
+        await reached.promise
+        // This test lives inside auth-js: observe the exact in-flight deferred rather than infer joining from elapsed time.
+        const shared = client['refreshingDeferred']!
+        const resolveSpy = jest.spyOn(shared, 'resolve'),
+          rejectSpy = jest.spyOn(shared, 'reject')
+        const joined = barrier()
+        let joins = 0
+        const originalThen = shared.promise.then.bind(shared.promise)
+        jest.spyOn(shared.promise, 'then').mockImplementation((...args) => {
+          if (++joins === count - 1) joined.resolve()
+          return originalThen(...args)
+        })
+        const others = Array.from({ length: count - 1 }, call)
+        await joined.promise
+        const success = kind === 'success',
+          proactive = kind === 'proactive'
+        if (!success && !proactive) bytes.set(storageKey, JSON.stringify(session(true)))
+        armed = true
+        release.resolve(response(success))
+        if (kind === 'delayed') {
+          await cleanupReached.promise
+          expect(settled).toEqual([])
+          expect(bytes.has(storageKey)).toBe(false)
+          expect(resolveSpy).not.toHaveBeenCalled()
+          expect(rejectSpy).not.toHaveBeenCalled()
+          cleanupAck.resolve()
+        }
+        await first
+        // A task boundary drains promise reactions. The deferred call counts below prove settlement without a timed pending inference.
+        await turn()
+        const fault = ['get', 'remove', 'abort', 'quota', 'lost-ack'].includes(kind)
+        expect(resolveSpy).toHaveBeenCalledTimes(fault ? 0 : 1)
+        expect(rejectSpy).toHaveBeenCalledTimes(fault ? 1 : 0)
+        expect(settled).toHaveLength(count)
+        await Promise.all(others)
+        expect(settled.map((item) => item.status)).toEqual(
+          Array(count).fill(fault ? 'rejected' : success ? 'success' : 'returned-error')
+        )
+        if (fault) for (const item of settled) expect(item.error).toBe(failure)
+        else if (!success) {
+          expect(settled[0].error).toMatchObject({
+            name: 'AuthApiError',
+            code: 'refresh_token_not_found',
+          })
+          for (const item of settled) expect(item.error).toBe(settled[0].error)
+        }
+        expect(removals.filter((key) => key === storageKey)).toHaveLength(
+          success || proactive || kind === 'get' ? 0 : 1
+        )
+        expect(events).toEqual([
+          'INITIAL_SESSION',
+          ...(success ? ['TOKEN_REFRESHED'] : fault || proactive ? [] : ['SIGNED_OUT']),
+        ])
+        expect(bytes.has(storageKey)).toBe(
+          success || proactive || ['get', 'remove', 'abort', 'quota'].includes(kind)
+        )
+        expect(fetch).toHaveBeenCalledTimes(1)
+        expect(client['refreshingDeferred']).toBeNull()
+        if (!fault && !success) {
+          const cached = await client.refreshSession({ refresh_token: session().refresh_token })
+          expect(cached.error).toBe(settled[0].error)
+          expect(fetch).toHaveBeenCalledTimes(1)
+          expect(events.filter((event) => event === 'SIGNED_OUT')).toHaveLength(proactive ? 0 : 1)
+        }
+        armed = false
+        const later = await client.refreshSession({
+          refresh_token: session(false, 'new-token').refresh_token,
+        })
+        expect(later.error).toBeNull()
+        // refreshSession first loads the still-expired retained session before refreshing the explicit token.
+        const retainedExpired = ['get', 'remove', 'abort', 'quota'].includes(kind)
+        const laterCalls = retainedExpired ? 3 : 2
+        expect(fetch).toHaveBeenCalledTimes(laterCalls)
+        expect(settled).toHaveLength(count)
+        expect(bytes.get(storageKey)).toContain('renewed')
+        // Success clears a previous terminal failure cooldown, including for the original token.
+        expect(
+          (await client.refreshSession({ refresh_token: session().refresh_token })).error
+        ).toBeNull()
+        expect(fetch).toHaveBeenCalledTimes(laterCalls + 1)
+      } finally {
+        armed = false
+        cleanupAck.resolve()
+        subscription.unsubscribe()
+        await client.dispose()
+      }
+    }
+  )
+})
