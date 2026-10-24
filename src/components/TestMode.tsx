@@ -6,6 +6,7 @@ import { useRetiredAccount } from '../hooks/useRetiredAccount';
 import { recoveryStore } from '../lib/recoveryStorage';
 import { Check, X, RotateCcw, CheckCircle2, AlertCircle, Info, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { sanitizeDescription } from '../lib/sanitizeDescription';
+import { renderStudyDescription } from '../lib/descriptionStudyMask';
 import {
   CompletedTestResult, matchesCompletedTest, persistPendingTest, removePendingTest,
 } from '../lib/pendingTestResults';
@@ -624,7 +625,7 @@ function AccountTestMode({ userId }: { userId: string }) {
             </div>
             {currentWord.description && (
               <div className="text-sm text-gray-600 italic dark:text-gray-300">
-                <div dangerouslySetInnerHTML={{ __html: sanitizeDescription(currentWord.description) }} />
+                <div dangerouslySetInnerHTML={{ __html: renderStudyDescription(currentWord.description) }} />
               </div>
             )}
           </div>
@@ -786,6 +787,9 @@ function AccountTestMode({ userId }: { userId: string }) {
                     <div className="font-medium text-gray-900 dark:text-gray-100">
                       {direction === 'en-to-geo' ? word.english_word : word.georgian_definitions.join(', ')}
                     </div>
+                    {word.description && (
+                      <div className="text-sm text-gray-600 mt-1 dark:text-gray-300" dangerouslySetInnerHTML={{ __html: sanitizeDescription(word.description) }} />
+                    )}
                     <div className="text-sm text-gray-600 mt-1 dark:text-gray-300">
                       Your answer: <span className="font-medium">{word.userAnswer || '(empty)'}</span>
                     </div>

@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRight, Bold, Palette, Plus, X } from "lucide-react";
 import { Word } from "../../../lib/supabase";
 import { sanitizeDescription } from "../../../lib/sanitizeDescription";
 import { applyFormatting } from "../../../lib/applyFormatting";
+import { editDescriptionStudyMask, readDescriptionSourceSelection, type DescriptionSelection } from "../../../lib/descriptionStudyMask";
 import { WordFormData } from "../useWords";
 import { partOfSpeechStyles } from "../partOfSpeechStyles";
 import ModalPortal from "./ModalPortal";
@@ -50,6 +51,9 @@ export default function WordModal({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
+  const studyToolbarRef = useRef<HTMLDivElement | null>(null);
+  const studySelectionRef = useRef<{ description: string; selection: DescriptionSelection | null; error?: string } | null>(null);
+  const [maskFeedback, setMaskFeedback] = useState("");
   const initialStateRef = useRef<{
     englishWord: string;
     partOfSpeech: string;
@@ -80,6 +84,8 @@ export default function WordModal({
     setPastParticiple(word?.past_participle || "");
     setGeorgianDefs(word?.georgian_definitions || [""]);
     setDescription(word?.description || "");
+    studySelectionRef.current = null;
+    setMaskFeedback("");
     setShowColorPicker(false);
     setShowCloseConfirm(false);
     initialStateRef.current = {
@@ -99,6 +105,47 @@ export default function WordModal({
       phaseRef.current = "editing";
     }
   }, [hidden]);
+
+  useEffect(() => {
+    studySelectionRef.current = null;
+  }, [description, hidden]);
+
+  // Keep the range only while focus travels within the textarea/toolbar.
+  // Copying Preview text or moving elsewhere ends this editing interaction.
+  const releaseStudySelection = (event: React.FocusEvent<HTMLElement>) => {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || (next !== descriptionRef.current && !studyToolbarRef.current?.contains(next))) {
+      studySelectionRef.current = null;
+    }
+  };
+
+  const captureSourceSelection = (textarea: HTMLTextAreaElement) => {
+    if (document.activeElement !== textarea) return;
+    studySelectionRef.current = null;
+    // Textarea values normalize CRLF; offsets belong to that visible source.
+    if (textarea.value !== description.replace(/\r\n?/g, "\n") || textarea.selectionStart === textarea.selectionEnd) return;
+    const mapped = readDescriptionSourceSelection(textarea.value,
+      { start: textarea.selectionStart, end: textarea.selectionEnd });
+    studySelectionRef.current = { description, selection: mapped.selection ?? null, error: mapped.error };
+  };
+
+  const handleStudyMask = (action: "mask" | "unmask") => {
+    if (hidden || phaseRef.current !== "editing") return;
+    const saved = studySelectionRef.current;
+    if (saved?.description === description && saved.error) {
+      setMaskFeedback(saved.error);
+      return;
+    }
+    const result = editDescriptionStudyMask(description,
+      saved?.description === description ? saved.selection : null, action);
+    if ("error" in result) {
+      setMaskFeedback(result.error);
+      return;
+    }
+    studySelectionRef.current = null;
+    setDescription(result.html);
+    setMaskFeedback(result.message);
+  };
 
   const isDirty = () => {
     const initial = initialStateRef.current;
@@ -143,6 +190,7 @@ export default function WordModal({
       return;
     }
 
+    studySelectionRef.current = null;
     setDescription(result.nextText);
 
     requestAnimationFrame(() => {
@@ -328,7 +376,7 @@ export default function WordModal({
 
               <form onSubmit={handleSubmit} aria-busy={saving}>
                 <fieldset disabled={saving || showCloseConfirm} className="min-w-0 space-y-6">
-                <div className="grid gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       English Word
@@ -459,7 +507,7 @@ export default function WordModal({
                               newDefs[idx] = e.target.value;
                               setGeorgianDefs(newDefs);
                             }}
-                            className="flex-1 px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                            className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                             placeholder={`Definition ${idx + 1}`}
                             required
                           />
@@ -502,7 +550,7 @@ export default function WordModal({
                         <span>Rich text</span>
                       </span>
                     </label>
-                    <div className="flex gap-2 mb-2">
+                    <div ref={studyToolbarRef} onBlur={releaseStudySelection} className="flex flex-wrap gap-2 mb-2">
                       <button
                         type="button"
                         onClick={() => handleFormatting("bold")}
@@ -540,11 +588,39 @@ export default function WordModal({
                           </div>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => handleStudyMask("mask")}
+                        aria-describedby="study-mask-help"
+                        className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50"
+                      >
+                        Mask for Study
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => handleStudyMask("unmask")}
+                        aria-describedby="study-mask-help"
+                        className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50"
+                      >
+                        Remove Study Mask
+                      </button>
                     </div>
+                    <p id="study-mask-help" className="mb-2 text-sm text-gray-600 dark:text-gray-300">
+                      Select words directly in Description, then choose Mask for Study. To remove a mask, select its text in Description and choose Remove Study Mask. Preview only displays the original words; dotted underlines identify masks.
+                    </p>
+                    <p role="status" className="text-sm text-blue-700 dark:text-blue-300 mb-2">{maskFeedback}</p>
                     <textarea
                       ref={descriptionRef}
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onSelect={(event) => captureSourceSelection(event.currentTarget)}
+                      onBlur={releaseStudySelection}
+                      onChange={(e) => {
+                        studySelectionRef.current = null;
+                        setMaskFeedback("");
+                        setDescription(e.target.value);
+                      }}
                       rows={4}
                       className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                       placeholder="Add additional context or example sentences..."
@@ -555,7 +631,9 @@ export default function WordModal({
                           Preview
                         </div>
                         <div
-                          className="prose prose-sm dark:prose-invert max-w-none dark:text-gray-200"
+                          role="region"
+                          aria-label="Description preview"
+                          className="prose prose-sm dark:prose-invert max-w-none dark:text-gray-200 select-text [&_[data-study-mask=true]]:underline [&_[data-study-mask=true]]:decoration-dotted [&_[data-study-mask=true]]:underline-offset-4"
                           dangerouslySetInnerHTML={{
                             __html: sanitizeDescription(description),
                           }}

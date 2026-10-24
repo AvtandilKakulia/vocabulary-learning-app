@@ -51,10 +51,18 @@ export function sanitizeDescription(html: string): string {
       return;
     }
 
+    if (tag === "br") {
+      targetParent.appendChild(doc.createElement("br"));
+      return;
+    }
+
     if (tag === "strong" || tag === "span") {
       const cleanEl = doc.createElement(tag);
 
       if (tag === "span") {
+        if (element.getAttribute("data-study-mask") === "true") {
+          cleanEl.setAttribute("data-study-mask", "true");
+        }
         const style = element.getAttribute("style");
         if (style && colorRegex.test(style.trim())) {
           const match = style.trim().match(colorRegex);

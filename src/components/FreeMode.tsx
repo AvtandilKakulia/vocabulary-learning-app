@@ -10,7 +10,7 @@ import { Check, ChevronRight, Plus, Shuffle, X } from "lucide-react";
 import { supabase, Word } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { useLatestRequest } from "../hooks/useLatestRequest";
-import { sanitizeDescription } from "../lib/sanitizeDescription";
+import { renderStudyDescription } from "../lib/descriptionStudyMask";
 import type { User } from '@supabase/supabase-js';
 import { readPracticeSession, persistPracticeSession, removePracticeSession,
   type StoredPracticeSession, type PracticeResult, type PracticeMistake } from '../lib/practiceSessions';
@@ -1084,7 +1084,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                 <div
                   className="text-base text-gray-500 dark:text-gray-400 italic max-w-2xl mx-auto whitespace-pre-wrap break-words max-h-40 md:max-h-48 overflow-y-auto modal-scrollbar"
                   dangerouslySetInnerHTML={{
-                    __html: sanitizeDescription(currentWord.description),
+                    __html: renderStudyDescription(currentWord.description),
                   }}
                 />
               )}
