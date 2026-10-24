@@ -127,6 +127,69 @@ beforeEach(() => {
   vi.spyOn(window, 'alert').mockImplementation(() => {});
 });
 
+describe('History selection toolbar accessibility', () => {
+  it('keeps empty actions visible, named and natively disabled', async () => {
+    const api = server([]);
+    render(<History />); await finishLoading();
+    const group = screen.getByRole('group', { name: 'History selection toolbar' });
+    expect(within(group).getAllByRole('button').map(button => button.textContent?.trim()))
+      .toEqual(['Select All 0 Filtered Records', 'Delete Selected (0)']);
+    expect(group.querySelector('[aria-live="polite"]')).toHaveTextContent('0 of 0 matching records selected across all pages');
+    for (const button of within(group).getAllByRole('button')) {
+      expect(button).toBeDisabled(); fireEvent.click(button);
+    }
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(api.deletions).toEqual([]);
+  });
+
+  it('exposes exactly the applicable actions through partial, full and cleared selections', async () => {
+    const rows = history(6), api = server(rows);
+    render(<History />); await finishLoading();
+    const actions = () => toolbar().getAllByRole('button').map(button => button.textContent?.trim());
+    expect(actions()).toEqual(['Select All 6 Filtered Records', 'Delete Selected (0)']);
+    fireEvent.click(rowAction(rows[0], 'square'));
+    expect(actions()).toEqual(['Select All 6 Filtered Records', 'Clear Selection', 'Delete Selected (1)']);
+    fireEvent.click(rowAction(rows[1], 'square'));
+    expect(toolbar().getByText('2 of 6 matching records selected across all pages')).toBeInTheDocument();
+    expect(actions()).toEqual(['Select All 6 Filtered Records', 'Clear Selection', 'Delete Selected (2)']);
+    selectAll();
+    expect(actions()).toEqual(['Deselect All', 'Delete Selected (6)']);
+    expect(toolbar().queryByRole('button', { name: 'Clear Selection' })).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    toolbar().getByRole('button', { name: 'Deselect All' }).focus();
+    await user.keyboard('{Enter}');
+    expect(actions()).toEqual(['Select All 6 Filtered Records', 'Delete Selected (0)']);
+    fireEvent.click(rowAction(rows[2], 'square'));
+    toolbar().getByRole('button', { name: 'Clear Selection' }).focus();
+    await user.keyboard(' ');
+    expect(actions()).toEqual(['Select All 6 Filtered Records', 'Delete Selected (0)']);
+    expect(api.deletions).toEqual([]);
+  });
+
+  it('blocks toolbar actions while loading or while a coordinated deletion is pending', async () => {
+    const rows = history(3), api = server(rows), pending = deferred<QueryResult>();
+    api.respond = () => pending.promise;
+    render(<History />);
+    const assertDisabled = () => {
+      for (const button of toolbar().getAllByRole('button')) {
+        expect(button).toBeDisabled(); fireEvent.click(button);
+      }
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(api.deletions).toEqual([]);
+    };
+    assertDisabled();
+    await act(async () => pending.resolve({ data: rows, count: 3, error: null }));
+    await finishLoading();
+    fireEvent.click(rowAction(rows[0], 'square'));
+    let release!: () => void;
+    act(() => { release = beginHistoryDeletion('user-a')!; });
+    assertDisabled();
+    api.respond = (_read, response) => response;
+    act(() => release()); await finishLoading();
+    expect(toolbar().getByRole('button', { name: 'Select All 3 Filtered Records' })).toBeEnabled();
+  });
+});
+
 describe('History loads the complete authorized collection', () => {
   it.each([0, 3, 499, 500, 501, 1000, 1001, 2000, 2001])('loads %i records with complete statistics, deterministic ties, and no duplicate reads', async size => {
     const rows = history(size);

@@ -414,37 +414,34 @@ export default function History() {
 
       {/* SELECTION, STATS AND FILTERS */}
       <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-xl p-6">
-        <div role="group" aria-label="History selection toolbar" className="mb-6 space-y-3">
-          <p aria-live="polite" className="min-h-12 text-sm font-semibold text-blue-700 dark:text-blue-300 sm:min-h-6">
+        <div role="group" aria-label="History selection toolbar" className="mb-6 space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 dark:border-gray-700 dark:bg-gray-900/50 sm:p-4">
+          <p aria-live="polite" className="break-words text-sm font-semibold leading-6 tabular-nums text-blue-800 dark:text-blue-200">
             {eligibleIds.length} of {visibleIds.size} matching records selected across all pages
           </p>
-          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               onClick={toggleSelectAll}
               disabled={deleting || loading || visibleIds.size === 0}
-              className="min-h-16 min-w-0 break-words rounded-xl border px-3 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-11 min-w-0 break-words rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold leading-5 text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900 sm:min-w-64 sm:max-w-full"
             >
               {allSelected ? 'Deselect All' : `Select All ${visibleIds.size} Filtered Records`}
             </button>
-            {/* A non-interactive slot reserves space without a hidden focus target. */}
-            <div className="min-h-16 min-w-0">
-              {eligibleIds.length > 0 && !allSelected && (
-                <button
-                  onClick={() => changeSelection(new Set())}
-                  disabled={deleting || loading}
-                  className="h-full min-h-16 w-full break-words rounded-xl border px-3 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Clear Selection
-                </button>
-              )}
-            </div>
+            {eligibleIds.length > 0 && !allSelected && (
+              <button
+                onClick={() => changeSelection(new Set())}
+                disabled={deleting || loading}
+                className="min-h-11 min-w-0 break-words rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold leading-5 text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900"
+              >
+                Clear Selection
+              </button>
+            )}
             <button
               onClick={confirmBulkDelete}
               disabled={deleting || loading || eligibleIds.length === 0}
-              className="col-span-2 flex min-h-16 min-w-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1"
+              className="flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold leading-5 text-red-700 transition-colors hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900 dark:focus-visible:ring-red-400 dark:focus-visible:ring-offset-gray-900 sm:ml-auto"
             >
               <Trash2 size={18} aria-hidden="true" className="shrink-0" />
-              <span>Delete Selected ({eligibleIds.length})</span>
+              <span className="min-w-0 break-words tabular-nums">Delete Selected ({eligibleIds.length})</span>
             </button>
           </div>
         </div>
