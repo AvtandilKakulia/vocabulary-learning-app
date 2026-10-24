@@ -1,5 +1,6 @@
-import { StrictMode } from 'react';
+import { createElement, StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
+import type { LucideProps } from 'lucide-react';
 import { HISTORY_PAGE_SIZE_KEY } from '../lib/historyPreferences';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,17 @@ import type { TestHistory } from '../lib/supabase';
 import { beginHistoryDeletion } from '../lib/historyDeletion';
 import History from './History';
 import { allHistoryRows, findHistoryRow } from '../test/historyPagination';
+
+// SVG path geometry is decorative; keep real History rows, controls and icon
+// identities while avoiding thousands of unrelated SVG path mounts in jsdom.
+vi.mock('lucide-react', async importOriginal => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
+  const icon = (name: string) => (props: LucideProps) => createElement('svg', {
+    ...props, className: `lucide lucide-${name} ${props.className ?? ''}`,
+  });
+  return { ...actual, Trash2: icon('trash2'), Square: icon('square'),
+    CheckSquare: icon('square-check-big'), ChevronDown: icon('chevron-down'), ChevronUp: icon('chevron-up') };
+});
 
 function refreshAfterDeletion() {
   act(() => { const release = beginHistoryDeletion('user-a'); expect(release).not.toBeNull(); release!(); });
