@@ -20,6 +20,29 @@ function setup() {
 }
 
 describe('History summary interaction', () => {
+  it('keeps separators and ID-based highlights through adjacent selection, expansion and reordered records', () => {
+    const records = [historyRecord({ mistakes: [mistake] }), historyRecord({ id: 'second' }), historyRecord({ id: 'third' })];
+    const actions = { disabled: false, onSelect: vi.fn(), onDelete: vi.fn(), scoreEmoji: () => '🙂' };
+    const { container, rerender } = render(<HistoryRows records={records} selectedIds={new Set(['history-1', 'second'])} {...actions} />);
+    const row = (id: string) => container.querySelector(`[data-history-id="${id}"]`)!;
+    for (const id of ['history-1', 'second']) {
+      expect(row(id)).toHaveClass('border-b', 'border-slate-400/70', 'bg-blue-100', 'hover:bg-blue-200', 'dark:bg-blue-950/60');
+      expect(within(row(id) as HTMLElement).getByRole('button', { name: /^Select record/ })).toHaveAttribute('aria-pressed', 'true');
+    }
+    expect(row('third')).toHaveClass('odd:bg-white', 'even:bg-slate-50', 'hover:bg-blue-50');
+    fireEvent.click(within(row('history-1') as HTMLElement).getByRole('button', { name: 'Show mistakes' }));
+    expect(within(row('history-1') as HTMLElement).getByText('dog')).toBeInTheDocument();
+    rerender(<HistoryRows records={[records[2], records[1], records[0]]} selectedIds={new Set(records.map(record => record.id))} {...actions} />);
+    for (const record of records) expect(row(record.id)).toHaveClass('bg-blue-100', 'border-b', 'border-slate-400/70');
+    expect(within(row('history-1') as HTMLElement).getByText('dog')).toBeInTheDocument();
+    rerender(<HistoryRows records={records} selectedIds={new Set()} {...actions} />);
+    for (const record of records) {
+      expect(row(record.id)).not.toHaveClass('bg-blue-100');
+      expect(row(record.id)).toHaveClass('border-b', 'border-slate-400/70');
+    }
+    expect(actions.onDelete).not.toHaveBeenCalled();
+  });
+
   it('toggles by score and date and leaves expanded details independently clickable', async () => {
     const { rows, user } = setup();
     const row = within(rows[0]);

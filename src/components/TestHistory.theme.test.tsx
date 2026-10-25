@@ -127,7 +127,7 @@ describe('Test and History theme presentation', () => {
     expect(row).toHaveClass('dark:text-gray-100', 'dark:border-gray-700', 'dark:hover:bg-gray-700');
     fireEvent.click(screen.getByRole('button', { name: 'Show mistakes' }));
     const mistake = screen.getByText('cat').closest('.border');
-    expect(mistake).toHaveClass('bg-gray-50', 'border-red-200', 'dark:bg-gray-900', 'dark:border-red-900/60');
+    expect(mistake).toHaveClass('bg-slate-100', 'border-slate-300', 'break-words', 'dark:bg-gray-900', 'dark:border-red-900/60');
     expect(mistake).not.toHaveClass('dark:bg-red-950');
     expect(screen.getByText('Saved context').tagName).toBe('STRONG');
     expect(screen.getByText('Your answer:')).toHaveClass('font-bold', 'text-red-700', 'dark:text-red-300');
