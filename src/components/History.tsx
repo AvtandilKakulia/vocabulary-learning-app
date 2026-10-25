@@ -405,7 +405,7 @@ export default function History() {
     <div className="space-y-8 text-gray-900 dark:text-gray-100">
       {/* HEADER */}
       <div className="text-center mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent dark:from-blue-300 dark:to-purple-300">
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:bg-gradient-to-r dark:from-blue-300 dark:to-purple-300 dark:bg-clip-text dark:text-transparent">
           Test History & Statistics
         </h1>
         <p className="text-lg text-gray-600 dark:text-gray-400">
@@ -414,8 +414,8 @@ export default function History() {
       </div>
 
       {/* SELECTION, STATS AND FILTERS */}
-      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-xl p-6">
-        <div role="group" aria-label="History selection toolbar" className="mb-6 space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 dark:border-gray-700 dark:bg-gray-900/50 sm:p-4">
+      <div className="bg-white border border-slate-300 dark:border-gray-700 dark:bg-gray-800/80 dark:backdrop-blur-xl rounded-3xl shadow-sm dark:shadow-xl p-4 sm:p-6">
+        <div role="group" aria-label="History selection toolbar" className="mb-6 space-y-3 rounded-2xl border border-slate-300 bg-slate-50 p-3 dark:border-gray-700 dark:bg-gray-900/50 sm:p-4">
           <p aria-live="polite" className="break-words text-sm font-semibold leading-6 tabular-nums text-blue-800 dark:text-blue-200">
             {eligibleIds.length} of {visibleIds.size} matching records selected across all pages
           </p>
@@ -423,7 +423,7 @@ export default function History() {
             <button
               onClick={toggleSelectAll}
               disabled={deleting || loading || visibleIds.size === 0}
-              className="min-h-11 min-w-0 break-words rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold leading-5 text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900 sm:min-w-64 sm:max-w-full"
+              className="min-h-11 min-w-0 break-words rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold leading-5 text-slate-700 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900 sm:min-w-64 sm:max-w-full"
             >
               {allSelected ? 'Deselect All' : `Select All ${visibleIds.size} Filtered Records`}
             </button>
@@ -431,7 +431,7 @@ export default function History() {
               <button
                 onClick={() => changeSelection(new Set())}
                 disabled={deleting || loading}
-                className="min-h-11 min-w-0 break-words rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold leading-5 text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900"
+                className="min-h-11 min-w-0 break-words rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold leading-5 text-slate-700 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-200 dark:hover:bg-gray-700 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900"
               >
                 Clear Selection
               </button>
@@ -450,29 +450,29 @@ export default function History() {
         {/* STATS */}
         {!loading && !readError && totalTests > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="bg-white/80 dark:bg-gray-800/80 p-6 rounded-2xl shadow">
-              <div className="text-sm text-blue-600 dark:text-blue-400 mb-2">
+            <div className="bg-slate-50 border border-slate-200 dark:border-gray-700 dark:bg-gray-800/80 p-4 sm:p-6 rounded-2xl shadow-sm dark:shadow">
+              <div className="text-sm font-semibold text-slate-600 dark:text-blue-400 mb-2">
                 Total Tests
               </div>
-              <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent dark:from-blue-300 dark:to-purple-300">
+              <div className="text-4xl font-bold text-slate-900 dark:bg-gradient-to-r dark:from-blue-300 dark:to-purple-300 dark:bg-clip-text dark:text-transparent">
                 {totalTests}
               </div>
             </div>
 
-            <div className="bg-white/80 dark:bg-gray-800/80 p-6 rounded-2xl shadow">
-              <div className="text-sm text-green-700 dark:text-green-400 mb-2">
+            <div className="bg-slate-50 border border-slate-200 dark:border-gray-700 dark:bg-gray-800/80 p-4 sm:p-6 rounded-2xl shadow-sm dark:shadow">
+              <div className="text-sm font-semibold text-slate-600 dark:text-green-400 mb-2">
                 Average Score
               </div>
-              <div className="text-4xl font-bold flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent dark:from-green-300 dark:to-emerald-300">
+              <div className="text-4xl font-bold flex flex-wrap items-center gap-3 text-slate-900 dark:bg-gradient-to-r dark:from-green-300 dark:to-emerald-300 dark:bg-clip-text dark:text-transparent">
                 {avgScore}% {getScoreEmoji(avgScore)}
               </div>
             </div>
 
-            <div className="bg-white/80 dark:bg-gray-800/80 p-6 rounded-2xl shadow">
-              <div className="text-sm text-purple-600 dark:text-purple-400 mb-2">
+            <div className="bg-slate-50 border border-slate-200 dark:border-gray-700 dark:bg-gray-800/80 p-4 sm:p-6 rounded-2xl shadow-sm dark:shadow">
+              <div className="text-sm font-semibold text-slate-600 dark:text-purple-400 mb-2">
                 Total Questions
               </div>
-              <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent dark:from-purple-300 dark:to-pink-300">
+              <div className="text-4xl font-bold text-slate-900 dark:bg-gradient-to-r dark:from-purple-300 dark:to-pink-300 dark:bg-clip-text dark:text-transparent">
                 {filteredHistory.reduce((s, r) => s + r.total_words, 0)}
               </div>
             </div>
@@ -480,7 +480,7 @@ export default function History() {
         )}
 
         {/* FILTERS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6 bg-white/80 dark:bg-gray-800/80 rounded-2xl shadow">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-4 sm:p-6 bg-slate-50 border border-slate-200 dark:border-gray-700 dark:bg-gray-800/80 rounded-2xl">
           <div>
             <label className="block text-sm font-semibold mb-2">Direction</label>
             <div className="relative">
@@ -493,7 +493,7 @@ export default function History() {
                 setFilterDirection(e.target.value as any);
                 setPage(0);
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-slate-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="en-to-geo">English → Georgian</option>
@@ -517,7 +517,7 @@ export default function History() {
                 setFilterScore(e.target.value as any);
                 setPage(0);
               }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-slate-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="all">All</option>
               <option value="high">High (80–100%)</option>
@@ -537,7 +537,7 @@ export default function History() {
               value={sortBy}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortBy(e.target.value as any); setPage(0); } }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-slate-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="date">Date</option>
               <option value="score">Score</option>
@@ -555,7 +555,7 @@ export default function History() {
               value={sortOrder}
               disabled={deleting}
               onChange={(e) => { if (!getHistoryDeletionState(userId).busy) { setSortOrder(e.target.value as any); setPage(0); } }}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 history-filter-select w-full appearance-none pl-4 pr-12 py-3 rounded-xl border border-slate-300 bg-white text-gray-900 dark:border-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <option value="desc">Newest First</option>
               <option value="asc">Oldest First</option>
@@ -593,14 +593,14 @@ export default function History() {
         <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
           Records per page
           <select value={pageSize} onChange={event => changePageSize(event.target.value)} disabled={deleting}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700">
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed border-slate-300 dark:border-gray-500 hover:bg-slate-50 dark:hover:bg-gray-700">
             {HISTORY_PAGE_SIZES.map(size => <option key={size} value={size}>{size} records</option>)}
           </select>
         </label>
       </section>
       {!loading && !readError && totalPages > 1 && <HistoryPagination position="top" page={currentPage}
         totalPages={totalPages} disabled={deleting} onPageChange={changePage} />}
-      <div className="bg-white/80 dark:bg-gray-800/80 rounded-3xl shadow-xl overflow-hidden">
+      <div className="bg-white border border-slate-300 dark:border-gray-700 dark:bg-gray-800/80 rounded-3xl shadow-sm dark:shadow-xl overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">Loading...</div>
         ) : readError ? (
@@ -611,7 +611,7 @@ export default function History() {
             </button>
           </div>
         ) : filteredHistory.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 dark:text-gray-400">
+          <div className="p-12 text-center text-slate-600 dark:text-gray-400">
             No results found.
           </div>
         ) : (
@@ -627,7 +627,7 @@ export default function History() {
       {/* DELETE MODAL */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md dark:bg-gray-800">
+          <div className="bg-white border border-slate-300 rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-md dark:bg-gray-800 dark:border-gray-700">
             <div className="text-center mb-6">
               <div className="w-20 h-20 mx-auto bg-red-700 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg">
                 <svg width="32" height="32" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -650,7 +650,7 @@ export default function History() {
               <button
                 onClick={() => setShowDeleteModal(null)}
                 disabled={deleting}
-                className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-6 py-3 border rounded-xl border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 flex-1 px-6 py-3 border rounded-xl border-slate-300 dark:border-gray-500 hover:bg-slate-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -671,7 +671,7 @@ export default function History() {
       {bulkConfirmation && (
         <div role="alertdialog" aria-modal="true" aria-labelledby="bulk-delete-title"
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md dark:bg-gray-800">
+          <div className="bg-white border border-slate-300 rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-md dark:bg-gray-800 dark:border-gray-700">
             <div className="text-center mb-6">
               <div className="w-20 h-20 mx-auto bg-red-700 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg">
                 <svg width="32" height="32" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -703,7 +703,7 @@ export default function History() {
               <button
                 onClick={closeBulkConfirmation}
                 disabled={deleting}
-                className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 px-6 py-3 border rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 px-6 py-3 border rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 border-slate-300 dark:border-gray-500 hover:bg-slate-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>

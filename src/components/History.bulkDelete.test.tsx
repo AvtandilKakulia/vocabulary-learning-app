@@ -81,7 +81,7 @@ const ready = () => waitFor(() => expect(document.body.textContent).not.toContai
 const selectAll = () => fireEvent.click(toolbar().getByRole('button', { name: /^Select All \d+ Filtered Records$/ }));
 const openConfirmation = (count: number) => fireEvent.click(toolbar().getByRole('button', { name: `Delete Selected (${count})` }));
 const confirm = (count: number) => fireEvent.click(dialog().getByRole('button', { name: `Delete ${count} Record${count === 1 ? '' : 's'}` }));
-const renderedDates = () => Array.from(document.querySelectorAll('.border-b .text-gray-500'), element => element.textContent);
+const renderedDates = () => Array.from(document.querySelectorAll('.border-b .text-slate-600'), element => element.textContent);
 function handler(button: HTMLElement) {
   const key = Object.keys(button).find(key => key.startsWith('__reactProps$'))!;
   return (Reflect.get(button, key) as { onClick: () => void }).onClick;
