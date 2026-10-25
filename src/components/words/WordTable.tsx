@@ -54,15 +54,17 @@ export default function WordTable({
     englishWord ? englishWord[0].toUpperCase() + englishWord.slice(1) : "";
 
   return (
-    <div className="bg-white/90 dark:bg-gray-900/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 overflow-hidden transition-all duration-300">
+    <div className="bg-white dark:bg-gray-900/70 dark:backdrop-blur-xl rounded-3xl shadow-sm dark:shadow-2xl border border-slate-200 dark:border-gray-800/80 overflow-hidden transition-all duration-300">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-          <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600">
+        <table className="min-w-full divide-y divide-slate-300 dark:divide-gray-800">
+          <thead className="bg-slate-100 dark:bg-gradient-to-r dark:from-gray-700 dark:to-gray-600">
             <tr>
               <th className="px-4 py-4 text-left w-12">
                 <button
                   onClick={onToggleSelectAll}
-                  className={`p-2 rounded-xl border transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${
+                  aria-label={allSelected ? "Deselect all words on this page" : "Select all words on this page"}
+                  aria-pressed={allSelected}
+                  className={`p-2 rounded-xl border transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900 ${
                     allSelected
                       ? "text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-700 bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-800 shadow-inner"
                       : "text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 bg-slate-50/80 dark:bg-gray-800/60 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/70 dark:hover:bg-gray-700/60"
@@ -93,7 +95,7 @@ export default function WordTable({
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700 backdrop-blur-sm">
+          <tbody className="bg-white dark:bg-gray-800/50 divide-y divide-slate-200 dark:divide-gray-700 dark:backdrop-blur-sm">
             {loading ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center">
@@ -145,7 +147,12 @@ export default function WordTable({
               words.map((word) => (
                 <tr
                   key={word.id}
-                  className="hover:bg-blue-50/50 dark:hover:bg-gray-800/60 transition-colors border-b border-gray-200 dark:border-gray-700"
+                  aria-selected={selectedIds.has(word.id)}
+                  className={`transition-colors border-b border-slate-200 dark:border-gray-700 dark:bg-transparent dark:hover:bg-gray-800/60 ${
+                    selectedIds.has(word.id)
+                      ? "bg-blue-100 hover:bg-blue-200"
+                      : "odd:bg-white even:bg-slate-50 hover:bg-blue-50"
+                  }`}
                   onClick={() => onView(word)}
                 >
                   <td className="px-4 py-4">
@@ -154,7 +161,9 @@ export default function WordTable({
                         e.stopPropagation();
                         onToggleSelect(word.id);
                       }}
-                      className={`p-2 rounded-xl border transition-all duration-200 ${
+                      aria-label={`${selectedIds.has(word.id) ? "Deselect" : "Select"} ${word.english_word}`}
+                      aria-pressed={selectedIds.has(word.id)}
+                      className={`p-2 rounded-xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900 ${
                         selectedIds.has(word.id)
                           ? "text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-700 bg-gradient-to-br from-white to-blue-50 dark:from-gray-800 dark:to-gray-800 shadow-inner"
                           : "text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 bg-slate-50/80 dark:bg-gray-800/60 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/70 dark:hover:bg-gray-700/60"
@@ -180,6 +189,8 @@ export default function WordTable({
                           word.part_of_speech !== "unspecified" && (
                             <span
                               className={`inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm ${
+                                partOfSpeechStyles[word.part_of_speech] ? "!text-gray-950" : ""
+                              } ${
                                 partOfSpeechStyles[word.part_of_speech] ||
                                 partOfSpeechStyles.unspecified
                               }`}
@@ -208,7 +219,7 @@ export default function WordTable({
                           </div>
                         )}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                    <div className="text-xs text-slate-600 dark:text-gray-400 hidden sm:block">
                       {formatRelativeDate(word.created_at)}
                     </div>
                   </td>
@@ -244,7 +255,7 @@ export default function WordTable({
                           e.stopPropagation();
                           onEdit(word);
                         }}
-                        className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50/80 dark:hover:bg-gray-700/60 transition-all duration-200"
+                        className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50/80 dark:hover:bg-gray-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900 transition-all duration-200"
                         aria-label="Edit"
                       >
                         <Edit2 size={18} />
@@ -254,7 +265,7 @@ export default function WordTable({
                           e.stopPropagation();
                           onDelete(word);
                         }}
-                        className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-red-500 dark:text-red-400 hover:bg-red-50/80 dark:hover:bg-gray-700/60 transition-all duration-200"
+                        className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-gray-200 dark:border-gray-700 text-red-600 dark:text-red-400 hover:bg-red-50/80 dark:hover:bg-gray-700/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-900 transition-all duration-200"
                         aria-label="Delete"
                       >
                         <Trash2 size={18} />

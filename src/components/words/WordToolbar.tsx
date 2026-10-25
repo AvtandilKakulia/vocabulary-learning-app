@@ -114,7 +114,7 @@ export default function WordToolbar({
   }, [sortMenuOpen]);
 
   return (
-    <div className="relative bg-white/90 dark:bg-gray-900/70 rounded-3xl shadow-2xl border border-slate-100/60 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
+    <div className="relative bg-slate-50 dark:bg-gray-900/70 rounded-3xl shadow-sm dark:shadow-2xl border border-slate-200 dark:border-gray-800/80 p-6 transition-all duration-300 space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-white shadow-lg">
@@ -128,7 +128,7 @@ export default function WordToolbar({
 
         <div className="relative z-30 flex flex-wrap gap-3 justify-end items-center">
           {someSelected && (
-            <div className="flex flex-wrap items-center content-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm h-12">
+            <div className="flex flex-wrap items-center content-center gap-2 rounded-2xl border border-rose-100/80 dark:border-rose-900/50 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-900/20 dark:to-amber-900/20 px-3 py-2 text-rose-700 dark:text-rose-200 shadow-sm min-h-12">
               <span className="text-sm font-semibold">
                 {selectedCount} selected (this page)
               </span>
@@ -182,24 +182,24 @@ export default function WordToolbar({
               setPage(0);
             }}
             placeholder="Search English or Georgian words..."
-            className="w-full h-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-12 pr-12 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+            className="w-full h-full rounded-2xl border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800/70 pl-12 pr-12 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm dark:shadow-inner focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
           />
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
+          <div className="flex items-center h-12 gap-3 rounded-2xl border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800/70 dark:backdrop-blur-sm pl-3 pr-[0.2rem] shadow-sm dark:shadow-inner">
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               Sort
             </span>
             <div
               ref={sortMenuRef}
-              className={`relative flex-1 flex justify-end ${
+              className={`relative min-w-0 flex-1 flex justify-end ${
                 sortMenuOpen ? "z-[90]" : ""
               }`}
             >
               <button
                 type="button"
                 onClick={() => setSortMenuOpen((open) => !open)}
-                className={`inline-flex items-center justify-between w-full sm:w-48 min-w-[11rem] h-10 px-3 rounded-xl border border-gray-200/90 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm outline-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
+                className={`inline-flex items-center justify-between w-full sm:w-48 min-w-0 sm:min-w-[11rem] h-10 px-3 rounded-xl border border-gray-200/90 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm outline-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
                   sortMenuOpen ? "border-blue-500 ring-2 ring-blue-500/30" : ""
                 }`}
               >
@@ -249,20 +249,20 @@ export default function WordToolbar({
               )}
             </div>
           </div>
-          <div className="flex items-center h-12 gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/70 backdrop-blur-sm pl-3 pr-[0.2rem] shadow-inner">
+          <div className="flex items-center h-12 gap-3 rounded-2xl border border-slate-300 dark:border-gray-700 bg-white dark:bg-gray-800/70 dark:backdrop-blur-sm pl-3 pr-[0.2rem] shadow-sm dark:shadow-inner">
             <span className="whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">
               Page size
             </span>
             <div
               ref={pageSizeMenuRef}
-              className={`relative flex-1 flex justify-end ${
+              className={`relative min-w-0 flex-1 flex justify-end ${
                 pageSizeMenuOpen ? "z-[90]" : ""
               }`}
             >
               <button
                 type="button"
                 onClick={() => setPageSizeMenuOpen((open) => !open)}
-                className={`inline-flex items-center justify-between w-full sm:w-48 min-w-[11rem] h-10 px-3 rounded-xl border border-gray-200/90 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm outline-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
+                className={`inline-flex items-center justify-between w-full sm:w-48 min-w-0 sm:min-w-[11rem] h-10 px-3 rounded-xl border border-gray-200/90 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 text-sm font-semibold text-gray-900 dark:text-gray-100 shadow-sm outline-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-150 ${
                   pageSizeMenuOpen
                     ? "border-blue-500 ring-2 ring-blue-500/30"
                     : ""
