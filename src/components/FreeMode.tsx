@@ -1162,7 +1162,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                           ? `Form ${idx + 1}`
                           : "Type your answer..."
                       }
-                      className={`flex-1 px-6 py-4 text-lg border-2 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-4 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400 ${statusClasses}`}
+                      className={`flex-1 px-6 py-4 text-lg border-2 rounded-2xl bg-white/50 dark:bg-gray-700/50 focus:ring-4 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400 ${statusClasses}`}
                     />
                     {direction === "en-to-geo" &&
                       (idx === answerInputs.length - 1 ? (

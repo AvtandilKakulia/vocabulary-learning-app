@@ -233,6 +233,10 @@ describe('Practice ordering preserves the session', () => {
       expect(currentInputs).toHaveLength(inputs.length);
       inputs.forEach((input, index) => {
         expect(currentInputs[index]).toBe(input);
+        // Structural mitigation guard; jsdom cannot verify Chromium's painted pixels.
+        expect(input.className).not.toMatch(/\bbackdrop-/);
+        expect(input).toHaveClass('bg-white/50', 'dark:bg-gray-700/50',
+          'text-gray-900', 'dark:text-gray-100', 'focus:ring-4');
         expect(input).toHaveValue(drafts[index]);
         expect(input).not.toHaveFocus();
         expect(input.selectionStart).toBe(2);
