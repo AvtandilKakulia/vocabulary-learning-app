@@ -118,10 +118,23 @@ function AccountTestMode({ userId }: { userId: string }) {
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const mounted = useRef(true);
   const starting = useRef(false);
+  const enterDown = useRef(false);
   const beginVocabularyRead = useLatestRequest(userId);
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    const releaseEnter = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') enterDown.current = false;
+    };
+    const clearHeldKey = () => { enterDown.current = false; };
+    // A release can target another control. Only observe it globally; submission
+    // keydowns are handled on the answer controls, never on dialogs/navigation.
+    window.addEventListener('keyup', releaseEnter, true);
+    window.addEventListener('blur', clearHeldKey);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener('keyup', releaseEnter, true);
+      window.removeEventListener('blur', clearHeldKey);
+    };
   }, []);
   // Ref guards take effect immediately, before React can render disabled buttons.
   const testSessionRef = useRef<TestSession | null>(restored
@@ -129,6 +142,7 @@ function AccountTestMode({ userId }: { userId: string }) {
       hasPersistedCopy: recovery.pendingCopyIds.has(restored.id), hasActiveCopy: recovery.activeCopyIds.has(restored.id),
       hasCompletedCheckpoint: recovery.completedCopyIds.has(restored.id) }
     : active ? { userId, active, result: null, saveStatus: 'idle', hasPersistedCopy: false, hasActiveCopy: true, hasCompletedCheckpoint: false } : null);
+  const renderedSessionId = testSessionRef.current?.active?.id;
 
   function saveActiveProgress(next: ActiveTestSession) {
     if (recoveryStore.state(userId) === 'retired') return;
@@ -250,14 +264,28 @@ function AccountTestMode({ userId }: { userId: string }) {
     }
   }
 
+  function handleAnswerKeyDown(event: React.KeyboardEvent<HTMLInputElement | HTMLButtonElement>) {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (event.repeat || enterDown.current) {
+      event.preventDefault(); // Also cancel repeated native submit-button clicks.
+      return;
+    }
+    enterDown.current = true;
+    // Keep the button's native Enter click; do not submit from both handlers.
+    if (event.currentTarget instanceof HTMLButtonElement) return;
+    event.preventDefault();
+    if (event.currentTarget.type !== 'radio' || event.currentTarget.checked) submitAnswer();
+  }
+
   function submitAnswer() {
-    if (recoveryStore.state(userId) === 'retired') return;
+    if (!mounted.current || recoveryStore.state(userId) === 'retired') return;
     const session = testSessionRef.current;
     if (!session?.active || !testWords[currentQuestion] || session.result || showRestartConfirm ||
-      session.active.currentQuestion !== currentQuestion) return;
+      session.active.id !== renderedSessionId || session.active.currentQuestion !== currentQuestion) return;
 
     const currentWord = session.active.questions[currentQuestion];
     const answer = session.active.draftAnswer;
+    if (!answer.trim() || (session.active.inputType === 'multiple' && !currentWord.options.includes(answer))) return;
 
     // Update the current word with user answer and correctness
     const updatedWords = [...session.active.questions];
@@ -637,17 +665,13 @@ function AccountTestMode({ userId }: { userId: string }) {
                 value={userAnswer}
                 onChange={(e) => changeAnswer(e.target.value)}
                 disabled={showRestartConfirm}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && userAnswer.trim()) {
-                    submitAnswer();
-                  }
-                }}
+                onKeyDown={handleAnswerKeyDown}
                 placeholder="Type your answer..."
                 className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-4 py-3 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"
                 autoFocus
               />
             ) : (
-              <div className="space-y-3">
+              <div role="radiogroup" aria-label="Answer choices" aria-describedby="test-choice-hint" className="space-y-3">
                 {multipleChoiceOptions.map((option, idx) => (
                   <label key={idx} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors dark:border-gray-600 dark:hover:bg-gray-700">
                     <input
@@ -656,17 +680,22 @@ function AccountTestMode({ userId }: { userId: string }) {
                       value={option}
                       checked={userAnswer === option}
                       onChange={(e) => changeAnswer(e.target.value)}
+                      onKeyDown={handleAnswerKeyDown}
                       disabled={showRestartConfirm}
                       className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-4 h-4 text-blue-600 focus:ring-blue-500 dark:text-blue-300"
                     />
                     <span className="text-lg">{option}</span>
                   </label>
                 ))}
+                <p id="test-choice-hint" className="text-sm text-gray-600 dark:text-gray-300">
+                  Select an answer, then press Enter to confirm.
+                </p>
               </div>
             )}
 
             <button
               onClick={submitAnswer}
+              onKeyDown={handleAnswerKeyDown}
               disabled={!userAnswer.trim() || showRestartConfirm}
               className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-gray-800 w-full px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors ${
                 currentQuestion >= testWords.length - 1

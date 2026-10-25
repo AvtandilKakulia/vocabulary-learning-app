@@ -634,7 +634,8 @@ describe('TestMode save lifecycle', () => {
     await start([word()]);
     const input = screen.getByPlaceholderText('Type your answer...');
     fireEvent.change(input, { target: { value: 'wrong' } });
-    fireEvent.keyPress(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    fireEvent.keyUp(input, { key: 'Enter', code: 'Enter' });
     await screen.findByText('Result saved to History successfully.');
     expect(debug).not.toHaveBeenCalled();
   });
