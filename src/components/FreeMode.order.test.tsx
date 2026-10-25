@@ -202,6 +202,50 @@ describe('Practice ordering preserves the session', () => {
     expect(stored().queueIds[0]).toBe('a');
   });
 
+  it.each(['single', 'multiple', 'irregular'] as const)('preserves blurred %s inputs, caret and element identity without focusing or rescoring on order changes', async kind => {
+    const direction = kind === 'multiple' ? 'en-to-geo' : 'geo-to-en';
+    seed({ direction, orderMode: 'random', queueIds: ['a', 'd', 'c', 'b'] });
+    if (kind === 'irregular') {
+      supabaseMock.from.mockReturnValue(query({ data: [word({ id: 'a', english_word: 'go',
+        georgian_definitions: ['წასვლა'], is_irregular_verb: true, past_simple: 'went', past_participle: 'gone' }),
+      ...vocabulary.slice(1)], error: null }));
+    }
+    const view = render(<StrictMode><FreeMode /></StrictMode>);
+    await screen.findAllByRole('textbox');
+    if (kind === 'multiple') await userEvent.click(screen.getByRole('button', { name: 'Add another answer' }));
+    const inputs = screen.getAllByRole('textbox') as HTMLInputElement[];
+    expect(inputs).toHaveLength(kind === 'irregular' ? 3 : kind === 'multiple' ? 2 : 1);
+    const drafts = inputs.map((_, index) => `unfinished answer ${index}`);
+    inputs.forEach((input, index) => {
+      fireEvent.change(input, { target: { value: drafts[index] } });
+      input.setSelectionRange(2, 7);
+    });
+    inputs[0].focus();
+    const before = stored();
+    const reads = supabaseMock.from.mock.calls.length;
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    for (const mode of ['In database order', 'Random', 'In database order'] as const) {
+      const control = screen.getByRole('button', { name: mode });
+      await userEvent.click(control); // Real blur; the order control keeps focus.
+      view.rerender(<StrictMode><FreeMode /></StrictMode>);
+      expect(control).toHaveFocus();
+      const currentInputs = screen.getAllByRole('textbox');
+      expect(currentInputs).toHaveLength(inputs.length);
+      inputs.forEach((input, index) => {
+        expect(currentInputs[index]).toBe(input);
+        expect(input).toHaveValue(drafts[index]);
+        expect(input).not.toHaveFocus();
+        expect(input.selectionStart).toBe(2);
+        expect(input.selectionEnd).toBe(7);
+        expect(input.readOnly).toBe(false);
+      });
+      expect(stored()).toEqual({ ...before, orderMode: mode === 'Random' ? 'random' : 'db-order',
+        queueIds: mode === 'Random' ? ['a', 'c', 'd', 'b'] : ['a', 'b', 'c', 'd'] });
+      expect(screen.getByRole('status')).toHaveTextContent('The new order takes effect from the next word.');
+    }
+    expect(supabaseMock.from).toHaveBeenCalledTimes(reads);
+  });
+
   it.each([true, false])('keeps irregular-verb inputs and feedback (correct=%s)', async correct => {
     const irregular = word({ id: 'a', english_word: 'go', georgian_definitions: ['წასვლა'],
       is_irregular_verb: true, past_simple: 'went', past_participle: 'gone' });
