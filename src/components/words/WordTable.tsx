@@ -95,7 +95,7 @@ export default function WordTable({
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-gray-800/50 divide-y divide-slate-200 dark:divide-gray-700 dark:backdrop-blur-sm">
+          <tbody className="bg-white dark:bg-gray-800/50 [&>tr>td]:border-b [&>tr>td]:border-slate-400/70 [&>tr:last-child:not(:first-child)>td]:border-b-0 [&>tr>td[colspan]]:border-b-0 dark:[&>tr>td]:border-gray-700 dark:backdrop-blur-sm">
             {loading ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center">
@@ -148,7 +148,7 @@ export default function WordTable({
                 <tr
                   key={word.id}
                   aria-selected={selectedIds.has(word.id)}
-                  className={`transition-colors border-b border-slate-200 dark:border-gray-700 dark:bg-transparent dark:hover:bg-gray-800/60 ${
+                  className={`transition-colors dark:bg-transparent dark:hover:bg-gray-800/60 ${
                     selectedIds.has(word.id)
                       ? "bg-blue-100 hover:bg-blue-200"
                       : "odd:bg-white even:bg-slate-50 hover:bg-blue-50"

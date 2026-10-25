@@ -78,13 +78,13 @@ export default function ViewWordModal({
         onClick={onClose}
       >
         <div
-          className="relative bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-8"
+          className="relative bg-white dark:bg-gray-800/95 dark:backdrop-blur-sm rounded-3xl shadow-2xl border border-slate-200 dark:border-gray-700/20 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-8"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-4 flex-none">
-            <div className="space-y-3 flex-1">
-              <div className="flex items-start gap-3">
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent leading-snug">
+            <div className="space-y-3 min-w-0 flex-1">
+              <div className="flex flex-wrap items-start gap-3">
+                <h2 className="max-w-full break-words text-3xl font-bold text-slate-900 dark:bg-gradient-to-r dark:from-blue-600 dark:to-purple-600 dark:bg-clip-text dark:text-transparent leading-snug">
                   {formatEnglishWord(word.english_word)}
                 </h2>
 
@@ -113,15 +113,15 @@ export default function ViewWordModal({
             <button
               onClick={onClose}
               aria-label="Close"
-              className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 border border-white/40 dark:border-gray-700/60 shadow-md transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl bg-white/80 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 border border-white/40 dark:border-gray-700/60 shadow-md transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:focus-visible:ring-blue-400 dark:focus-visible:ring-offset-gray-800"
             >
               <X size={18} />
             </button>
           </div>
 
-          <div className="mt-6 space-y-6 flex-none">
+          <div className="mt-6 space-y-6 min-h-0 flex flex-col">
             <div className="space-y-3 flex-none">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-gray-400">
                 Georgian Definitions
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -137,12 +137,14 @@ export default function ViewWordModal({
             </div>
 
             {word.description && (
-              <div className="space-y-3 flex-none">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
+              <div className="space-y-3 min-h-0 flex flex-col">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-gray-400">
                   Description
                 </h3>
                 <div
-                  className="rounded-2xl border border-gray-200 dark:border-gray-600 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-700/40 dark:to-blue-900/30 p-5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words max-h-[calc(85vh-290px)] overflow-y-auto modal-scrollbar"
+                  role="region"
+                  aria-label="Word description"
+                  className="min-h-0 rounded-2xl border border-slate-300 dark:border-gray-600 bg-slate-100 dark:bg-transparent dark:bg-gradient-to-r dark:from-gray-700/40 dark:to-blue-900/30 p-5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words max-h-[calc(85vh-290px)] overflow-y-auto modal-scrollbar"
                   dangerouslySetInnerHTML={{
                     __html: sanitizeDescription(word.description),
                   }}

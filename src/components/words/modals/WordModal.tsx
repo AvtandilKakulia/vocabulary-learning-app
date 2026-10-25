@@ -343,8 +343,8 @@ export default function WordModal({
     <ModalPortal>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
         <div
-          className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm
-      rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/20
+          className="bg-white dark:bg-gray-800/95 dark:backdrop-blur-sm
+      rounded-3xl shadow-2xl border border-slate-200 dark:border-gray-700/20
       w-full max-w-lg relative transition-all duration-300"
         >
           <div
@@ -385,7 +385,7 @@ export default function WordModal({
                       type="text"
                       value={englishWord}
                       onChange={(e) => setEnglishWord(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                      className="w-full px-4 py-3 border-2 border-slate-300 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                       placeholder="Enter the English word"
                       required
                     />
@@ -471,7 +471,7 @@ export default function WordModal({
                           type="text"
                           value={pastSimple}
                           onChange={(e) => setPastSimple(e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                          className="w-full px-4 py-3 border-2 border-slate-300 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                           placeholder="Enter past simple form"
                           required={partOfSpeech === "verb" && isIrregularVerb}
                         />
@@ -484,7 +484,7 @@ export default function WordModal({
                           type="text"
                           value={pastParticiple}
                           onChange={(e) => setPastParticiple(e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                          className="w-full px-4 py-3 border-2 border-slate-300 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                           placeholder="Enter past participle form"
                           required={partOfSpeech === "verb" && isIrregularVerb}
                         />
@@ -507,7 +507,7 @@ export default function WordModal({
                               newDefs[idx] = e.target.value;
                               setGeorgianDefs(newDefs);
                             }}
-                            className="min-w-0 flex-1 px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                            className="min-w-0 flex-1 px-4 py-3 border-2 border-slate-300 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                             placeholder={`Definition ${idx + 1}`}
                             required
                           />
@@ -545,7 +545,7 @@ export default function WordModal({
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                       Description
-                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-gray-400">
                         <Bold size={14} />
                         <span>Rich text</span>
                       </span>
@@ -554,7 +554,7 @@ export default function WordModal({
                       <button
                         type="button"
                         onClick={() => handleFormatting("bold")}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 dark:border-gray-600 bg-white dark:bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 transition"
                       >
                         <Bold size={16} />
                         Bold
@@ -563,7 +563,7 @@ export default function WordModal({
                         <button
                           type="button"
                           onClick={() => setShowColorPicker((open) => !open)}
-                          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-300 dark:border-gray-600 bg-white dark:bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 transition"
                         >
                           <Palette size={16} />
                           Color
@@ -593,7 +593,7 @@ export default function WordModal({
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => handleStudyMask("mask")}
                         aria-describedby="study-mask-help"
-                        className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50"
+                        className="px-3 py-2 rounded-xl border border-slate-300 dark:border-gray-600 bg-white dark:bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50"
                       >
                         Mask for Study
                       </button>
@@ -602,7 +602,7 @@ export default function WordModal({
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => handleStudyMask("unmask")}
                         aria-describedby="study-mask-help"
-                        className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50"
+                        className="px-3 py-2 rounded-xl border border-slate-300 dark:border-gray-600 bg-white dark:bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50"
                       >
                         Remove Study Mask
                       </button>
@@ -622,18 +622,18 @@ export default function WordModal({
                         setDescription(e.target.value);
                       }}
                       rows={4}
-                      className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                      className="w-full px-4 py-3 border-2 border-slate-300 dark:border-gray-600 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                       placeholder="Add additional context or example sentences..."
                     />
                     {description && (
-                      <div className="mt-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50/60 dark:bg-gray-800/60">
-                        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                      <div className="mt-3 p-3 border border-slate-300 dark:border-gray-700 rounded-xl bg-slate-100 dark:bg-gray-800/60">
+                        <div className="text-xs font-semibold text-slate-600 dark:text-gray-400 mb-1">
                           Preview
                         </div>
                         <div
                           role="region"
                           aria-label="Description preview"
-                          className="prose prose-sm dark:prose-invert max-w-none dark:text-gray-200 select-text [&_[data-study-mask=true]]:underline [&_[data-study-mask=true]]:decoration-dotted [&_[data-study-mask=true]]:underline-offset-4"
+                          className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-gray-200 select-text [&_[data-study-mask=true]]:underline [&_[data-study-mask=true]]:decoration-dotted [&_[data-study-mask=true]]:underline-offset-4"
                           dangerouslySetInnerHTML={{
                             __html: sanitizeDescription(description),
                           }}

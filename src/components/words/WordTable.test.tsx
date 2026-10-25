@@ -27,8 +27,9 @@ describe('Words table visual hierarchy', () => {
     render(<WordTable {...props()} />);
     expect(screen.getByRole('table').parentElement!.parentElement).toHaveClass('bg-white', 'shadow-sm', 'dark:shadow-2xl');
     expect(screen.getByRole('table').querySelector('thead')).toHaveClass('bg-slate-100', 'dark:bg-gradient-to-r');
+    expect(screen.getByRole('table').querySelector('tbody')).toHaveClass('[&>tr>td]:border-b', '[&>tr>td]:border-slate-400/70', '[&>tr:last-child:not(:first-child)>td]:border-b-0', 'dark:[&>tr>td]:border-gray-700');
     for (const row of rows()) {
-      expect(row).toHaveClass('odd:bg-white', 'even:bg-slate-50', 'hover:bg-blue-50', 'border-slate-200', 'dark:bg-transparent', 'dark:hover:bg-gray-800/60');
+      expect(row).toHaveClass('odd:bg-white', 'even:bg-slate-50', 'hover:bg-blue-50', 'dark:bg-transparent', 'dark:hover:bg-gray-800/60');
       expect(row).toHaveAttribute('aria-selected', 'false');
       expect(row).not.toHaveClass('bg-blue-100');
     }
@@ -59,6 +60,26 @@ describe('Words table visual hierarchy', () => {
     assertSelection(-1); // Selection does not move to an unrelated replacement row.
     view.rerender(<WordTable {...props({ words: [words[1]], selectedIds })} />);
     assertSelection(0);
+  });
+
+  it.each([
+    ['two adjacent', ['sense-a', 'sense-b']],
+    ['three adjacent', ['sense-a', 'sense-b', 'go']],
+    ['all visible', ['sense-a', 'sense-b', 'go', 'four', 'five']],
+    ['alternating', ['sense-a', 'go', 'five']],
+  ] as const)('keeps cell separators independent of %s selection and row hover backgrounds', (_label, ids) => {
+    const visible = [...words, word({ id: 'four' }), word({ id: 'five' })];
+    const selectedIds = new Set<string>(ids);
+    render(<WordTable {...props({ words: visible, selectedIds, allSelected: ids.length === visible.length })} />);
+    const body = screen.getByRole('table').querySelector('tbody')!;
+    expect(body).toHaveClass('[&>tr>td]:border-b', '[&>tr>td]:border-slate-400/70', '[&>tr:last-child:not(:first-child)>td]:border-b-0', 'dark:[&>tr>td]:border-gray-700');
+    rows().forEach((row, i) => {
+      expect(row.cells).toHaveLength(5);
+      expect(row).not.toHaveClass('border-b');
+      const selected = selectedIds.has(visible[i].id);
+      expect(row).toHaveAttribute('aria-selected', String(selected));
+      expect(row).toHaveClass(selected ? 'hover:bg-blue-200' : 'hover:bg-blue-50');
+    });
   });
 
   it('supports keyboard selection, full-page selection and deselection without opening details', async () => {
@@ -117,6 +138,7 @@ describe('Words table visual hierarchy', () => {
     expect(screen.queryByRole('button', { name: 'Deselect yield' })).not.toBeInTheDocument();
     expect(rows()).toHaveLength(1);
     expect(rows()[0]).not.toHaveClass('bg-blue-100');
+    expect(rows()[0].parentElement).toHaveClass('[&>tr>td[colspan]]:border-b-0');
     if (state === 'loading') expect(screen.getByText('Loading words...')).toBeInTheDocument();
     if (state === 'empty') expect(screen.getByText('No words yet')).toBeInTheDocument();
     if (state === 'error') {
