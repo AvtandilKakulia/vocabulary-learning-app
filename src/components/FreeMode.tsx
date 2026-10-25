@@ -57,8 +57,9 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
   const [words, setWords] = useState<Word[]>([]);
   const [reconciledWords, setReconciledWords] = useState<Word[] | null>(null);
   const [wordQueue, setWordQueue] = useState<string[]>([]);
-  const [direction, setDirection] = useState<Direction>("en-to-geo");
+  const [direction, setDirection] = useState<Direction>("geo-to-en");
   const [orderMode, setOrderMode] = useState<OrderMode>("random");
+  const [orderFeedback, setOrderFeedback] = useState("");
   const [allowReguess, setAllowReguess] = useState(false);
   const [answerInputs, setAnswerInputs] = useState<string[]>([""]);
   const [inputStatuses, setInputStatuses] = useState<InputStatus[]>(["idle"]);
@@ -121,6 +122,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
     presentationRef.current = { id, scored: false };
     setPresentationId(id);
     setHasChecked(false);
+    setOrderFeedback("");
   }, []);
 
   const uniqueWordCount = useMemo(
@@ -495,21 +497,36 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
     setDirection(newDirection);
   };
 
+  const orderUnavailable = loading || !!readError || !sessionInitialized || reconciledWords !== words ||
+    !currentWord || showFinishModal || !!completedResultRef.current || handoffRequested || !owner.canWrite();
   const handleOrderChange = (newOrder: OrderMode) => {
-    if (!owner.canWrite()) return;
-    if (newOrder === orderMode || showFinishModal || completedResultRef.current) return;
+    if (orderUnavailable || completedResultRef.current || !mountedRef.current || !owner.canWrite() ||
+      presentationId !== presentationRef.current.id || newOrder === orderMode) return;
     setOrderMode(newOrder);
     const [active, ...remaining] = wordQueue;
-    if (!active) return;
-    const pending = [...new Set(remaining)].filter(id => id !== active);
+    // Only an untouched, unscored session may replace its first presentation.
+    // Whitespace is still a draft; the synchronous guard also covers a Check
+    // event whose scored state has not committed yet.
+    const untouched = totalAttempts === 0 && !hasChecked && !presentationRef.current.scored &&
+      answerInputs.every(answer => answer.length === 0);
+    const pending = untouched ? [...new Set(wordQueue)] : [...new Set(remaining)].filter(id => id !== active);
     const arrange = (ids: string[]) => newOrder === "random"
       ? shuffleArray(ids) : words.filter(word => ids.includes(word.id)).map(word => word.id);
     // Historical mistakes are not retry eligibility. Keep genuine deferred
-    // retries behind unattempted work, and never replace the active presentation.
-    setWordQueue([active,
+    // retries behind unattempted work, and preserve any presentation in progress.
+    const reordered = [...(untouched ? [] : [active]),
       ...arrange(pending.filter(id => !unresolvedWordIds.includes(id))),
       ...arrange(pending.filter(id => unresolvedWordIds.includes(id))),
-    ]);
+    ];
+    const changed = reordered.some((id, index) => id !== wordQueue[index]);
+    if (changed) {
+      if (reordered[0] !== active) beginPresentation();
+      setWordQueue(reordered);
+    }
+    const label = newOrder === "random" ? "Random order" : "Database order";
+    setOrderFeedback(`${label} selected. ${!changed ? "The question sequence is unchanged."
+      : untouched ? "The question order is updated."
+      : "The new order takes effect from the next word. Your current answer is kept."}`);
   };
 
   const handleCheckAnswer = () => {
@@ -909,6 +926,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
+                aria-pressed={direction === "en-to-geo"}
                 onClick={() => handleDirectionChange("en-to-geo")}
                 className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                   direction === "en-to-geo"
@@ -919,6 +937,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                 English → Georgian
               </button>
               <button
+                aria-pressed={direction === "geo-to-en"}
                 onClick={() => handleDirectionChange("geo-to-en")}
                 className={`px-4 py-3 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                   direction === "geo-to-en"
@@ -933,14 +952,16 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
 
           <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/20 p-6 transition-all duration-300">
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                   Word Order
                 </span>
                 <div className="flex gap-2">
                   <button
+                    aria-pressed={orderMode === "random"}
+                    disabled={orderUnavailable}
                     onClick={() => handleOrderChange("random")}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                       orderMode === "random"
                         ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow"
                         : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
@@ -949,8 +970,10 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                     <Shuffle size={16} /> Random
                   </button>
                   <button
+                    aria-pressed={orderMode === "db-order"}
+                    disabled={orderUnavailable}
                     onClick={() => handleOrderChange("db-order")}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 ${
                       orderMode === "db-order"
                         ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow"
                         : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
@@ -960,6 +983,8 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                   </button>
                 </div>
               </div>
+
+              <p role="status" aria-atomic="true" className="text-sm text-gray-700 dark:text-gray-300">{orderFeedback}</p>
 
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -1137,7 +1162,7 @@ function AccountPractice({ user, owner, handoffRequested }: { user: User; owner:
                           ? `Form ${idx + 1}`
                           : "Type your answer..."
                       }
-                      className={`flex-1 px-6 py-4 text-lg border-2 rounded-2xl bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-4 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400 ${statusClasses}`}
+                      className={`flex-1 px-6 py-4 text-lg border-2 rounded-2xl bg-white/50 dark:bg-gray-700/50 focus:ring-4 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 caret-blue-600 dark:caret-blue-400 ${statusClasses}`}
                     />
                     {direction === "en-to-geo" &&
                       (idx === answerInputs.length - 1 ? (
