@@ -22,6 +22,48 @@ function editor(editing = false) {
   return { ...view, props, form };
 }
 
+describe('Word Modal description surfaces', () => {
+  it.each([false, true])('distinguishes inputs and Preview while retaining draft, Cancel and Save (editing: %s)', async editing => {
+    const { props, form } = editor(editing);
+    const textarea = screen.getByPlaceholderText('Add additional context or example sentences...');
+    const modal = textarea.closest('.fixed')!.firstElementChild;
+    expect(modal).toHaveClass('bg-white', 'dark:bg-gray-800/95');
+    for (const input of form.querySelectorAll('input, textarea')) {
+      expect(input).toHaveClass('bg-white', 'border-slate-300', 'focus:ring-4', 'dark:bg-gray-700/50');
+      expect(input.className).not.toContain('backdrop-blur');
+    }
+    expect(screen.getByRole('button', { name: 'Bold' })).toHaveClass('bg-white', 'border-slate-300', 'focus-visible:outline-2');
+    const source = '<strong>ქართული</strong> <span style="color: #2563eb">colored</span> <span data-study-mask="true">study</span>';
+    fireEvent.change(textarea, { target: { value: source } });
+    const preview = screen.getByRole('region', { name: 'Description preview' });
+    expect(preview.parentElement).toHaveClass('bg-slate-100', 'border-slate-300', 'dark:bg-gray-800/60');
+    expect(preview.querySelector('strong')).toHaveTextContent('ქართული');
+    expect(preview.querySelector('[style]')).toHaveStyle({ color: '#2563eb' });
+    expect(preview.querySelector('[data-study-mask]')).toHaveTextContent('study');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(textarea).toHaveValue(source);
+    await userEvent.click(screen.getByRole('button', { name: editing ? 'Save changes' : 'Add word' }));
+    const payload = { englishWord: 'yield', georgianDefs: ['მოსავალი', ...(editing ? ['მოსავლიანობა'] : [])], description: source };
+    if (editing) expect(props.updateWord).toHaveBeenCalledExactlyOnceWith(props.word!.id, expect.objectContaining(payload), props.word!.updated_at);
+    else expect(props.addWord).toHaveBeenCalledExactlyOnceWith(expect.objectContaining(payload));
+    expect(props.onSave).toHaveBeenCalledOnce();
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('keeps the source draft intact while sanitizing rich-text Preview content', () => {
+    editor();
+    const source = '<strong>safe</strong><script>bad()</script><img src="x" onerror="bad()"><span style="color: #abcdef" onclick="bad()">colored</span>';
+    const textarea = screen.getByPlaceholderText('Add additional context or example sentences...');
+    fireEvent.change(textarea, { target: { value: source } });
+    const preview = screen.getByRole('region', { name: 'Description preview' });
+    expect(textarea).toHaveValue(source);
+    expect(preview.querySelector('script, img, [onclick], [onerror]')).toBeNull();
+    expect(preview.querySelector('strong')).toHaveTextContent('safe');
+    expect(preview.querySelector('span')).toHaveStyle({ color: '#abcdef' });
+  });
+});
+
 describe('Word Modal pending saves', () => {
   it('blocks Cancel and editing until an update succeeds, then calls onSave exactly once', async () => {
     const { props, form } = editor(true);
